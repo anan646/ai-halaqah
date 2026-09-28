@@ -1,0 +1,77 @@
+export type AttendanceStatus = 'มา' | 'ขาด' | 'ลา';
+
+export interface Student {
+  studentId: string;
+  fullName: string;
+  gender: 'ชาย' | 'หญิง';
+  yearLevel: string; // e.g. 'ปี 2', 'ปี 3', 'ปี 4'
+  groupName: string; // e.g. 'ชั้นปีที่ 2 กลุ่มที่ 1'
+  teacherName: string; // e.g. 'อาจารย์มุสลิม หะยีสะมะแอ'
+  groupId: string;
+}
+
+export interface Teacher {
+  name: string;
+  groupId: string;
+  groupName: string;
+  gender: 'ชาย' | 'หญิง';
+  yearLevel: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  teacher: string;
+  gender: 'ชาย' | 'หญิง';
+  yearLevel: string;
+  studentCount: number;
+}
+
+export interface AttendanceRecord {
+  id?: string;
+  date: string; // YYYY-MM-DD
+  studentId: string;
+  studentName: string;
+  teacherName: string;
+  groupName: string;
+  yearLevel: string;
+  gender: 'ชาย' | 'หญิง';
+  status: AttendanceStatus;
+  timestamp?: string;
+}
+
+export interface DailySummary {
+  date: string;
+  total: number;
+  present: number;
+  absent: number;
+  leave: number;
+  rate: number;
+}
+
+export interface TeacherSummary {
+  teacherName: string;
+  groupName: string;
+  yearLevel: string;
+  gender: string;
+  studentCount: number;
+  checkedDatesCount: number;
+  totalPresent: number;
+  totalAbsent: number;
+  totalLeave: number;
+  overallRate: number;
+}
+
+export interface StudentSummary {
+  studentId: string;
+  fullName: string;
+  groupName: string;
+  teacherName: string;
+  yearLevel: string;
+  gender: string;
+  totalDays: number;
+  presentDays: number;
+  absentDays: number;
+  leaveDays: number;
+  attendanceRate: number;
+}
