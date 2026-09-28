@@ -1,5 +1,6 @@
 import { AttendanceRecord, Student, Teacher } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
+import { getActiveStudents, getActiveTeachers } from './data-store';
 
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 const STORAGE_KEY_SCRIPT_URL = 'halaqah_apps_script_url';
@@ -28,9 +29,9 @@ export function setSavedScriptUrl(url: string) {
 
 export function getSavedLogo(): string {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem(STORAGE_KEY_LOGO) || '';
+    return localStorage.getItem(STORAGE_KEY_LOGO) || '/logo.jpg';
   }
-  return '';
+  return '/logo.jpg';
 }
 
 export function setSavedLogo(base64: string) {
@@ -212,8 +213,8 @@ export async function backupAllToGoogleSheet(): Promise<{
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'backupAll',
-        students: INITIAL_STUDENTS,
-        teachers: INITIAL_TEACHERS,
+        students: getActiveStudents(),
+        teachers: getActiveTeachers(),
         attendance: attendance,
         logoUrl: logoUrl
       })

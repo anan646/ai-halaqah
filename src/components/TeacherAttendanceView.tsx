@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
-import { INITIAL_TEACHERS, INITIAL_STUDENTS } from '@/lib/students-data';
+import { getActiveTeachers, getActiveStudents } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
 
 interface TeacherAttendanceViewProps {
@@ -64,23 +64,26 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  const teachers = useMemo(() => getActiveTeachers(), []);
+  const allStudents = useMemo(() => getActiveStudents(), []);
+
   // Initialize selected teacher
   useEffect(() => {
-    if (activeTeacherName && INITIAL_TEACHERS.some((t) => t.name === activeTeacherName)) {
+    if (activeTeacherName && teachers.some((t) => t.name === activeTeacherName)) {
       setSelectedTeacherName(activeTeacherName);
     } else {
       const saved = localStorage.getItem('last_selected_teacher');
-      if (saved && INITIAL_TEACHERS.some((t) => t.name === saved)) {
+      if (saved && teachers.some((t) => t.name === saved)) {
         setSelectedTeacherName(saved);
-      } else if (INITIAL_TEACHERS.length > 0) {
-        setSelectedTeacherName(INITIAL_TEACHERS[0].name);
+      } else if (teachers.length > 0) {
+        setSelectedTeacherName(teachers[0].name);
       }
     }
-  }, [activeTeacherName]);
+  }, [activeTeacherName, teachers]);
 
   const currentTeacher = useMemo(() => {
-    return INITIAL_TEACHERS.find((t) => t.name === selectedTeacherName) || INITIAL_TEACHERS[0];
-  }, [selectedTeacherName]);
+    return teachers.find((t) => t.name === selectedTeacherName) || teachers[0];
+  }, [selectedTeacherName, teachers]);
 
   const handleTeacherChange = (teacherName: string) => {
     setSelectedTeacherName(teacherName);
@@ -90,8 +93,8 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
 
   const groupStudents = useMemo(() => {
     if (!currentTeacher) return [];
-    return INITIAL_STUDENTS.filter((st) => st.teacherName === currentTeacher.name);
-  }, [currentTeacher]);
+    return allStudents.filter((st) => st.teacherName === currentTeacher.name);
+  }, [currentTeacher, allStudents]);
 
   // Load existing records or default
   useEffect(() => {
@@ -312,7 +315,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
               onChange={(e) => handleTeacherChange(e.target.value)}
               className="w-full sm:w-64 bg-white/15 text-white text-xs rounded-xl px-3 py-2 border border-white/25 focus:outline-none focus:bg-purple-900 font-semibold"
             >
-              {INITIAL_TEACHERS.map((t) => (
+              {teachers.map((t) => (
                 <option key={t.groupId} value={t.name} className="text-gray-900">
                   {t.name} ({t.groupName})
                 </option>

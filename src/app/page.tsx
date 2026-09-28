@@ -10,7 +10,7 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { AttendanceRecord } from '@/lib/types';
 import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllToGoogleSheet } from '@/lib/api-client';
 import { getAdminSession, setAdminSession } from '@/lib/admin-auth';
-import { INITIAL_STUDENTS } from '@/lib/students-data';
+import { getActiveStudents } from '@/lib/data-store';
 
 export default function HomePage() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'teacher' | 'admin'>('landing');
@@ -80,7 +80,7 @@ export default function HomePage() {
         onBackupAll={handleBackupAll}
         isSyncing={isSyncing}
         isBackingUp={isBackingUp}
-        totalStudents={INITIAL_STUDENTS.length}
+        totalStudents={getActiveStudents().length}
         customLogo={customLogo}
         isAdminLoggedIn={!!adminUser}
       />
@@ -113,6 +113,7 @@ export default function HomePage() {
               records={records}
               adminUser={adminUser}
               onLogout={handleAdminLogout}
+              onBackToLanding={() => setCurrentTab('landing')}
             />
           ) : (
             <AdminLoginView
