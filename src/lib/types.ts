@@ -81,9 +81,18 @@ export interface StudentSummary {
   lastRecordedTime?: string;
 }
 
+export interface SubAdmin {
+  id: string;
+  name: string;
+  passcode: string;
+  createdAt: string;
+  role: 'admin' | 'subadmin';
+}
+
 export interface AppSettings {
-  logoUrl?: string; // Base64 or URL
+  logoUrl?: string;
   appTitle?: string;
   scriptUrl?: string;
   lastSyncTime?: string;
+  subAdmins?: SubAdmin[];
 }

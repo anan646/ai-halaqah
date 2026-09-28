@@ -5,13 +5,14 @@ import { Navbar } from '@/components/Navbar';
 import { LandingPageView } from '@/components/LandingPageView';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { AdminDashboardView } from '@/components/AdminDashboardView';
+import { AdminLoginView } from '@/components/AdminLoginView';
 import { SettingsModal } from '@/components/SettingsModal';
 import { AttendanceRecord } from '@/lib/types';
-import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, setSavedLogo, backupAllToGoogleSheet } from '@/lib/api-client';
+import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllToGoogleSheet } from '@/lib/api-client';
+import { getAdminSession, setAdminSession } from '@/lib/admin-auth';
 import { INITIAL_STUDENTS } from '@/lib/students-data';
 
 export default function HomePage() {
-  // Default to 'landing' as requested: เข้ามาแล้วเจอหน้า Landing Page ก่อน
   const [currentTab, setCurrentTab] = useState<'landing' | 'teacher' | 'admin'>('landing');
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -20,11 +21,15 @@ export default function HomePage() {
   const [customLogo, setCustomLogo] = useState<string>('');
   const [activeTeacherName, setActiveTeacherName] = useState<string>('');
 
-  // Load records & logo
+  // Admin authentication state
+  const [adminUser, setAdminUser] = useState<{ id: string; name: string; role: 'admin' | 'subadmin' } | null>(null);
+
+  // Load records & logo & admin session
   const loadData = useCallback(async () => {
     setIsSyncing(true);
     setRecords(getLocalAttendanceRecords());
     setCustomLogo(getSavedLogo());
+    setAdminUser(getAdminSession());
 
     try {
       const res = await fetchAllAttendance();
@@ -57,12 +62,15 @@ export default function HomePage() {
     }
   };
 
-  const handleLogoUpdated = (newLogo: string) => {
-    setCustomLogo(newLogo);
+  // Admin Logout
+  const handleAdminLogout = () => {
+    setAdminSession(null);
+    setAdminUser(null);
+    setCurrentTab('landing');
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#fdfcff] text-purple-950 font-sans">
+    <div className="min-h-screen flex flex-col bg-[#fcfbfe] text-purple-950 font-sans overflow-x-hidden">
       {/* Navigation */}
       <Navbar
         currentTab={currentTab}
@@ -74,17 +82,18 @@ export default function HomePage() {
         isBackingUp={isBackingUp}
         totalStudents={INITIAL_STUDENTS.length}
         customLogo={customLogo}
+        isAdminLoggedIn={!!adminUser}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 pt-3 sm:pt-4">
         {currentTab === 'landing' && (
           <LandingPageView
             onSelectTeacher={handleSelectTeacher}
             onGoToAdmin={() => setCurrentTab('admin')}
             onOpenSettings={() => setIsSettingsOpen(true)}
             customLogo={customLogo}
-            onLogoUpdated={handleLogoUpdated}
+            onLogoUpdated={(logo) => setCustomLogo(logo)}
           />
         )}
 
@@ -94,13 +103,24 @@ export default function HomePage() {
             onAttendanceSaved={loadData}
             activeTeacherName={activeTeacherName}
             onTeacherChanged={setActiveTeacherName}
+            onBackToLanding={() => setCurrentTab('landing')}
           />
         )}
 
         {currentTab === 'admin' && (
-          <AdminDashboardView
-            records={records}
-          />
+          adminUser ? (
+            <AdminDashboardView
+              records={records}
+              adminUser={adminUser}
+              onLogout={handleAdminLogout}
+            />
+          ) : (
+            <AdminLoginView
+              onLoginSuccess={(user) => setAdminUser(user)}
+              onCancel={() => setCurrentTab('landing')}
+              customLogo={customLogo}
+            />
+          )
         )}
       </main>
 
@@ -111,10 +131,9 @@ export default function HomePage() {
         onSaved={loadData}
       />
 
-      {/* Footer */}
-      <footer className="border-t border-purple-100 bg-white py-6 mt-auto text-center text-xs text-purple-800/60 print:hidden">
-        <p className="font-semibold text-purple-900">ระบบบันทึกการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์) • ธีมสีม่วงสบายตา</p>
-        <p className="mt-1 text-purple-700/50">เชื่อมต่อ Google Sheet • สำรองข้อมูลได้ทุกที่ทุกเวลา</p>
+      {/* Clean Footer (Removed requested slogans) */}
+      <footer className="border-t border-purple-100 bg-white py-4 mt-auto text-center text-xs text-purple-800/60 print:hidden">
+        <p className="font-semibold text-purple-900">ระบบบันทึกการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</p>
       </footer>
     </div>
   );

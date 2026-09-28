@@ -8,17 +8,14 @@ import {
   Clock,
   Save,
   Users,
-  Award,
   History,
   Sparkles,
   ChevronRight,
-  Search,
-  Filter,
-  AlertCircle,
-  Timer
+  Timer,
+  ArrowLeft
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Teacher, Student, AttendanceRecord, AttendanceStatus } from '@/lib/types';
+import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
 import { INITIAL_TEACHERS, INITIAL_STUDENTS } from '@/lib/students-data';
 import { saveAttendanceBatch } from '@/lib/api-client';
 
@@ -27,6 +24,7 @@ interface TeacherAttendanceViewProps {
   onAttendanceSaved: () => void;
   activeTeacherName?: string;
   onTeacherChanged?: (name: string) => void;
+  onBackToLanding?: () => void;
 }
 
 export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
@@ -34,12 +32,10 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   onAttendanceSaved,
   activeTeacherName,
   onTeacherChanged,
+  onBackToLanding,
 }) => {
   // 1. Teacher selection
   const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
-  const [genderFilter, setGenderFilter] = useState<'ทั้งหมด' | 'ชาย' | 'หญิง'>('ทั้งหมด');
-
-  // Real-time current clock
   const [currentTime, setCurrentTime] = useState<string>('');
 
   useEffect(() => {
@@ -68,7 +64,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // Initialize selected teacher from props or localStorage
+  // Initialize selected teacher
   useEffect(() => {
     if (activeTeacherName && INITIAL_TEACHERS.some((t) => t.name === activeTeacherName)) {
       setSelectedTeacherName(activeTeacherName);
@@ -91,12 +87,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     localStorage.setItem('last_selected_teacher', teacherName);
     if (onTeacherChanged) onTeacherChanged(teacherName);
   };
-
-  const filteredTeachers = useMemo(() => {
-    return INITIAL_TEACHERS.filter((t) => {
-      return genderFilter === 'ทั้งหมด' || t.gender === genderFilter;
-    });
-  }, [genderFilter]);
 
   const groupStudents = useMemo(() => {
     if (!currentTeacher) return [];
@@ -138,7 +128,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     );
   }, [currentTeacher, groupStudents, records, selectedDate]);
 
-  // Real-time click status change
+  // Change single status with realtime timestamp
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     const nowTimeStr = new Date().toLocaleTimeString('th-TH', { hour12: false });
     setAttendanceMap((prev) => ({
@@ -206,20 +196,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [records, currentTeacher]);
 
-  const groupOverallStats = useMemo(() => {
-    let totalPresent = 0;
-    let totalAll = 0;
-    groupHistory.forEach((h) => {
-      totalPresent += h.present;
-      totalAll += h.total;
-    });
-    const overallRate = totalAll > 0 ? (totalPresent / totalAll) * 100 : 0;
-    return {
-      totalCheckins: groupHistory.length,
-      overallRate,
-    };
-  }, [groupHistory]);
-
   // Save
   const handleSaveAttendance = async () => {
     if (!currentTeacher || groupStudents.length === 0) return;
@@ -254,10 +230,10 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         });
 
         confetti({
-          particleCount: 65,
+          particleCount: 50,
           spread: 60,
           origin: { y: 0.8 },
-          colors: ['#7e22ce', '#9333ea', '#a855f7', '#c084fc', '#10b981'],
+          colors: ['#7e22ce', '#9333ea', '#a855f7', '#10b981'],
         });
 
         onAttendanceSaved();
@@ -276,9 +252,9 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       if (parts.length === 3) {
         const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
         return d.toLocaleDateString('th-TH', {
-          weekday: 'long',
+          weekday: 'short',
           year: 'numeric',
-          month: 'long',
+          month: 'short',
           day: 'numeric',
         });
       }
@@ -287,421 +263,308 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Top Banner: Soothing Purple Gradient */}
-      <div className="bg-gradient-to-r from-purple-800 via-purple-700 to-indigo-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl shadow-purple-900/10 border border-purple-600/30">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <span className="bg-white/20 text-purple-100 text-xs px-3 py-1 rounded-full font-semibold backdrop-blur-sm">
-                สำหรับอาจารย์ประจำกลุ่ม
-              </span>
-              <span className="bg-purple-400/25 text-purple-200 text-xs px-2.5 py-1 rounded-full font-medium">
-                {currentTeacher?.gender === 'ชาย' ? 'กลุ่มนักศึกษาชาย' : 'กลุ่มนักศึกษาหญิง'}
-              </span>
-              {/* Real-time Clock Badge */}
-              <div className="flex items-center space-x-1 bg-white/10 px-2.5 py-1 rounded-full text-xs font-mono text-purple-200">
-                <Timer className="w-3.5 h-3.5 text-purple-300" />
-                <span>เวลาปัจจุบัน: {currentTime} น.</span>
-              </div>
-            </div>
+    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 pb-28">
+      {/* Top Bar: Back & Teacher Switcher */}
+      <div className="flex items-center justify-between gap-2">
+        {onBackToLanding && (
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="inline-flex items-center space-x-1 text-xs font-bold text-purple-700 hover:text-purple-950 bg-white border border-purple-200 px-3 py-2 rounded-xl shadow-sm transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>เปลี่ยนอาจารย์</span>
+          </button>
+        )}
 
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              {currentTeacher?.name || 'เลือกอาจารย์ประจำกลุ่ม'}
+        {/* Real-time Clock */}
+        <div className="inline-flex items-center space-x-1.5 bg-purple-100/80 px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-purple-900 ml-auto border border-purple-200">
+          <Timer className="w-3.5 h-3.5 text-purple-600" />
+          <span>{currentTime} น.</span>
+        </div>
+      </div>
+
+      {/* Teacher Card Banner (Mobile Optimized) */}
+      <div className="bg-gradient-to-r from-purple-800 via-purple-700 to-indigo-900 text-white rounded-3xl p-5 sm:p-6 shadow-md shadow-purple-900/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="bg-white/20 text-purple-100 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                {currentTeacher?.gender === 'ชาย' ? 'กลุ่มชาย' : 'กลุ่มหญิง'}
+              </span>
+              <span className="bg-purple-300/30 text-purple-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
+                {currentTeacher?.yearLevel}
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+              {currentTeacher?.name}
             </h1>
-            <p className="text-purple-200 text-sm flex items-center gap-2">
-              <Users className="w-4 h-4 text-purple-300" />
-              <span>{currentTeacher?.groupName} ({currentTeacher?.yearLevel})</span>
-              <span className="text-white/40">•</span>
-              <span>สมาชิกในกลุ่ม {groupStudents.length} คน</span>
+            <p className="text-xs text-purple-200 mt-0.5 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-purple-300" />
+              <span>{currentTeacher?.groupName} ({groupStudents.length} คน)</span>
             </p>
           </div>
 
-          {/* Teacher Selection Dropdown with Soothing Theme */}
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 min-w-[320px]">
-            <label className="block text-xs font-medium text-purple-200 mb-1.5">
-              เปลี่ยนอาจารย์ประจำกลุ่ม
-            </label>
-            <div className="space-y-2">
-              <div className="flex gap-1.5 mb-2">
-                {(['ทั้งหมด', 'ชาย', 'หญิง'] as const).map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setGenderFilter(g)}
-                    className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${
-                      genderFilter === g
-                        ? 'bg-white text-purple-900 font-bold shadow-sm'
-                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-              <select
-                value={selectedTeacherName}
-                onChange={(e) => handleTeacherChange(e.target.value)}
-                className="w-full bg-white text-purple-950 text-sm rounded-xl px-3 py-2 border border-transparent focus:outline-none focus:ring-2 focus:ring-purple-400 font-medium shadow-sm"
-              >
-                {filteredTeachers.map((t) => (
-                  <option key={t.groupId} value={t.name}>
-                    {t.name} ({t.groupName})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Date Selector & Live Summary Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Minimal Date Selector */}
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-purple-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2 text-purple-950 font-bold">
-                <Calendar className="w-5 h-5 text-purple-700" />
-                <span>เลือกวันเดือนปีที่เช็คชื่อ (Minimal Style)</span>
-              </div>
-              {isDateAlreadySaved ? (
-                <span className="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                  บันทึกข้อมูลแล้ว
-                </span>
-              ) : (
-                <span className="inline-flex items-center text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded-full">
-                  <Clock className="w-3.5 h-3.5 mr-1 text-purple-600" />
-                  รอการบันทึก
-                </span>
-              )}
-            </div>
-
-            {/* Quick date preset buttons */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => setSelectedDate(getTodayString())}
-                className={`text-xs px-3.5 py-1.5 rounded-xl border transition-all ${
-                  selectedDate === getTodayString()
-                    ? 'bg-purple-700 text-white border-purple-700 shadow-sm font-semibold'
-                    : 'bg-purple-50 text-purple-800 border-purple-200/60 hover:bg-purple-100'
-                }`}
-              >
-                วันนี้
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const d = new Date();
-                  d.setDate(d.getDate() - 1);
-                  setSelectedDate(d.toISOString().slice(0, 10));
-                }}
-                className="text-xs px-3.5 py-1.5 rounded-xl border bg-purple-50 text-purple-800 border-purple-200/60 hover:bg-purple-100 transition-colors"
-              >
-                เมื่อวาน
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const d = new Date();
-                  d.setDate(d.getDate() - 7);
-                  setSelectedDate(d.toISOString().slice(0, 10));
-                }}
-                className="text-xs px-3.5 py-1.5 rounded-xl border bg-purple-50 text-purple-800 border-purple-200/60 hover:bg-purple-100 transition-colors"
-              >
-                7 วันที่แล้ว
-              </button>
-            </div>
-
-            {/* Native Clean Date Input */}
-            <div className="flex items-center space-x-3">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-4 py-2.5 border border-purple-200 rounded-2xl text-purple-950 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 bg-purple-50/50 hover:bg-white transition-all shadow-inner"
-              />
-              <span className="text-sm font-semibold text-purple-900 hidden sm:inline">
-                {formatThaiDate(selectedDate)}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-purple-50 flex items-center justify-between text-xs text-purple-800/60">
-            <span>บันทึกแบบ Real-time: ทุกครั้งที่เปลี่ยนสถานะจะบันทึกเวลาจริงกำกับไว้</span>
-            <button
-              onClick={() => handleMarkAll('มา')}
-              className="text-purple-700 font-bold hover:underline flex items-center gap-1"
+          {/* Quick Dropdown to switch within group */}
+          <div className="w-full sm:w-auto">
+            <select
+              value={selectedTeacherName}
+              onChange={(e) => handleTeacherChange(e.target.value)}
+              className="w-full sm:w-64 bg-white/15 text-white text-xs rounded-xl px-3 py-2 border border-white/25 focus:outline-none focus:bg-purple-900 font-semibold"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>ทำเครื่องหมายมาทุกคน</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Live Attendance Counter */}
-        <div className="bg-white rounded-3xl p-6 border border-purple-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <span className="text-xs font-bold text-purple-900/50 uppercase tracking-wider">
-              สถิติประจำวันที่เลือก ({selectedDate})
-            </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-purple-950">{counts.rate.toFixed(0)}%</span>
-              <span className="text-xs text-purple-800 font-semibold bg-purple-100/70 px-2.5 py-1 rounded-full border border-purple-200">
-                มา {counts.present} จาก {counts.total} คน
-              </span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full bg-purple-50 h-2.5 rounded-full mt-3 overflow-hidden flex border border-purple-100">
-              <div
-                style={{ width: `${(counts.present / Math.max(counts.total, 1)) * 100}%` }}
-                className="bg-emerald-500 h-full"
-                title={`มา: ${counts.present} คน`}
-              />
-              <div
-                style={{ width: `${(counts.leave / Math.max(counts.total, 1)) * 100}%` }}
-                className="bg-amber-400 h-full"
-                title={`ลา: ${counts.leave} คน`}
-              />
-              <div
-                style={{ width: `${(counts.absent / Math.max(counts.total, 1)) * 100}%` }}
-                className="bg-rose-500 h-full"
-                title={`ขาด: ${counts.absent} คน`}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-purple-50 text-center">
-            <div className="p-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-200">
-              <div className="text-lg font-bold text-emerald-800">{counts.present}</div>
-              <div className="text-[11px] text-emerald-700 font-medium">มา</div>
-            </div>
-            <div className="p-2.5 rounded-2xl bg-rose-50/80 border border-rose-200">
-              <div className="text-lg font-bold text-rose-800">{counts.absent}</div>
-              <div className="text-[11px] text-rose-700 font-medium">ขาด</div>
-            </div>
-            <div className="p-2.5 rounded-2xl bg-amber-50/80 border border-amber-200">
-              <div className="text-lg font-bold text-amber-800">{counts.leave}</div>
-              <div className="text-[11px] text-amber-700 font-medium">ลา</div>
-            </div>
+              {INITIAL_TEACHERS.map((t) => (
+                <option key={t.groupId} value={t.name} className="text-gray-900">
+                  {t.name} ({t.groupName})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
-      {/* Alert Notice */}
+      {/* Date Selector & Status Cards (Mobile-first Layout) */}
+      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-sm space-y-4">
+        {/* Date Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-purple-700" />
+            <span className="text-xs sm:text-sm font-bold text-purple-950">
+              วันที่เช็คชื่อ: {formatThaiDate(selectedDate)}
+            </span>
+            {isDateAlreadySaved ? (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                บันทึกแล้ว
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                ยังไม่บันทึก
+              </span>
+            )}
+          </div>
+
+          {/* Quick Buttons for mobile */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(getTodayString())}
+              className={`flex-1 sm:flex-none text-xs px-3 py-1.5 rounded-xl border font-bold transition-all ${
+                selectedDate === getTodayString()
+                  ? 'bg-purple-700 text-white border-purple-700'
+                  : 'bg-purple-50 text-purple-800 border-purple-200'
+              }`}
+            >
+              วันนี้
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const d = new Date();
+                d.setDate(d.getDate() - 1);
+                setSelectedDate(d.toISOString().slice(0, 10));
+              }}
+              className="flex-1 sm:flex-none text-xs px-3 py-1.5 rounded-xl border bg-purple-50 text-purple-800 border-purple-200 font-bold"
+            >
+              เมื่อวาน
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="flex-1 sm:flex-none px-2 py-1 border border-purple-200 rounded-xl text-xs font-bold text-purple-900 bg-purple-50"
+            />
+          </div>
+        </div>
+
+        {/* Live Counts Bar (Mobile-Optimized) */}
+        <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-purple-50">
+          <div className="p-2 rounded-2xl bg-emerald-50 border border-emerald-200">
+            <div className="text-base sm:text-lg font-extrabold text-emerald-800">{counts.present}</div>
+            <div className="text-[11px] font-bold text-emerald-700">มา</div>
+          </div>
+          <div className="p-2 rounded-2xl bg-rose-50 border border-rose-200">
+            <div className="text-base sm:text-lg font-extrabold text-rose-800">{counts.absent}</div>
+            <div className="text-[11px] font-bold text-rose-700">ขาด</div>
+          </div>
+          <div className="p-2 rounded-2xl bg-amber-50 border border-amber-200">
+            <div className="text-base sm:text-lg font-extrabold text-amber-800">{counts.leave}</div>
+            <div className="text-[11px] font-bold text-amber-700">ลา</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Save Alert */}
       {saveMessage && (
         <div
-          className={`p-4 rounded-2xl border flex items-center justify-between text-sm ${
+          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs font-semibold ${
             saveMessage.type === 'success'
-              ? 'bg-purple-50 border-purple-200 text-purple-900'
-              : saveMessage.type === 'info'
-              ? 'bg-blue-50 border-blue-200 text-blue-900'
+              ? 'bg-purple-50 border-purple-200 text-purple-950'
               : 'bg-rose-50 border-rose-200 text-rose-900'
           }`}
         >
           <div className="flex items-center space-x-2">
-            {saveMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-purple-600 shrink-0" />}
-            {saveMessage.type === 'info' && <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />}
-            {saveMessage.type === 'error' && <XCircle className="w-5 h-5 text-rose-600 shrink-0" />}
-            <span className="font-medium">{saveMessage.text}</span>
+            {saveMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+            ) : (
+              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{saveMessage.text}</span>
           </div>
-          <button
-            onClick={() => setSaveMessage(null)}
-            className="text-xs text-purple-800/70 hover:text-purple-950 underline ml-4"
-          >
+          <button onClick={() => setSaveMessage(null)} className="underline ml-2">
             ปิด
           </button>
         </div>
       )}
 
-      {/* Students Attendance Table */}
-      <div className="bg-white rounded-3xl border border-purple-100 shadow-sm overflow-hidden">
-        {/* Table Header Controls */}
-        <div className="p-4 sm:p-5 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-purple-50/40">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-purple-950">
-              รายชื่อนักศึกษาในกลุ่ม ({groupStudents.length} คน)
-            </h2>
-            <p className="text-xs text-purple-800/60 mt-0.5">
-              คลิกเลือกสถานะ [มา] [ขาด] [ลา] ระบบจะบันทึกเวลากำกับแบบ Real-time ทันที
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => handleMarkAll('มา')}
-              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-100 text-purple-900 hover:bg-purple-200 transition-colors"
-            >
-              มาทั้งหมด
-            </button>
-            <button
-              type="button"
-              onClick={() => handleMarkAll('ขาด')}
-              className="text-xs font-medium px-2.5 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-            >
-              ขาดทั้งหมด
-            </button>
-            <button
-              type="button"
-              onClick={() => handleMarkAll('ลา')}
-              className="text-xs font-medium px-2.5 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-            >
-              ลาทั้งหมด
-            </button>
-          </div>
+      {/* Quick Mark All Buttons */}
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs font-bold text-purple-950">
+          รายชื่อนักศึกษา ({groupStudents.length} คน)
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleMarkAll('มา')}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-100 text-purple-900 hover:bg-purple-200 transition-colors"
+          >
+            มาทุกคน
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMarkAll('ขาด')}
+            className="text-xs font-bold px-2.5 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+          >
+            ขาดหมด
+          </button>
         </div>
+      </div>
 
-        {/* Table Rows */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-purple-50/70 text-purple-900/70 text-xs font-bold uppercase tracking-wider border-b border-purple-100">
-                <th className="py-3.5 px-4 w-12 text-center">#</th>
-                <th className="py-3.5 px-4">รหัสนักศึกษา</th>
-                <th className="py-3.5 px-4">ชื่อ - นามสกุล</th>
-                <th className="py-3.5 px-4 text-center">เวลาบันทึก (Real-time)</th>
-                <th className="py-3.5 px-4 w-48 text-center">สถานะการเข้าร่วม</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-purple-50 text-sm">
-              {groupStudents.map((st, idx) => {
-                const entry = attendanceMap[st.studentId] || { status: 'มา', time: currentTime };
-                return (
-                  <tr
-                    key={st.studentId}
-                    className={`transition-colors hover:bg-purple-50/30 ${
-                      entry.status === 'ขาด'
-                        ? 'bg-rose-50/40'
-                        : entry.status === 'ลา'
-                        ? 'bg-amber-50/40'
-                        : ''
-                    }`}
-                  >
-                    <td className="py-3.5 px-4 text-center font-medium text-purple-400 text-xs">
-                      {idx + 1}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-medium text-purple-950">
-                      {st.studentId}
-                    </td>
-                    <td className="py-3.5 px-4 font-semibold text-purple-950">
+      {/* STUDENTS LIST - MOBILE FIRST CARD TILES (No cramped columns, comfortable touch targets!) */}
+      <div className="space-y-2">
+        {groupStudents.map((st, idx) => {
+          const entry = attendanceMap[st.studentId] || { status: 'มา', time: currentTime };
+          return (
+            <div
+              key={st.studentId}
+              className={`p-3 sm:p-4 rounded-2xl bg-white border transition-all ${
+                entry.status === 'ขาด'
+                  ? 'border-rose-200 bg-rose-50/30'
+                  : entry.status === 'ลา'
+                  ? 'border-amber-200 bg-amber-50/30'
+                  : 'border-purple-100 hover:border-purple-200'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                {/* Student Info */}
+                <div className="flex items-start space-x-2.5 min-w-0">
+                  <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-purple-950 truncate">
                       {st.fullName}
-                    </td>
-                    <td className="py-3.5 px-4 text-center text-xs font-mono text-purple-700/80">
-                      <span className="inline-flex items-center gap-1 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100">
-                        <Clock className="w-3 h-3 text-purple-500" />
+                    </div>
+                    <div className="text-[11px] font-mono text-purple-800/60 flex items-center gap-2">
+                      <span>รหัส {st.studentId}</span>
+                      <span>•</span>
+                      <span className="text-purple-600 flex items-center gap-0.5">
+                        <Clock className="w-3 h-3" />
                         <span>{entry.time || '-'}</span>
                       </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      {/* Segmented Status Buttons */}
-                      <div className="flex items-center justify-center p-1 bg-purple-50/80 rounded-xl space-x-1 max-w-[200px] mx-auto border border-purple-100">
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(st.studentId, 'มา')}
-                          className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all ${
-                            entry.status === 'มา'
-                              ? 'bg-emerald-600 text-white shadow-sm'
-                              : 'text-purple-800 hover:text-emerald-700'
-                          }`}
-                        >
-                          มา
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(st.studentId, 'ขาด')}
-                          className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all ${
-                            entry.status === 'ขาด'
-                              ? 'bg-rose-600 text-white shadow-sm'
-                              : 'text-purple-800 hover:text-rose-700'
-                          }`}
-                        >
-                          ขาด
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(st.studentId, 'ลา')}
-                          className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all ${
-                            entry.status === 'ลา'
-                              ? 'bg-amber-500 text-white shadow-sm'
-                              : 'text-purple-800 hover:text-amber-700'
-                          }`}
-                        >
-                          ลา
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+                </div>
 
-        {/* Save Bar at Bottom */}
-        <div className="p-4 sm:p-5 bg-purple-50/50 border-t border-purple-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-xs text-purple-900 font-medium flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-purple-600" />
-            <span>
-              สรุป: มา {counts.present} คน | ขาด {counts.absent} คน | ลา {counts.leave} คน (บันทึกเวลาจริงตามการเลือก)
+                {/* Big Segmented Status Buttons (Min 44px height for easy tapping!) */}
+                <div className="flex items-center space-x-1.5 w-full sm:w-auto pt-1 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(st.studentId, 'มา')}
+                    className={`flex-1 sm:w-16 h-10 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center ${
+                      entry.status === 'มา'
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                        : 'bg-purple-50 text-purple-800 hover:bg-emerald-50 hover:text-emerald-700'
+                    }`}
+                  >
+                    มา
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(st.studentId, 'ขาด')}
+                    className={`flex-1 sm:w-16 h-10 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center ${
+                      entry.status === 'ขาด'
+                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
+                        : 'bg-purple-50 text-purple-800 hover:bg-rose-50 hover:text-rose-700'
+                    }`}
+                  >
+                    ขาด
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(st.studentId, 'ลา')}
+                    className={`flex-1 sm:w-16 h-10 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center ${
+                      entry.status === 'ลา'
+                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
+                        : 'bg-purple-50 text-purple-800 hover:bg-amber-50 hover:text-amber-700'
+                    }`}
+                  >
+                    ลา
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Past Dates Grid */}
+      {groupHistory.length > 0 && (
+        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-5 space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-purple-950">
+            <span className="flex items-center gap-1.5">
+              <History className="w-4 h-4 text-purple-700" />
+              <span>ประวัติการเช็คชื่อของกลุ่มนี้ ({groupHistory.length} วัน)</span>
             </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {groupHistory.map((item) => (
+              <button
+                key={item.date}
+                type="button"
+                onClick={() => setSelectedDate(item.date)}
+                className={`p-2.5 rounded-xl border text-left text-xs transition-all ${
+                  selectedDate === item.date
+                    ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-600/20 font-bold'
+                    : 'border-purple-100 hover:bg-purple-50/50'
+                }`}
+              >
+                <div className="font-bold text-purple-950">{item.date}</div>
+                <div className="text-[10px] text-purple-700 mt-0.5">
+                  มา {item.present} / ขาด {item.absent}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* STICKY BOTTOM SAVE ACTION BAR FOR MOBILE (Thumb friendly!) */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white/95 backdrop-blur-md border-t border-purple-200 shadow-2xl z-30">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+          <div className="text-xs text-purple-900 font-bold hidden sm:block">
+            สรุป: มา {counts.present} | ขาด {counts.absent} | ลา {counts.leave}
           </div>
 
           <button
             type="button"
             onClick={handleSaveAttendance}
             disabled={isSaving}
-            className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white font-bold px-6 py-2.5 rounded-2xl shadow-lg shadow-purple-900/15 transition-all disabled:opacity-50"
+            className="w-full sm:w-auto h-12 px-8 bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-lg shadow-purple-900/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 ml-auto"
           >
-            <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+            <Save className={`w-5 h-5 ${isSaving ? 'animate-spin' : ''}`} />
             <span>{isSaving ? 'กำลังบันทึกข้อมูล...' : 'บันทึกผลการเช็คชื่อ'}</span>
           </button>
         </div>
-      </div>
-
-      {/* Historical Check-ins */}
-      <div className="bg-white rounded-3xl border border-purple-100 p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <History className="w-5 h-5 text-purple-700" />
-            <h3 className="font-bold text-purple-950">ประวัติการเช็คชื่อย้อนหลังของกลุ่มนี้</h3>
-          </div>
-          <span className="text-xs text-purple-800/70">
-            เช็คแล้วทั้งหมด {groupOverallStats.totalCheckins} ครั้ง | อัตราการเข้าร่วมเฉลี่ย {groupOverallStats.overallRate.toFixed(1)}%
-          </span>
-        </div>
-
-        {groupHistory.length === 0 ? (
-          <p className="text-sm text-purple-400 py-6 text-center">ยังไม่มีประวัติการเช็คชื่อสำหรับกลุ่มนี้</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {groupHistory.map((item) => (
-              <button
-                key={item.date}
-                type="button"
-                onClick={() => setSelectedDate(item.date)}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
-                  selectedDate === item.date
-                    ? 'border-purple-500 bg-purple-50/70 ring-2 ring-purple-500/20'
-                    : 'border-purple-100 hover:border-purple-300 hover:bg-purple-50/30'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs font-bold text-purple-950 mb-1">
-                  <span>{item.date}</span>
-                  <span className="text-purple-700">{item.rate.toFixed(0)}%</span>
-                </div>
-                <div className="text-[11px] text-gray-500 flex items-center justify-between">
-                  <span>มา {item.present}</span>
-                  <span>ขาด {item.absent}</span>
-                  <span>ลา {item.leave}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

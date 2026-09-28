@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BookOpen, BarChart3, UserCheck, Settings, ExternalLink, RefreshCw, Home, CloudUpload } from 'lucide-react';
+import { BookOpen, BarChart3, UserCheck, Settings, RefreshCw, Home, CloudUpload, Lock } from 'lucide-react';
 import { getGoogleSheetUrl } from '@/lib/api-client';
 
 interface NavbarProps {
@@ -14,6 +14,7 @@ interface NavbarProps {
   isBackingUp: boolean;
   totalStudents: number;
   customLogo?: string;
+  isAdminLoggedIn?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,117 +27,101 @@ export const Navbar: React.FC<NavbarProps> = ({
   isBackingUp,
   totalStudents,
   customLogo,
+  isAdminLoggedIn,
 }) => {
-  const sheetUrl = getGoogleSheetUrl();
-
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-purple-100 sticky top-0 z-40 shadow-sm print:hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
           {/* Brand & Logo */}
           <button
             onClick={() => setCurrentTab('landing')}
-            className="flex items-center space-x-3 text-left group"
+            className="flex items-center space-x-2 text-left shrink-0"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-700 via-purple-600 to-indigo-500 p-0.5 shadow-md shadow-purple-900/15 flex items-center justify-center overflow-hidden">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-purple-700 via-purple-600 to-indigo-600 p-0.5 shadow-sm flex items-center justify-center overflow-hidden">
               {customLogo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={customLogo} alt="Logo" className="w-full h-full object-cover rounded-[10px]" />
               ) : (
-                <BookOpen className="w-5 h-5 text-white" />
+                <BookOpen className="w-4 h-4 text-white" />
               )}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-purple-950 text-base sm:text-lg tracking-tight group-hover:text-purple-700 transition-colors">
-                  หะละเกาะห์ อัลกุรอาน
-                </span>
-                <span className="text-[11px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full border border-purple-200">
-                  {totalStudents} นศ.
-                </span>
-              </div>
-              <p className="text-[11px] text-purple-700/60 hidden sm:block">ระบบเช็คชื่อกลุ่มศึกษาอัลกุรอาน</p>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-purple-950 text-sm sm:text-base tracking-tight">
+                หะละเกาะห์
+              </span>
+              <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded-full">
+                {totalStudents} นศ.
+              </span>
             </div>
           </button>
 
-          {/* Navigation Tabs (Purple Theme) */}
-          <div className="flex items-center bg-purple-50/70 p-1 rounded-2xl border border-purple-100">
+          {/* Navigation Tabs (Centered & Mobile-Optimized) */}
+          <div className="flex items-center bg-purple-100/70 p-1 rounded-2xl border border-purple-200">
             <button
               onClick={() => setCurrentTab('landing')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+              className={`flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 currentTab === 'landing'
                   ? 'bg-purple-700 text-white shadow-sm'
-                  : 'text-purple-800/70 hover:text-purple-950'
+                  : 'text-purple-900 hover:text-purple-950'
               }`}
             >
-              <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">หน้าแรก</span>
+              <Home className="w-3.5 h-3.5" />
+              <span>หน้าแรก</span>
             </button>
+
             <button
               onClick={() => setCurrentTab('teacher')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+              className={`flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 currentTab === 'teacher'
                   ? 'bg-purple-700 text-white shadow-sm'
-                  : 'text-purple-800/70 hover:text-purple-950'
+                  : 'text-purple-900 hover:text-purple-950'
               }`}
             >
-              <UserCheck className="w-4 h-4" />
+              <UserCheck className="w-3.5 h-3.5" />
               <span>อาจารย์</span>
             </button>
+
             <button
               onClick={() => setCurrentTab('admin')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+              className={`flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 currentTab === 'admin'
                   ? 'bg-purple-700 text-white shadow-sm'
-                  : 'text-purple-800/70 hover:text-purple-950'
+                  : 'text-purple-900 hover:text-purple-950'
               }`}
             >
-              <BarChart3 className="w-4 h-4" />
+              {isAdminLoggedIn ? <BarChart3 className="w-3.5 h-3.5" /> : <Lock className="w-3 h-3" />}
               <span>แอดมิน</span>
             </button>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
-            {/* Backup All to Google Sheet button */}
+          {/* Quick Action Buttons */}
+          <div className="flex items-center space-x-1 shrink-0">
             <button
               onClick={onBackupAll}
               disabled={isBackingUp}
-              title="สำรองข้อมูลทั้งหมด (นักศึกษา + อาจารย์ + ประวัติ) ขึ้น Google Sheet"
-              className="flex items-center space-x-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-xl transition-all disabled:opacity-50"
+              title="สำรองข้อมูลทั้งหมดขึ้น Google Sheet"
+              className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all flex items-center gap-1"
             >
               <CloudUpload className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-bounce' : ''}`} />
-              <span className="hidden md:inline">{isBackingUp ? 'กำลังสำรอง...' : 'สำรองขึ้นชีต'}</span>
+              <span className="hidden md:inline">{isBackingUp ? 'กำลังสำรอง...' : 'สำรองชีต'}</span>
             </button>
 
-            {/* Refresh */}
             <button
               onClick={onRefreshData}
               disabled={isSyncing}
               title="รีเฟรชข้อมูล"
-              className="p-2 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded-xl transition-colors disabled:opacity-50"
+              className="p-2 text-purple-600 hover:text-purple-950 hover:bg-purple-50 rounded-xl transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-purple-700' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             </button>
 
-            {/* Google Sheet Link */}
-            <a
-              href={sheetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden lg:flex items-center space-x-1.5 text-xs text-purple-800/80 hover:text-purple-950 bg-white hover:bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-xl transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-purple-600" />
-              <span>Google Sheet</span>
-            </a>
-
-            {/* Settings */}
             <button
               onClick={onOpenSettings}
-              className="flex items-center space-x-1.5 text-xs font-medium text-purple-800 bg-white hover:bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-xl transition-colors"
+              title="ตั้งค่าเชื่อมต่อ"
+              className="p-2 text-purple-700 hover:text-purple-950 hover:bg-purple-50 rounded-xl transition-colors"
             >
-              <Settings className="w-3.5 h-3.5 text-purple-600" />
-              <span className="hidden sm:inline">ตั้งค่าชีต</span>
+              <Settings className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
