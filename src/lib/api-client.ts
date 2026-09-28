@@ -1,8 +1,10 @@
-import { AttendanceRecord } from './types';
-import { INITIAL_STUDENTS } from './students-data';
+import { AttendanceRecord, Student, Teacher } from './types';
+import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 const STORAGE_KEY_SCRIPT_URL = 'halaqah_apps_script_url';
+const STORAGE_KEY_LOGO = 'halaqah_custom_logo';
+const STORAGE_KEY_LAST_BACKUP = 'halaqah_last_backup_time';
 const DEFAULT_SHEET_ID = '1S8XLzMp1w9CdeW5rydKmTYvvL_ie-ecFIfQbqi_P_D0';
 
 export function getGoogleSheetUrl(): string {
@@ -24,17 +26,35 @@ export function setSavedScriptUrl(url: string) {
   }
 }
 
-// Generate demo attendance records for the last 3 halaqah sessions
+export function getSavedLogo(): string {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(STORAGE_KEY_LOGO) || '';
+  }
+  return '';
+}
+
+export function setSavedLogo(base64: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_LOGO, base64);
+  }
+}
+
+export function getLastBackupTime(): string {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(STORAGE_KEY_LAST_BACKUP) || '';
+  }
+  return '';
+}
+
+// Generate demo attendance records for initial test
 function generateInitialDemoRecords(): AttendanceRecord[] {
   const dates = ['2026-09-21', '2026-09-14', '2026-09-07'];
+  const times = ['08:35:12', '08:42:05', '09:05:18'];
   const records: AttendanceRecord[] = [];
-  
-  // Pick first 5 groups for initial sample
-  const sampleStudents = INITIAL_STUDENTS.slice(0, 100);
+  const sampleStudents = INITIAL_STUDENTS.slice(0, 120);
 
-  dates.forEach((d) => {
+  dates.forEach((d, dIdx) => {
     sampleStudents.forEach((st, idx) => {
-      // 85% มา, 10% ขาด, 5% ลา
       let status: 'มา' | 'ขาด' | 'ลา' = 'มา';
       const hash = (idx * 31 + d.charCodeAt(d.length - 1)) % 100;
       if (hash > 90) status = 'ลา';
@@ -43,6 +63,7 @@ function generateInitialDemoRecords(): AttendanceRecord[] {
       records.push({
         id: `ATT_${d}_${st.studentId}`,
         date: d,
+        recordedTime: times[dIdx % times.length],
         studentId: st.studentId,
         studentName: st.fullName,
         teacherName: st.teacherName,
@@ -50,7 +71,7 @@ function generateInitialDemoRecords(): AttendanceRecord[] {
         yearLevel: st.yearLevel,
         gender: st.gender,
         status: status,
-        timestamp: new Date(`${d}T09:00:00Z`).toISOString()
+        timestamp: new Date(`${d}T${times[dIdx % times.length]}Z`).toISOString()
       });
     });
   });
@@ -98,8 +119,7 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (data && data.success && Array.isArray(data.records)) {
-      // Merge remote records with local records
+    if (data && data.success && Array.isArray(data.records) && data.records.length > 0) {
       const recordMap = new Map<string, AttendanceRecord>();
       localRecords.forEach((r) => recordMap.set(`${r.date}_${r.studentId}`, r));
       data.records.forEach((r: AttendanceRecord) => recordMap.set(`${r.date}_${r.studentId}`, r));
@@ -118,7 +138,7 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
 export async function saveAttendanceBatch(
   newRecords: AttendanceRecord[]
 ): Promise<{ success: boolean; syncedWithSheet: boolean; message: string }> {
-  // 1. Update local storage first (instant responsiveness)
+  // Update local storage first
   const current = getLocalAttendanceRecords();
   const map = new Map<string, AttendanceRecord>();
   current.forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
@@ -127,20 +147,19 @@ export async function saveAttendanceBatch(
   const updated = Array.from(map.values());
   saveLocalAttendanceRecords(updated);
 
-  // 2. Sync with Google Apps Script if URL provided
   const scriptUrl = getSavedScriptUrl();
   if (!scriptUrl) {
     return {
       success: true,
       syncedWithSheet: false,
-      message: 'บันทึกในเครื่องเรียบร้อย (ยังไม่ได้ตั้งค่า Google Apps Script URL เพื่อซิงค์กับ Google Sheet)'
+      message: 'บันทึกในระบบเรียบร้อย (ยังไม่ได้ใส่ Web App URL เพื่ออัปเดตลง Google Sheet)'
     };
   }
 
   try {
     const res = await fetch(scriptUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Google Apps Script handles text/plain with JSON body best
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'saveAttendance',
         records: newRecords
@@ -152,13 +171,13 @@ export async function saveAttendanceBatch(
       return {
         success: true,
         syncedWithSheet: true,
-        message: 'บันทึกและซิงค์ข้อมูลไปยัง Google Sheet เรียบร้อยแล้ว'
+        message: 'บันทึกและอัปเดตลงใน Google Sheet เรียบร้อยแล้ว!'
       };
     } else {
       return {
         success: true,
         syncedWithSheet: false,
-        message: `บันทึกในเครื่องแล้ว แต่การซิงค์ชีตแจ้งเตือน: ${result?.message || 'ไม่สามารถเขียนข้อมูลได้'}`
+        message: `บันทึกในเครื่องแล้ว: ${result?.message || 'ไม่สามารถเขียนชีตได้'}`
       };
     }
   } catch (err: any) {
@@ -167,6 +186,59 @@ export async function saveAttendanceBatch(
       success: true,
       syncedWithSheet: false,
       message: `บันทึกในเครื่องแล้ว (การเชื่อมต่อไปยัง Google Sheet ขัดข้อง: ${err.message || err})`
+    };
+  }
+}
+
+// สำรองข้อมูลทั้งหมดขึ้น Google Sheet (Students + Teachers + Attendance + Logo)
+export async function backupAllToGoogleSheet(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) {
+    return {
+      success: false,
+      message: 'กรุณาตั้งค่า Google Apps Script Web App URL ในเมนูตั้งค่าก่อนสำรองข้อมูล'
+    };
+  }
+
+  const attendance = getLocalAttendanceRecords();
+  const logoUrl = getSavedLogo();
+
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'backupAll',
+        students: INITIAL_STUDENTS,
+        teachers: INITIAL_TEACHERS,
+        attendance: attendance,
+        logoUrl: logoUrl
+      })
+    });
+
+    const result = await res.json();
+    if (result && result.success) {
+      const nowStr = new Date().toLocaleString('th-TH');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_LAST_BACKUP, nowStr);
+      }
+      return {
+        success: true,
+        message: `สำรองข้อมูลทั้งหมดสำเร็จ! (นักศึกษา ${INITIAL_STUDENTS.length} คน, อาจารย์ ${INITIAL_TEACHERS.length} ท่าน, ประวัติเช็คชื่อ ${attendance.length} รายการ)`
+      };
+    } else {
+      return {
+        success: false,
+        message: `Google Sheet ตอบกลับ: ${result?.message || 'ไม่สามารถสำรองได้'}`
+      };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `การสำรองข้อมูลขัดข้อง: ${err.message || err}`
     };
   }
 }

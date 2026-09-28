@@ -37,7 +37,8 @@ export interface AttendanceRecord {
   yearLevel: string;
   gender: 'ชาย' | 'หญิง';
   status: AttendanceStatus;
-  timestamp?: string;
+  timestamp?: string; // ISO or formatted
+  recordedTime?: string; // Real-time clock e.g. "16:04:15"
 }
 
 export interface DailySummary {
@@ -47,6 +48,7 @@ export interface DailySummary {
   absent: number;
   leave: number;
   rate: number;
+  lastRecordedTime?: string;
 }
 
 export interface TeacherSummary {
@@ -60,6 +62,7 @@ export interface TeacherSummary {
   totalAbsent: number;
   totalLeave: number;
   overallRate: number;
+  lastCheckedTime?: string;
 }
 
 export interface StudentSummary {
@@ -74,4 +77,13 @@ export interface StudentSummary {
   absentDays: number;
   leaveDays: number;
   attendanceRate: number;
+  lastStatus?: AttendanceStatus;
+  lastRecordedTime?: string;
+}
+
+export interface AppSettings {
+  logoUrl?: string; // Base64 or URL
+  appTitle?: string;
+  scriptUrl?: string;
+  lastSyncTime?: string;
 }
