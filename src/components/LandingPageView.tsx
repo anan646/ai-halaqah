@@ -69,10 +69,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
         {/* Title & Organization Name */}
         <div className="space-y-1 pt-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-purple-100/80 border border-purple-200/60 text-purple-900 text-[11px] font-bold">
-            <Sparkles className="w-3 h-3 text-purple-600" />
-            <span>ระบบบันทึกและติดตามการเข้าร่วม</span>
-          </div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-purple-950 tracking-tight text-balance">
             กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
           </h1>
