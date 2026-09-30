@@ -136,50 +136,70 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </header>
 
-      {/* 2. MOBILE BOTTOM NAVIGATION BAR (Thumb-friendly, Never crowded or sinking!) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-purple-200/80 shadow-[0_-4px_25px_rgba(126,34,206,0.12)] py-1.5 px-4 flex items-center justify-around print:hidden">
-        <button
-          onClick={() => setCurrentTab('landing')}
-          className={`flex flex-col items-center justify-center py-1 px-4 rounded-2xl transition-all duration-200 ${
-            currentTab === 'landing'
-              ? 'text-purple-900 font-extrabold scale-105'
-              : 'text-purple-700/60 font-semibold hover:text-purple-900'
-          }`}
-        >
-          <div className={`p-1 rounded-full ${currentTab === 'landing' ? 'bg-purple-100 text-purple-800' : ''}`}>
-            <Home className="w-4 h-4" />
+      {/* 2. FLOATING BOTTOM NAVIGATION BAR WITH GLASS-FX & PURPLE THEME */}
+      <div className="md:hidden fixed bottom-3 inset-x-0 z-40 flex justify-center px-4 pointer-events-none print:hidden">
+        <nav className="pointer-events-auto relative w-full max-w-sm rounded-full overflow-hidden border border-purple-200/60 shadow-[0_10px_35px_rgba(107,33,168,0.22),0_2px_10px_rgba(107,33,168,0.1)] p-1.5 transition-all duration-300">
+          {/* Glass-FX Backdrop Layer with Purple Theme */}
+          <div className="glass-fx absolute inset-0 z-0 is-on pointer-events-none" aria-hidden="true">
+            <div className="absolute inset-0 backdrop-blur-xl" />
+            <div className="absolute inset-0" style={{ background: 'rgba(255, 255, 255, 0.45)' }} />
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-purple-600/15 to-indigo-500/10" />
+            <div
+              className="absolute inset-0"
+              style={{
+                boxShadow:
+                  'inset 0 -1px 1px 0 rgba(255, 255, 255, 0.6), inset 0 1px 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 16px 0 rgba(147, 51, 234, 0.15)',
+              }}
+            />
           </div>
-          <span className="text-[11px] mt-0.5">หน้าแรก</span>
-        </button>
 
-        <button
-          onClick={() => setCurrentTab('teacher')}
-          className={`flex flex-col items-center justify-center py-1 px-4 rounded-2xl transition-all duration-200 ${
-            currentTab === 'teacher'
-              ? 'text-purple-900 font-extrabold scale-105'
-              : 'text-purple-700/60 font-semibold hover:text-purple-900'
-          }`}
-        >
-          <div className={`p-1 rounded-full ${currentTab === 'teacher' ? 'bg-purple-100 text-purple-800' : ''}`}>
-            <UserCheck className="w-4 h-4" />
-          </div>
-          <span className="text-[11px] mt-0.5">อาจารย์</span>
-        </button>
+          {/* Interactive Navigation Items */}
+          <div className="relative z-10 flex items-center justify-between gap-1 w-full">
+            <button
+              type="button"
+              onClick={() => setCurrentTab('landing')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full transition-all duration-200 active:scale-95 ${
+                currentTab === 'landing'
+                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-extrabold shadow-md shadow-purple-950/25'
+                  : 'text-purple-950/80 hover:text-purple-950 hover:bg-white/40 font-bold'
+              }`}
+            >
+              <Home className="w-4 h-4 shrink-0" />
+              <span className="text-xs">หน้าแรก</span>
+            </button>
 
-        <button
-          onClick={() => setCurrentTab('admin')}
-          className={`flex flex-col items-center justify-center py-1 px-4 rounded-2xl transition-all duration-200 ${
-            currentTab === 'admin'
-              ? 'text-purple-900 font-extrabold scale-105'
-              : 'text-purple-700/60 font-semibold hover:text-purple-900'
-          }`}
-        >
-          <div className={`p-1 rounded-full ${currentTab === 'admin' ? 'bg-purple-100 text-purple-800' : ''}`}>
-            {isAdminLoggedIn ? <BarChart3 className="w-4 h-4" /> : <Lock className="w-3.5 h-3.5" />}
+            <button
+              type="button"
+              onClick={() => setCurrentTab('teacher')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full transition-all duration-200 active:scale-95 ${
+                currentTab === 'teacher'
+                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-extrabold shadow-md shadow-purple-950/25'
+                  : 'text-purple-950/80 hover:text-purple-950 hover:bg-white/40 font-bold'
+              }`}
+            >
+              <UserCheck className="w-4 h-4 shrink-0" />
+              <span className="text-xs">อาจารย์</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentTab('admin')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full transition-all duration-200 active:scale-95 ${
+                currentTab === 'admin'
+                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-extrabold shadow-md shadow-purple-950/25'
+                  : 'text-purple-950/80 hover:text-purple-950 hover:bg-white/40 font-bold'
+              }`}
+            >
+              {isAdminLoggedIn ? (
+                <BarChart3 className="w-4 h-4 shrink-0" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span className="text-xs">แอดมิน</span>
+            </button>
           </div>
-          <span className="text-[11px] mt-0.5">แอดมิน</span>
-        </button>
-      </nav>
+        </nav>
+      </div>
     </>
   );
 };

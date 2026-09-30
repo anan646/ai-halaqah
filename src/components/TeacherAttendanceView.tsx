@@ -616,7 +616,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       )}
 
       {/* 7. FLOATING ISLAND SAVE ACTION BAR (Mobile-First Thumb-Friendly) */}
-      <div className="fixed bottom-3 sm:bottom-4 left-0 right-0 px-3 sm:px-4 z-40 pointer-events-none">
+      <div className="fixed bottom-20 sm:bottom-4 left-0 right-0 px-3 sm:px-4 z-30 pointer-events-none">
         <div className="max-w-xl mx-auto bg-white/95 backdrop-blur-xl border border-purple-200/90 shadow-[0_12px_40px_rgba(126,34,206,0.18)] rounded-full p-2 sm:p-2.5 flex items-center justify-between gap-3 pointer-events-auto transition-all">
           <div className="pl-3 sm:pl-4 text-xs font-extrabold text-purple-950 hidden sm:block">
             มา <span className="text-emerald-700 font-black">{counts.present}</span> • ขาด <span className="text-rose-700 font-black">{counts.absent}</span> • ลา <span className="text-amber-700 font-black">{counts.leave}</span>
