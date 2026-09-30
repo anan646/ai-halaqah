@@ -45,10 +45,61 @@ export default function HomePage() {
     loadData();
   }, [loadData]);
 
+  // Synchronize with Browser History & Mobile Back/Forward button
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window === 'undefined') return;
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab') as 'landing' | 'teacher' | 'admin' | null;
+      const teacher = params.get('teacher');
+
+      if (tab === 'teacher') {
+        setCurrentTab('teacher');
+        if (teacher) setActiveTeacherName(decodeURIComponent(teacher));
+      } else if (tab === 'admin') {
+        setCurrentTab('admin');
+      } else {
+        setCurrentTab('landing');
+      }
+    };
+
+    // Parse initial URL on mount if user arrived via link
+    handlePopState();
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Custom navigation that pushes state to browser history
+  const navigateToTab = (tab: 'landing' | 'teacher' | 'admin', teacherName?: string) => {
+    setCurrentTab(tab);
+    if (teacherName !== undefined) {
+      setActiveTeacherName(teacherName);
+    }
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      if (tab === 'teacher' && (teacherName || activeTeacherName)) {
+        url.searchParams.set('teacher', teacherName || activeTeacherName);
+      } else {
+        url.searchParams.delete('teacher');
+      }
+      window.history.pushState({ tab, teacherName: teacherName || activeTeacherName }, '', url.toString());
+    }
+  };
+
+  // Back navigation that honors browser history
+  const handleBackNavigation = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigateToTab('landing');
+    }
+  };
+
   // Handle teacher selection from Landing Page
   const handleSelectTeacher = (teacherName: string) => {
-    setActiveTeacherName(teacherName);
-    setCurrentTab('teacher');
+    navigateToTab('teacher', teacherName);
   };
 
   // Handle Backup All to Google Sheet
@@ -66,7 +117,7 @@ export default function HomePage() {
   const handleAdminLogout = () => {
     setAdminSession(null);
     setAdminUser(null);
-    setCurrentTab('landing');
+    navigateToTab('landing');
   };
 
   return (
@@ -74,7 +125,7 @@ export default function HomePage() {
       {/* Navigation */}
       <Navbar
         currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={(tab) => navigateToTab(tab)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onRefreshData={loadData}
         onBackupAll={handleBackupAll}
@@ -86,11 +137,11 @@ export default function HomePage() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 pt-3 sm:pt-4">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 pt-2 sm:pt-4 pb-20 md:pb-8">
         {currentTab === 'landing' && (
           <LandingPageView
             onSelectTeacher={handleSelectTeacher}
-            onGoToAdmin={() => setCurrentTab('admin')}
+            onGoToAdmin={() => navigateToTab('admin')}
             onOpenSettings={() => setIsSettingsOpen(true)}
             customLogo={customLogo}
             onLogoUpdated={(logo) => setCustomLogo(logo)}
@@ -102,8 +153,15 @@ export default function HomePage() {
             records={records}
             onAttendanceSaved={loadData}
             activeTeacherName={activeTeacherName}
-            onTeacherChanged={setActiveTeacherName}
-            onBackToLanding={() => setCurrentTab('landing')}
+            onTeacherChanged={(name) => {
+              setActiveTeacherName(name);
+              if (typeof window !== 'undefined') {
+                const url = new URL(window.location.href);
+                url.searchParams.set('teacher', name);
+                window.history.replaceState({ tab: 'teacher', teacherName: name }, '', url.toString());
+              }
+            }}
+            onBackToLanding={handleBackNavigation}
           />
         )}
 
@@ -113,7 +171,7 @@ export default function HomePage() {
               records={records}
               adminUser={adminUser}
               onLogout={handleAdminLogout}
-              onBackToLanding={() => setCurrentTab('landing')}
+              onBackToLanding={handleBackNavigation}
               customLogo={customLogo}
               onLogoUpdated={(logo) => setCustomLogo(logo)}
               onOpenSettings={() => setIsSettingsOpen(true)}
@@ -122,23 +180,26 @@ export default function HomePage() {
             />
           ) : (
             <AdminLoginView
-              onLoginSuccess={(user) => setAdminUser(user)}
-              onCancel={() => setCurrentTab('landing')}
+              onLoginSuccess={(user) => {
+                setAdminUser(user);
+                navigateToTab('admin');
+              }}
+              onCancel={handleBackNavigation}
               customLogo={customLogo}
             />
           )
         )}
       </main>
 
-      {/* Settings Modal */}
+      {/* Settings Modal (Admin only) */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaved={loadData}
       />
 
-      {/* Clean Footer (Removed requested slogans) */}
-      <footer className="border-t border-purple-100 bg-white py-4 mt-auto text-center text-xs text-purple-800/60 print:hidden">
+      {/* Clean Footer */}
+      <footer className="border-t border-purple-100 bg-white py-4 mt-auto text-center text-xs text-purple-800/60 print:hidden hidden md:block">
         <p className="font-semibold text-purple-900">ระบบบันทึกการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</p>
       </footer>
     </div>
