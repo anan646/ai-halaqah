@@ -31,8 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      {/* 1. TOP NAVBAR (Clean, Spaced, Never Sinking or Crowded) */}
-      <header className="sticky top-2 sm:top-3.5 z-40 w-full px-2.5 sm:px-4 print:hidden pointer-events-none">
+      {/* 1. TOP NAVBAR (Hidden on mobile as requested in screenshot, shown on desktop) */}
+      <header className="hidden md:block sticky top-2 sm:top-3.5 z-40 w-full px-2.5 sm:px-4 print:hidden pointer-events-none">
         <div className="max-w-5xl mx-auto pointer-events-auto">
           <div className="bg-white/95 backdrop-blur-xl border border-purple-200/80 shadow-[0_8px_30px_rgb(126,34,206,0.08)] rounded-full px-3.5 sm:px-5 py-2 flex items-center justify-between gap-3 transition-all duration-300">
             
