@@ -4,7 +4,7 @@ import { getActiveStudents, getActiveTeachers } from './data-store';
 
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 const STORAGE_KEY_SCRIPT_URL = 'halaqah_apps_script_url';
-const STORAGE_KEY_LOGO = 'halaqah_custom_logo_v3';
+const STORAGE_KEY_LOGO = 'halaqah_custom_logo_v4';
 const STORAGE_KEY_LAST_BACKUP = 'halaqah_last_backup_time';
 const DEFAULT_SHEET_ID = '1S8XLzMp1w9CdeW5rydKmTYvvL_ie-ecFIfQbqi_P_D0';
 
@@ -32,11 +32,12 @@ export function getSavedLogo(): string {
     try {
       localStorage.removeItem('halaqah_custom_logo');
       localStorage.removeItem('halaqah_custom_logo_v2');
+      localStorage.removeItem('halaqah_custom_logo_v3');
     } catch {}
     const saved = localStorage.getItem(STORAGE_KEY_LOGO);
     if (saved && saved.trim()) return saved.trim();
   }
-  return '/logo.jpg';
+  return '/logo.png';
 }
 
 export function setSavedLogo(base64: string) {

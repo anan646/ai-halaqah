@@ -287,22 +287,19 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     }
   };
 
-  const logoSrc = customLogo || '/logo.jpg';
+  const logoSrc = customLogo || '/logo.png';
 
   return (
     <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 sm:space-y-7 animate-fadeIn">
-      {/* 1. TOP PROMINENT OFFICIAL LOGO */}
-      <div className="flex flex-col items-center justify-center text-center space-y-3 sm:space-y-4">
-        {/* Outer Shell */}
-        <div className="w-full max-w-sm sm:max-w-lg md:max-w-xl p-2.5 sm:p-3.5 rounded-3xl bg-purple-100/60 border border-purple-200/70 shadow-card transition-all duration-300 hover:shadow-card-hover">
-          <div className="bg-white rounded-[1.25rem] px-4 py-3 sm:px-8 sm:py-5 shadow-sm flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logoSrc}
-              alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
-              className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto object-contain transition-transform duration-300 hover:scale-[1.01]"
-            />
-          </div>
+      {/* 1. TOP PROMINENT OFFICIAL LOGO (NO BACKGROUND CONTAINER) */}
+      <div className="flex flex-col items-center justify-center text-center space-y-2 sm:space-y-3">
+        <div className="w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl flex items-center justify-center py-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoSrc}
+            alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
+            className="w-auto h-24 sm:h-32 md:h-40 lg:h-48 max-w-full object-contain transition-transform duration-300 hover:scale-[1.02]"
+          />
         </div>
 
         {/* Title */}
@@ -311,7 +308,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
           </h1>
           <p className="text-xs sm:text-sm text-purple-800/80 font-medium">
-            คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี
+            ระบบบันทึกและติดตามการเข้าร่วม
           </p>
         </div>
       </div>

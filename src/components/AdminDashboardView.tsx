@@ -413,7 +413,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const handleResetLogo = () => {
     if (confirm('คุณต้องการรีเซ็ตโลโก้กลับเป็นรูปทางการเริ่มต้นหรือไม่?')) {
       setSavedLogo('');
-      if (onLogoUpdated) onLogoUpdated('/logo.jpg');
+      if (onLogoUpdated) onLogoUpdated('/logo.png');
       alert('รีเซ็ตโลโก้กลับเป็นรูปทางการเริ่มต้นเรียบร้อยแล้ว');
     }
   };
@@ -1886,10 +1886,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 bg-white rounded-2xl border border-purple-200 flex items-center justify-center">
+              <div className="p-3 bg-white/70 rounded-2xl border border-purple-200 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={customLogo || '/logo.jpg'}
+                  src={customLogo || '/logo.png'}
                   alt="Current Logo"
                   className="max-h-24 w-auto object-contain"
                 />
