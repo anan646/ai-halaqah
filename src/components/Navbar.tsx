@@ -137,8 +137,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       </header>
 
       {/* 2. FLOATING BOTTOM NAVIGATION BAR WITH GLASS-FX & PURPLE THEME */}
-      <div className="md:hidden fixed bottom-3 inset-x-0 z-40 flex justify-center px-4 pointer-events-none print:hidden">
-        <nav className="pointer-events-auto relative w-full max-w-sm rounded-full overflow-hidden border border-purple-200/60 shadow-[0_10px_35px_rgba(107,33,168,0.22),0_2px_10px_rgba(107,33,168,0.1)] p-1.5 transition-all duration-300">
+      <div className="md:hidden fixed bottom-4 inset-x-0 z-40 flex justify-center px-4 pointer-events-none print:hidden">
+        <nav className="pointer-events-auto relative w-full max-w-[320px] rounded-full overflow-hidden border border-purple-200/60 shadow-[0_12px_38px_rgba(107,33,168,0.25),0_2px_10px_rgba(107,33,168,0.12)] p-2 transition-all duration-300">
           {/* Glass-FX Backdrop Layer with Purple Theme */}
           <div className="glass-fx absolute inset-0 z-0 is-on pointer-events-none" aria-hidden="true">
             <div className="absolute inset-0 backdrop-blur-xl" />
@@ -153,49 +153,36 @@ export const Navbar: React.FC<NavbarProps> = ({
             />
           </div>
 
-          {/* Interactive Navigation Items */}
-          <div className="relative z-10 flex items-center justify-between gap-1 w-full">
+          {/* Interactive Navigation Items (Spacious & Thumb-Friendly) */}
+          <div className="relative z-10 flex items-center justify-between gap-1.5 w-full">
             <button
               type="button"
               onClick={() => setCurrentTab('landing')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full transition-all duration-200 active:scale-95 ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-full transition-all duration-200 active:scale-95 ${
                 currentTab === 'landing'
-                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-extrabold shadow-md shadow-purple-950/25'
+                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-black shadow-md shadow-purple-950/25 scale-102'
                   : 'text-purple-950/80 hover:text-purple-950 hover:bg-white/40 font-bold'
               }`}
             >
-              <Home className="w-4 h-4 shrink-0" />
-              <span className="text-xs">หน้าแรก</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentTab('teacher')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full transition-all duration-200 active:scale-95 ${
-                currentTab === 'teacher'
-                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-extrabold shadow-md shadow-purple-950/25'
-                  : 'text-purple-950/80 hover:text-purple-950 hover:bg-white/40 font-bold'
-              }`}
-            >
-              <UserCheck className="w-4 h-4 shrink-0" />
-              <span className="text-xs">อาจารย์</span>
+              <Home className="w-5 h-5 shrink-0" />
+              <span className="text-sm font-extrabold">หน้าแรก</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentTab('admin')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full transition-all duration-200 active:scale-95 ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-full transition-all duration-200 active:scale-95 ${
                 currentTab === 'admin'
-                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-extrabold shadow-md shadow-purple-950/25'
+                  ? 'bg-gradient-to-r from-purple-800 to-purple-900 text-white font-black shadow-md shadow-purple-950/25 scale-102'
                   : 'text-purple-950/80 hover:text-purple-950 hover:bg-white/40 font-bold'
               }`}
             >
               {isAdminLoggedIn ? (
-                <BarChart3 className="w-4 h-4 shrink-0" />
+                <BarChart3 className="w-5 h-5 shrink-0" />
               ) : (
-                <Lock className="w-3.5 h-3.5 shrink-0" />
+                <Lock className="w-4 h-4 shrink-0" />
               )}
-              <span className="text-xs">แอดมิน</span>
+              <span className="text-sm font-extrabold">แอดมิน</span>
             </button>
           </div>
         </nav>
