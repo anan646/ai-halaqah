@@ -291,33 +291,25 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
   return (
     <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 sm:space-y-7 animate-fadeIn">
-      {/* 1. TOP PROMINENT OFFICIAL LOGO WITH LUXURY DIMENSION */}
-      <div className="relative flex flex-col items-center justify-center text-center space-y-4 pt-2 sm:pt-4 pb-2">
-        {/* Luminous Ambient Light Aura behind logo (creates 3D floating dimension & warmth) */}
-        <div
-          className="absolute -top-4 left-1/2 -translate-x-1/2 w-72 sm:w-96 md:w-[500px] h-44 sm:h-60 rounded-full bg-gradient-to-tr from-purple-300/35 via-amber-200/30 to-indigo-300/25 blur-3xl pointer-events-none -z-10"
-          aria-hidden="true"
-        />
-
-        {/* Centerpiece Logo Artwork with Depth & Dimension */}
-        <div className="relative w-full max-w-[340px] sm:max-w-md md:max-w-lg lg:max-w-xl flex items-center justify-center py-2 group">
-          {/* Subtle floating shadow reflection beneath logo */}
-          <div
-            className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4/5 h-4 rounded-full bg-purple-900/10 blur-md pointer-events-none"
-            aria-hidden="true"
-          />
-
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={logoSrc}
-            alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
-            className="w-full h-32 sm:h-44 md:h-52 lg:h-60 object-contain transition-all duration-500 ease-spring group-hover:scale-[1.03] drop-shadow-[0_12px_24px_rgba(88,28,135,0.18)] hover:drop-shadow-[0_18px_36px_rgba(88,28,135,0.28)]"
-          />
+      {/* 1. TOP PROMINENT OFFICIAL LOGO (NEW FTU EDU ANIMATION WITH LIGHT SWEEP) */}
+      <div className="relative flex flex-col items-center justify-center text-center space-y-4 pt-1 sm:pt-3 pb-2">
+        {/* Animated New Logo Showcase matching C:\Users\Lenovo\Downloads\อินโทรคณะ ใหม่.mp4 */}
+        <div className="relative w-full max-w-[360px] sm:max-w-lg md:max-w-xl flex items-center justify-center py-1 group">
+          <div className="w-full overflow-hidden rounded-2xl sm:rounded-3xl shadow-[0_10px_32px_-6px_rgba(88,28,135,0.14)] border border-purple-200/80 bg-white transition-all duration-300 hover:shadow-[0_14px_40px_-6px_rgba(88,28,135,0.22)]">
+            <video
+              src="/faculty-intro.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto object-contain block"
+            />
+          </div>
         </div>
 
-        {/* Title & Dimension Subtitle Pill */}
-        <div className="space-y-2.5 pt-1 text-center">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-purple-950 tracking-tight text-balance drop-shadow-xs">
+        {/* Title & Subtitle Pill */}
+        <div className="space-y-2 pt-1 text-center">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-purple-950 tracking-tight text-balance">
             กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
           </h1>
 
