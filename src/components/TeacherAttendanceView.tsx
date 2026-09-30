@@ -12,7 +12,10 @@ import {
   Sparkles,
   ChevronRight,
   Timer,
-  ArrowLeft
+  ArrowLeft,
+  Check,
+  UserX,
+  FileText
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
@@ -34,6 +37,9 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   onTeacherChanged,
   onBackToLanding,
 }) => {
+  const teachers = useMemo(() => getActiveTeachers(), []);
+  const allStudents = useMemo(() => getActiveStudents(), []);
+
   // 1. Teacher selection
   const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -63,9 +69,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; time: string }>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
-
-  const teachers = useMemo(() => getActiveTeachers(), []);
-  const allStudents = useMemo(() => getActiveStudents(), []);
 
   // Initialize selected teacher
   useEffect(() => {
@@ -202,121 +205,135 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   // Save
   const handleSaveAttendance = async () => {
     if (!currentTeacher || groupStudents.length === 0) return;
+
     setIsSaving(true);
     setSaveMessage(null);
 
     const nowISO = new Date().toISOString();
-    const batchRecords: AttendanceRecord[] = groupStudents.map((st) => {
-      const entry = attendanceMap[st.studentId] || { status: 'มา', time: currentTime };
+    const payload: AttendanceRecord[] = groupStudents.map((st) => {
+      const item = attendanceMap[st.studentId] || { status: 'มา', time: currentTime };
       return {
-        id: `ATT_${selectedDate}_${st.studentId}`,
         date: selectedDate,
-        recordedTime: entry.time || currentTime,
         studentId: st.studentId,
         studentName: st.fullName,
         teacherName: currentTeacher.name,
         groupName: currentTeacher.groupName,
         yearLevel: currentTeacher.yearLevel,
         gender: currentTeacher.gender,
-        status: entry.status,
+        status: item.status,
         timestamp: nowISO,
+        recordedTime: item.time || currentTime,
       };
     });
 
     try {
-      const res = await saveAttendanceBatch(batchRecords);
-      setIsSaving(false);
+      const res = await saveAttendanceBatch(payload);
       if (res.success) {
-        setSaveMessage({
-          type: res.syncedWithSheet ? 'success' : 'info',
-          text: res.message,
-        });
-
         confetti({
           particleCount: 50,
           spread: 60,
-          origin: { y: 0.8 },
-          colors: ['#7e22ce', '#9333ea', '#a855f7', '#10b981'],
+          origin: { y: 0.85 },
+          colors: ['#7e22ce', '#a855f7', '#10b981'],
         });
-
+        setSaveMessage({
+          type: 'success',
+          text: `บันทึกข้อมูลเรียบร้อยแล้ว (${groupStudents.length} คน)`,
+        });
         onAttendanceSaved();
       } else {
-        setSaveMessage({ type: 'error', text: res.message });
+        setSaveMessage({
+          type: 'error',
+          text: res.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล',
+        });
       }
-    } catch (err: any) {
+    } catch {
+      setSaveMessage({
+        type: 'error',
+        text: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์',
+      });
+    } finally {
       setIsSaving(false);
-      setSaveMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการบันทึก' });
     }
   };
 
   const formatThaiDate = (dateStr: string) => {
     try {
-      const parts = dateStr.split('-');
-      if (parts.length === 3) {
-        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        return d.toLocaleDateString('th-TH', {
-          weekday: 'short',
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        });
-      }
-    } catch {}
-    return dateStr;
+      const [y, m, d] = dateStr.split('-');
+      const thaiYear = parseInt(y, 10) + 543;
+      const months = [
+        'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+      ];
+      return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${thaiYear}`;
+    } catch {
+      return dateStr;
+    }
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 pb-28">
-      {/* Top Bar: Back & Teacher Switcher */}
+    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 animate-fadeIn">
+      {/* 1. TOP BAR: BACK & LIVE CLOCK */}
       <div className="flex items-center justify-between gap-2">
         {onBackToLanding && (
           <button
             type="button"
             onClick={onBackToLanding}
-            className="inline-flex items-center space-x-1 text-xs font-bold text-purple-700 hover:text-purple-950 bg-white border border-purple-200 px-3 py-2 rounded-xl shadow-sm transition-all"
+            className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 hover:text-purple-950 bg-white/90 hover:bg-white border border-purple-200/80 px-3.5 py-2 rounded-full shadow-card hover:shadow-card-hover transition-all duration-300 ease-spring active:scale-95 group"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>เปลี่ยนอาจารย์</span>
+            <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center group-hover:-translate-x-0.5 transition-transform duration-200">
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </div>
+            <span>เปลี่ยนอาจารย์ / หน้าแรก</span>
           </button>
         )}
 
-        {/* Real-time Clock */}
-        <div className="inline-flex items-center space-x-1.5 bg-purple-100/80 px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-purple-900 ml-auto border border-purple-200">
-          <Timer className="w-3.5 h-3.5 text-purple-600" />
-          <span>{currentTime} น.</span>
+        {/* Real-time Clock with Pulsing Dot */}
+        <div className="inline-flex items-center space-x-2 bg-white/90 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold text-purple-950 border border-purple-200/80 shadow-card ml-auto">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <Timer className="w-3.5 h-3.5 text-purple-700" />
+          <span className="tabular-nums">{currentTime} น.</span>
         </div>
       </div>
 
-      {/* Teacher Card Banner (Mobile Optimized) */}
-      <div className="bg-gradient-to-r from-purple-800 via-purple-700 to-indigo-900 text-white rounded-3xl p-5 sm:p-6 shadow-md shadow-purple-900/10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-white/20 text-purple-100 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                {currentTeacher?.gender === 'ชาย' ? 'กลุ่มชาย' : 'กลุ่มหญิง'}
+      {/* 2. TEACHER BANNER WITH DOUBLE-BEZEL & DEPTH */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950 text-white p-5 sm:p-7 shadow-xl shadow-purple-900/15 border border-purple-700/60">
+        {/* Ambient Glow Orb */}
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="bg-white/15 backdrop-blur-md text-purple-100 text-[10px] font-mono font-extrabold px-3 py-0.5 rounded-full border border-white/20">
+                {currentTeacher?.gender === 'ชาย' ? '👨‍💼 กลุ่มชาย' : '👩‍💼 กลุ่มหญิง'}
               </span>
-              <span className="bg-purple-300/30 text-purple-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
+              <span className="bg-purple-300/25 backdrop-blur-md text-purple-200 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-purple-300/30">
                 {currentTeacher?.yearLevel}
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-balance">
               {currentTeacher?.name}
             </h1>
-            <p className="text-xs text-purple-200 mt-0.5 flex items-center gap-1.5">
+            <p className="text-xs text-purple-200/90 font-medium flex items-center gap-1.5 pt-0.5">
               <Users className="w-3.5 h-3.5 text-purple-300" />
-              <span>{currentTeacher?.groupName} ({groupStudents.length} คน)</span>
+              <span>{currentTeacher?.groupName} • นักศึกษาในกลุ่ม {groupStudents.length} คน</span>
             </p>
           </div>
 
-          {/* Quick Dropdown to switch within group */}
+          {/* Teacher Selector Dropdown */}
           <div className="w-full sm:w-auto">
+            <div className="text-[11px] text-purple-200/70 font-semibold mb-1 sm:hidden">
+              สลับกลุ่มอาจารย์:
+            </div>
             <select
               value={selectedTeacherName}
               onChange={(e) => handleTeacherChange(e.target.value)}
-              className="w-full sm:w-64 bg-white/15 text-white text-xs rounded-xl px-3 py-2 border border-white/25 focus:outline-none focus:bg-purple-900 font-semibold"
+              className="w-full sm:w-72 bg-white/15 hover:bg-white/20 text-white text-xs rounded-2xl px-3.5 py-2.5 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold backdrop-blur-md transition-all cursor-pointer"
             >
               {teachers.map((t) => (
-                <option key={t.groupId} value={t.name} className="text-gray-900">
+                <option key={t.groupId} value={t.name} className="text-gray-900 bg-white">
                   {t.name} ({t.groupName})
                 </option>
               ))}
@@ -325,35 +342,37 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         </div>
       </div>
 
-      {/* Date Selector & Status Cards (Mobile-first Layout) */}
-      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-sm space-y-4">
+      {/* 3. DATE SELECTOR & STATUS CARDS */}
+      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-4">
         {/* Date Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-purple-700" />
-            <span className="text-xs sm:text-sm font-bold text-purple-950">
-              วันที่เช็คชื่อ: {formatThaiDate(selectedDate)}
-            </span>
-            {isDateAlreadySaved ? (
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                บันทึกแล้ว
+            <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs sm:text-sm font-extrabold text-purple-950">
+                วันที่เช็คชื่อ: {formatThaiDate(selectedDate)}
               </span>
-            ) : (
-              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
-                ยังไม่บันทึก
-              </span>
-            )}
+              <div className="text-[10px] text-purple-700/80 font-medium">
+                {isDateAlreadySaved ? (
+                  <span className="text-emerald-700 font-bold">● บันทึกแล้ว (สามารถแก้ไขได้)</span>
+                ) : (
+                  <span className="text-purple-600">○ ยังไม่มีบันทึกของวันนี้</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Quick Buttons for mobile */}
-          <div className="flex items-center gap-1.5">
+          {/* Quick Date Presets */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={() => setSelectedDate(getTodayString())}
-              className={`flex-1 sm:flex-none text-xs px-3 py-1.5 rounded-xl border font-bold transition-all ${
+              className={`text-xs px-3.5 py-1.5 rounded-full border font-bold transition-all duration-200 active:scale-95 ${
                 selectedDate === getTodayString()
-                  ? 'bg-purple-700 text-white border-purple-700'
-                  : 'bg-purple-50 text-purple-800 border-purple-200'
+                  ? 'bg-purple-800 text-white border-purple-800 shadow-sm'
+                  : 'bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100'
               }`}
             >
               วันนี้
@@ -365,7 +384,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                 d.setDate(d.getDate() - 1);
                 setSelectedDate(d.toISOString().slice(0, 10));
               }}
-              className="flex-1 sm:flex-none text-xs px-3 py-1.5 rounded-xl border bg-purple-50 text-purple-800 border-purple-200 font-bold"
+              className="text-xs px-3 py-1.5 rounded-full border bg-purple-50 text-purple-900 border-purple-200 font-bold hover:bg-purple-100 active:scale-95 transition-all"
             >
               เมื่อวาน
             </button>
@@ -373,24 +392,35 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex-1 sm:flex-none px-2 py-1 border border-purple-200 rounded-xl text-xs font-bold text-purple-900 bg-purple-50"
+              className="px-3 py-1.5 border border-purple-200 rounded-full text-xs font-bold text-purple-950 bg-purple-50/80 focus:outline-none focus:ring-2 focus:ring-purple-600"
             />
           </div>
         </div>
 
-        {/* Live Counts Bar (Mobile-Optimized) */}
-        <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-purple-50">
-          <div className="p-2 rounded-2xl bg-emerald-50 border border-emerald-200">
-            <div className="text-base sm:text-lg font-extrabold text-emerald-800">{counts.present}</div>
-            <div className="text-[11px] font-bold text-emerald-700">มา</div>
+        {/* Live Counts Cards (Tactile 3-Card Bento) */}
+        <div className="grid grid-cols-3 gap-2.5 text-center pt-3 border-t border-purple-50">
+          <div className="p-2.5 sm:p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 transition-transform duration-200 hover:scale-[1.01]">
+            <div className="text-lg sm:text-2xl font-black text-emerald-800 tabular-nums">{counts.present}</div>
+            <div className="text-[11px] font-bold text-emerald-700 flex items-center justify-center gap-1">
+              <Check className="w-3 h-3" />
+              <span>มา</span>
+            </div>
           </div>
-          <div className="p-2 rounded-2xl bg-rose-50 border border-rose-200">
-            <div className="text-base sm:text-lg font-extrabold text-rose-800">{counts.absent}</div>
-            <div className="text-[11px] font-bold text-rose-700">ขาด</div>
+
+          <div className="p-2.5 sm:p-3 rounded-2xl bg-rose-50/70 border border-rose-200/80 transition-transform duration-200 hover:scale-[1.01]">
+            <div className="text-lg sm:text-2xl font-black text-rose-800 tabular-nums">{counts.absent}</div>
+            <div className="text-[11px] font-bold text-rose-700 flex items-center justify-center gap-1">
+              <UserX className="w-3 h-3" />
+              <span>ขาด</span>
+            </div>
           </div>
-          <div className="p-2 rounded-2xl bg-amber-50 border border-amber-200">
-            <div className="text-base sm:text-lg font-extrabold text-amber-800">{counts.leave}</div>
-            <div className="text-[11px] font-bold text-amber-700">ลา</div>
+
+          <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 transition-transform duration-200 hover:scale-[1.01]">
+            <div className="text-lg sm:text-2xl font-black text-amber-800 tabular-nums">{counts.leave}</div>
+            <div className="text-[11px] font-bold text-amber-700 flex items-center justify-center gap-1">
+              <FileText className="w-3 h-3" />
+              <span>ลา</span>
+            </div>
           </div>
         </div>
       </div>
@@ -398,94 +428,94 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       {/* Save Alert */}
       {saveMessage && (
         <div
-          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs font-semibold ${
+          className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-bold animate-fadeIn ${
             saveMessage.type === 'success'
-              ? 'bg-purple-50 border-purple-200 text-purple-950'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
               : 'bg-rose-50 border-rose-200 text-rose-900'
           }`}
         >
           <div className="flex items-center space-x-2">
             {saveMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             ) : (
-              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
             )}
             <span>{saveMessage.text}</span>
           </div>
-          <button onClick={() => setSaveMessage(null)} className="underline ml-2">
+          <button onClick={() => setSaveMessage(null)} className="underline ml-2 text-xs">
             ปิด
           </button>
         </div>
       )}
 
-      {/* Quick Mark All Buttons */}
+      {/* 4. STUDENTS LIST HEADER & QUICK MARK ALL */}
       <div className="flex items-center justify-between px-1">
-        <span className="text-xs font-bold text-purple-950">
-          รายชื่อนักศึกษา ({groupStudents.length} คน)
+        <span className="text-xs sm:text-sm font-extrabold text-purple-950">
+          รายชื่อนักศึกษาในกลุ่ม ({groupStudents.length} คน)
         </span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => handleMarkAll('มา')}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-100 text-purple-900 hover:bg-purple-200 transition-colors"
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 transition-all active:scale-95 shadow-sm"
           >
             มาทุกคน
           </button>
           <button
             type="button"
             onClick={() => handleMarkAll('ขาด')}
-            className="text-xs font-bold px-2.5 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 shadow-sm"
           >
             ขาดหมด
           </button>
         </div>
       </div>
 
-      {/* STUDENTS LIST - MOBILE FIRST CARD TILES (No cramped columns, comfortable touch targets!) */}
-      <div className="space-y-2">
+      {/* 5. STUDENT CARDS (Finger-friendly Tactile Toggle) */}
+      <div className="space-y-2.5">
         {groupStudents.map((st, idx) => {
           const entry = attendanceMap[st.studentId] || { status: 'มา', time: currentTime };
           return (
             <div
               key={st.studentId}
-              className={`p-3 sm:p-4 rounded-2xl bg-white border transition-all ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-white border transition-all duration-200 shadow-card hover:shadow-card-hover ${
                 entry.status === 'ขาด'
-                  ? 'border-rose-200 bg-rose-50/30'
+                  ? 'border-rose-300 bg-rose-50/20'
                   : entry.status === 'ลา'
-                  ? 'border-amber-200 bg-amber-50/30'
-                  : 'border-purple-100 hover:border-purple-200'
+                  ? 'border-amber-300 bg-amber-50/20'
+                  : 'border-purple-100/90'
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 {/* Student Info */}
-                <div className="flex items-start space-x-2.5 min-w-0">
-                  <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                <div className="flex items-start space-x-3 min-w-0">
+                  <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-900 text-xs font-mono font-extrabold flex items-center justify-center shrink-0 mt-0.5 border border-purple-200/60">
                     {idx + 1}
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-purple-950 truncate">
+                    <div className="text-sm font-extrabold text-purple-950 truncate">
                       {st.fullName}
                     </div>
-                    <div className="text-[11px] font-mono text-purple-800/60 flex items-center gap-2">
+                    <div className="text-[11px] font-mono text-purple-800/70 flex items-center gap-2 mt-0.5">
                       <span>รหัส {st.studentId}</span>
                       <span>•</span>
-                      <span className="text-purple-600 flex items-center gap-0.5">
-                        <Clock className="w-3 h-3" />
-                        <span>{entry.time || '-'}</span>
+                      <span className="text-purple-700 font-semibold flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-purple-500" />
+                        <span className="tabular-nums">{entry.time || '-'}</span>
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Big Segmented Status Buttons (Min 44px height for easy tapping!) */}
+                {/* Big Segmented Status Buttons (Min 44px touch target) */}
                 <div className="flex items-center space-x-1.5 w-full sm:w-auto pt-1 sm:pt-0">
                   <button
                     type="button"
                     onClick={() => handleStatusChange(st.studentId, 'มา')}
-                    className={`flex-1 sm:w-16 h-10 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center ${
+                    className={`flex-1 sm:w-16 h-11 rounded-xl text-xs font-extrabold transition-all duration-200 flex items-center justify-center active:scale-95 ${
                       entry.status === 'มา'
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-                        : 'bg-purple-50 text-purple-800 hover:bg-emerald-50 hover:text-emerald-700'
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-700/25 ring-2 ring-emerald-500/20'
+                        : 'bg-purple-50/80 text-purple-900 hover:bg-emerald-50 hover:text-emerald-700'
                     }`}
                   >
                     มา
@@ -493,10 +523,10 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleStatusChange(st.studentId, 'ขาด')}
-                    className={`flex-1 sm:w-16 h-10 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center ${
+                    className={`flex-1 sm:w-16 h-11 rounded-xl text-xs font-extrabold transition-all duration-200 flex items-center justify-center active:scale-95 ${
                       entry.status === 'ขาด'
-                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
-                        : 'bg-purple-50 text-purple-800 hover:bg-rose-50 hover:text-rose-700'
+                        ? 'bg-rose-600 text-white shadow-md shadow-rose-700/25 ring-2 ring-rose-500/20'
+                        : 'bg-purple-50/80 text-purple-900 hover:bg-rose-50 hover:text-rose-700'
                     }`}
                   >
                     ขาด
@@ -504,10 +534,10 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleStatusChange(st.studentId, 'ลา')}
-                    className={`flex-1 sm:w-16 h-10 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center ${
+                    className={`flex-1 sm:w-16 h-11 rounded-xl text-xs font-extrabold transition-all duration-200 flex items-center justify-center active:scale-95 ${
                       entry.status === 'ลา'
-                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
-                        : 'bg-purple-50 text-purple-800 hover:bg-amber-50 hover:text-amber-700'
+                        ? 'bg-amber-500 text-white shadow-md shadow-amber-600/25 ring-2 ring-amber-500/20'
+                        : 'bg-purple-50/80 text-purple-900 hover:bg-amber-50 hover:text-amber-700'
                     }`}
                   >
                     ลา
@@ -519,13 +549,13 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         })}
       </div>
 
-      {/* Past Dates Grid */}
+      {/* 6. PAST DATES HISTORY */}
       {groupHistory.length > 0 && (
-        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-5 space-y-3">
+        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 space-y-3 shadow-card">
           <div className="flex items-center justify-between text-xs font-bold text-purple-950">
             <span className="flex items-center gap-1.5">
               <History className="w-4 h-4 text-purple-700" />
-              <span>ประวัติการเช็คชื่อของกลุ่มนี้ ({groupHistory.length} วัน)</span>
+              <span>ประวัติการเช็คชื่อย้อนหลัง ({groupHistory.length} วัน)</span>
             </span>
           </div>
 
@@ -535,15 +565,15 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                 key={item.date}
                 type="button"
                 onClick={() => setSelectedDate(item.date)}
-                className={`p-2.5 rounded-xl border text-left text-xs transition-all ${
+                className={`p-3 rounded-2xl border text-left text-xs transition-all duration-200 active:scale-95 ${
                   selectedDate === item.date
                     ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-600/20 font-bold'
                     : 'border-purple-100 hover:bg-purple-50/50'
                 }`}
               >
-                <div className="font-bold text-purple-950">{item.date}</div>
-                <div className="text-[10px] text-purple-700 mt-0.5">
-                  มา {item.present} / ขาด {item.absent}
+                <div className="font-bold text-purple-950 font-mono">{item.date}</div>
+                <div className="text-[10px] text-purple-700 mt-1 font-semibold">
+                  มา {item.present} • ขาด {item.absent}
                 </div>
               </button>
             ))}
@@ -551,20 +581,22 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         </div>
       )}
 
-      {/* STICKY BOTTOM SAVE ACTION BAR FOR MOBILE (Thumb friendly!) */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white/95 backdrop-blur-md border-t border-purple-200 shadow-2xl z-30">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <div className="text-xs text-purple-900 font-bold hidden sm:block">
-            สรุป: มา {counts.present} | ขาด {counts.absent} | ลา {counts.leave}
+      {/* 7. FLOATING ISLAND SAVE ACTION BAR (Mobile-First Thumb-Friendly) */}
+      <div className="fixed bottom-3 sm:bottom-4 left-0 right-0 px-3 sm:px-4 z-40 pointer-events-none">
+        <div className="max-w-xl mx-auto bg-white/95 backdrop-blur-xl border border-purple-200/90 shadow-[0_12px_40px_rgba(126,34,206,0.18)] rounded-full p-2 sm:p-2.5 flex items-center justify-between gap-3 pointer-events-auto transition-all">
+          <div className="pl-3 sm:pl-4 text-xs font-extrabold text-purple-950 hidden sm:block">
+            มา <span className="text-emerald-700 font-black">{counts.present}</span> • ขาด <span className="text-rose-700 font-black">{counts.absent}</span> • ลา <span className="text-amber-700 font-black">{counts.leave}</span>
           </div>
 
           <button
             type="button"
             onClick={handleSaveAttendance}
             disabled={isSaving}
-            className="w-full sm:w-auto h-12 px-8 bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-lg shadow-purple-900/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 ml-auto"
+            className="w-full sm:w-auto h-12 px-7 bg-gradient-to-r from-purple-800 to-purple-700 hover:from-purple-900 hover:to-purple-800 text-white font-extrabold text-xs sm:text-sm rounded-full shadow-md shadow-purple-900/25 transition-all duration-200 flex items-center justify-center space-x-2 active:scale-95 disabled:opacity-50 ml-auto group"
           >
-            <Save className={`w-5 h-5 ${isSaving ? 'animate-spin' : ''}`} />
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+              <Save className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : 'group-hover:scale-110 transition-transform'}`} />
+            </div>
             <span>{isSaving ? 'กำลังบันทึกข้อมูล...' : 'บันทึกผลการเช็คชื่อ'}</span>
           </button>
         </div>

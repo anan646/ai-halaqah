@@ -373,31 +373,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   }, [teachers, editorSearch]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-20">
+    <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-24 animate-fadeIn">
       {/* ==================== 1. TOP HEADER & PROMINENT BACK BUTTON ==================== */}
-      <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Back button & Title */}
+      <div className="bg-white rounded-3xl border border-purple-100/90 p-4 sm:p-6 shadow-card hover:shadow-card-hover transition-all duration-300 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Back button & Title with nested button-in-button */}
           <div className="flex items-center space-x-3">
             {onBackToLanding && (
               <button
                 type="button"
                 onClick={onBackToLanding}
-                className="flex items-center space-x-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-extrabold transition-all shadow-sm shrink-0"
+                className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 hover:text-purple-950 bg-white/90 hover:bg-white border border-purple-200/80 px-3.5 py-2 rounded-full shadow-card hover:shadow-card-hover transition-all duration-300 ease-spring active:scale-95 group shrink-0"
               >
-                <ArrowLeft className="w-4 h-4 text-purple-700" />
+                <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center group-hover:-translate-x-0.5 transition-transform duration-200">
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                </div>
                 <span>ย้อนกลับ</span>
               </button>
             )}
 
             <div>
               <div className="flex items-center space-x-2">
-                <span className="bg-purple-100 text-purple-900 text-[11px] px-2.5 py-0.5 rounded-full font-bold">
+                <span className="bg-purple-100/90 text-purple-900 text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border border-purple-200/60">
                   {adminUser?.role === 'subadmin' ? 'แอดมินรอง' : 'ผู้ดูแลระบบหลัก'}
                 </span>
                 <span className="text-xs text-purple-800 font-semibold">{adminUser?.name || 'แอดมิน'}</span>
               </div>
-              <h1 className="text-lg sm:text-xl font-black text-purple-950 mt-0.5">
+              <h1 className="text-lg sm:text-xl font-black text-purple-950 mt-0.5 tracking-tight">
                 ศูนย์จัดการระบบและแดชบอร์ด
               </h1>
             </div>
@@ -407,7 +409,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 print:hidden">
             <button
               onClick={() => exportToExcel(filteredRecords, teacherSummaries, studentSummaries, 'แดชบอร์ดสรุปผล')}
-              className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition-all"
+              className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-full shadow-sm transition-all"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
@@ -415,7 +417,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             <button
               onClick={() => exportToWord(filteredRecords, teacherSummaries, 'แดชบอร์ดสรุปผล')}
-              className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition-all"
+              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-full shadow-sm transition-all"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Word</span>
@@ -423,7 +425,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             <button
               onClick={() => downloadPdfReport(filteredRecords, teacherSummaries, 'แดชบอร์ดสรุปผล')}
-              className="flex items-center space-x-1 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition-all"
+              className="flex items-center space-x-1.5 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-full shadow-sm transition-all"
             >
               <Download className="w-3.5 h-3.5" />
               <span>PDF</span>
@@ -431,7 +433,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             <button
               onClick={() => printReport()}
-              className="flex items-center space-x-1 bg-gray-800 hover:bg-black text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition-all"
+              className="flex items-center space-x-1.5 bg-gray-800 hover:bg-black active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-full shadow-sm transition-all"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>พิมพ์</span>
@@ -439,7 +441,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             <button
               onClick={onLogout}
-              className="flex items-center space-x-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold px-3 py-2 rounded-xl transition-all"
+              className="flex items-center space-x-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold px-3 py-2 rounded-full active:scale-95 transition-all"
               title="ออกจากระบบแอดมิน"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -449,30 +451,30 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
 
         {/* Minimal High-Contrast KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 pt-2 border-t border-purple-50">
-          <div className="bg-purple-50/60 p-3 rounded-2xl border border-purple-100">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pt-3 border-t border-purple-50">
+          <div className="bg-purple-50/50 hover:bg-purple-50 p-3.5 rounded-2xl border border-purple-100/90 transition-all duration-200">
             <div className="text-[11px] font-bold text-purple-700">อัตราเข้าเรียนรวม</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5">{kpi.rate.toFixed(1)}%</div>
+            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.rate.toFixed(1)}%</div>
             <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">มา {kpi.present} • ขาด {kpi.absent} • ลา {kpi.leave}</div>
           </div>
 
-          <div className="bg-purple-50/60 p-3 rounded-2xl border border-purple-100">
+          <div className="bg-purple-50/50 hover:bg-purple-50 p-3.5 rounded-2xl border border-purple-100/90 transition-all duration-200">
             <div className="text-[11px] font-bold text-purple-700">บันทึกทั้งหมด</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5">{kpi.totalRecords} ครั้ง</div>
+            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.totalRecords} ครั้ง</div>
             <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">จาก {kpi.distinctDates} วันที่เช็คชื่อ</div>
           </div>
 
-          <div className="bg-purple-50/60 p-3 rounded-2xl border border-purple-100">
+          <div className="bg-purple-50/50 hover:bg-purple-50 p-3.5 rounded-2xl border border-purple-100/90 transition-all duration-200">
             <div className="text-[11px] font-bold text-purple-700">นักศึกษาในระบบ</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5">{kpi.totalRegisteredStudents} คน</div>
+            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.totalRegisteredStudents} คน</div>
             <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">
               ชาย {students.filter(s => s.gender === 'ชาย').length} / หญิง {students.filter(s => s.gender === 'หญิง').length}
             </div>
           </div>
 
-          <div className="bg-purple-50/60 p-3 rounded-2xl border border-purple-100">
+          <div className="bg-purple-50/50 hover:bg-purple-50 p-3.5 rounded-2xl border border-purple-100/90 transition-all duration-200">
             <div className="text-[11px] font-bold text-purple-700">อาจารย์ผู้ดูแล</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5">{kpi.totalRegisteredTeachers} ท่าน</div>
+            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.totalRegisteredTeachers} ท่าน</div>
             <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">
               {teachers.filter(t => t.gender === 'ชาย').length} กลุ่มชาย / {teachers.filter(t => t.gender === 'หญิง').length} กลุ่มหญิง
             </div>
@@ -480,8 +482,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* ==================== 2. MAIN TABS SWITCHER (EASY TO TAP) ==================== */}
-      <div className="flex bg-white p-1.5 rounded-2xl border border-purple-100 shadow-sm overflow-x-auto space-x-1.5 scrollbar-none print:hidden">
+      {/* ==================== 2. MAIN TABS SWITCHER (FLOATING PILL) ==================== */}
+      <div className="flex bg-white/90 backdrop-blur-md p-1.5 rounded-full border border-purple-200/70 shadow-sm overflow-x-auto space-x-1.5 scrollbar-none print:hidden">
         {[
           { id: 'overview', label: '📊 ภาพรวม & รายงาน' },
           { id: 'transfer', label: '🔄 โยกย้ายนักศึกษา' },
@@ -494,10 +496,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id as TabType)}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all ${
+            className={`px-4 py-2 rounded-full text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all duration-300 active:scale-95 ${
               activeTab === tab.id
-                ? 'bg-purple-700 text-white shadow-sm'
-                : 'text-purple-900 hover:bg-purple-50'
+                ? 'bg-purple-800 text-white shadow-md shadow-purple-900/20'
+                : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-50'
             }`}
           >
             {tab.label}

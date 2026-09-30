@@ -4,29 +4,71 @@
 
 @layer base {
   body {
-    @apply bg-[#fdfcff] text-purple-950 antialiased min-h-screen selection:bg-purple-200 selection:text-purple-950;
+    @apply bg-[#faf8fc] text-purple-950 antialiased min-h-screen selection:bg-purple-200 selection:text-purple-900;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(126, 34, 206, 0.08), rgba(255, 255, 255, 0)),
+      radial-gradient(ellipse 60% 40% at 100% 30%, rgba(147, 51, 234, 0.04), rgba(255, 255, 255, 0));
+    background-attachment: fixed;
   }
 }
 
-@keyframes fadeIn {
+/* Custom smooth transitions & animations */
+.ease-spring {
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes floatSoft {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-float {
+  animation: floatSoft 4s ease-in-out infinite;
+}
+
+@keyframes fadeInScale {
   from {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.98) translateY(6px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInScale 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Scrollbar polish */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(147, 51, 234, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(147, 51, 234, 0.35);
 }
 
 @media print {
   body {
     background: white !important;
+    background-image: none !important;
     color: black !important;
   }
   .print\:hidden {
