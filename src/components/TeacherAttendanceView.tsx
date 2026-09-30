@@ -11,6 +11,7 @@ import {
   History,
   Sparkles,
   ChevronRight,
+  ChevronLeft,
   Timer,
   ArrowLeft,
   Check,
@@ -64,6 +65,20 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   };
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
+
+  const changeDay = (deltaDays: number) => {
+    try {
+      const parts = selectedDate.split('-');
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      d.setDate(d.getDate() + deltaDays);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      setSelectedDate(`${y}-${m}-${day}`);
+    } catch {
+      // fallback
+    }
+  };
 
   // 3. Student statuses & timestamps for selected date
   const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; time: string }>>({});
@@ -322,78 +337,97 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
             </p>
           </div>
 
-          {/* Teacher Selector Dropdown */}
-          <div className="w-full sm:w-auto">
-            <div className="text-[11px] text-purple-200/70 font-semibold mb-1 sm:hidden">
-              สลับกลุ่มอาจารย์:
-            </div>
-            <select
-              value={selectedTeacherName}
-              onChange={(e) => handleTeacherChange(e.target.value)}
-              className="w-full sm:w-72 bg-white/15 hover:bg-white/20 text-white text-xs rounded-2xl px-3.5 py-2.5 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold backdrop-blur-md transition-all cursor-pointer"
-            >
-              {teachers.map((t) => (
-                <option key={t.groupId} value={t.name} className="text-gray-900 bg-white">
-                  {t.name} ({t.groupName})
-                </option>
-              ))}
-            </select>
+          {/* Right badge: Group Info */}
+          <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-2xl">
+            <Users className="w-4 h-4 text-purple-200" />
+            <span className="text-xs font-bold text-purple-100">
+              {groupStudents.length} คนในกลุ่ม
+            </span>
           </div>
         </div>
       </div>
 
       {/* 3. DATE SELECTOR & STATUS CARDS */}
       <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-4">
-        {/* Date Row */}
+        {/* Minimalist Date Navigation Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
               <Calendar className="w-4 h-4" />
             </div>
             <div>
-              <span className="text-xs sm:text-sm font-extrabold text-purple-950">
-                วันที่เช็คชื่อ: {formatThaiDate(selectedDate)}
-              </span>
-              <div className="text-[10px] text-purple-700/80 font-medium">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-extrabold text-purple-950">
+                  {formatThaiDate(selectedDate)}
+                </span>
+                {selectedDate === getTodayString() && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                    วันนี้
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-purple-700/80 font-medium mt-0.5">
                 {isDateAlreadySaved ? (
-                  <span className="text-emerald-700 font-bold">● บันทึกแล้ว (สามารถแก้ไขได้)</span>
+                  <span className="text-emerald-700 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    บันทึกแล้ว (สามารถแก้ไขได้)
+                  </span>
                 ) : (
-                  <span className="text-purple-600">○ ยังไม่มีบันทึกของวันนี้</span>
+                  <span className="text-purple-600/90 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 inline-block" />
+                    ยังไม่มีบันทึกของวันนี้
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Quick Date Presets */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setSelectedDate(getTodayString())}
-              className={`text-xs px-3.5 py-1.5 rounded-full border font-bold transition-all duration-200 active:scale-95 ${
-                selectedDate === getTodayString()
-                  ? 'bg-purple-800 text-white border-purple-800 shadow-sm'
-                  : 'bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100'
-              }`}
-            >
-              วันนี้
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const d = new Date();
-                d.setDate(d.getDate() - 1);
-                setSelectedDate(d.toISOString().slice(0, 10));
-              }}
-              className="text-xs px-3 py-1.5 rounded-full border bg-purple-50 text-purple-900 border-purple-200 font-bold hover:bg-purple-100 active:scale-95 transition-all"
-            >
-              เมื่อวาน
-            </button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-1.5 border border-purple-200 rounded-full text-xs font-bold text-purple-950 bg-purple-50/80 focus:outline-none focus:ring-2 focus:ring-purple-600"
-            />
+          {/* Minimalist Tactile Date Picker & Navigator */}
+          <div className="flex items-center gap-1.5 self-start sm:self-auto">
+            {/* Quick Today Pill (if not on today) */}
+            {selectedDate !== getTodayString() && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate(getTodayString())}
+                className="text-xs font-bold px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200/80 transition-all active:scale-95"
+              >
+                วันนี้
+              </button>
+            )}
+
+            {/* Stepper with embedded date picker */}
+            <div className="inline-flex items-center bg-purple-50/90 border border-purple-200/80 rounded-full p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => changeDay(-1)}
+                title="วันก่อนหน้า"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-purple-800 hover:bg-white transition-all active:scale-90"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* Minimalist Date Trigger */}
+              <label className="relative px-3 py-1 flex items-center gap-1.5 text-xs font-extrabold text-purple-950 hover:bg-white rounded-full transition-all cursor-pointer">
+                <Calendar className="w-3.5 h-3.5 text-purple-700" />
+                <span className="select-none">{formatThaiDate(selectedDate)}</span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  title="คลิกเพื่อเลือกวันเดือนปีจากปฏิทิน"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => changeDay(1)}
+                title="วันถัดไป"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-purple-800 hover:bg-white transition-all active:scale-90"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
