@@ -317,27 +317,27 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* 2. INITIAL SELECTION SCREEN: 2 BIG MINIMALIST BUTTONS */}
       {/* ============================================================== */}
       {portalView === 'select' && (
-        <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn pt-1">
+        <div className="space-y-4 max-w-xl mx-auto animate-fadeIn pt-1">
           <div className="text-center">
-            <span className="text-[11px] font-bold tracking-wider text-purple-900/80 bg-purple-100/70 px-4 py-1.5 rounded-full border border-purple-200/60">
+            <span className="text-[10px] sm:text-[11px] font-bold tracking-wider text-purple-900/80 bg-purple-100/70 px-3.5 py-1 rounded-full border border-purple-200/60">
               กรุณาเลือกประเภทผู้ใช้งาน
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-            {/* BIG LIQUID GLASS BUTTON 1: สำหรับนักศึกษา */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            {/* BIG LIQUID GLASS BUTTON 1: สำหรับนักศึกษา (Compact & Sleek) */}
             <button
               type="button"
               onClick={() => navigateToView('student')}
-              className="group relative overflow-hidden text-left p-6 sm:p-7 rounded-[2rem] bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white border border-white/30 hover:border-white/60 shadow-[0_16px_36px_-10px_rgba(107,33,168,0.45)] hover:shadow-[0_22px_45px_-8px_rgba(126,34,206,0.6)] backdrop-blur-2xl transition-all duration-300 active:scale-[0.98] flex flex-col justify-between min-h-[205px]"
+              className="group relative overflow-hidden text-left p-4 sm:p-5 rounded-2xl sm:rounded-[1.75rem] bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white border border-white/30 hover:border-white/60 shadow-[0_12px_28px_-8px_rgba(107,33,168,0.4)] hover:shadow-[0_16px_36px_-6px_rgba(126,34,206,0.55)] backdrop-blur-2xl transition-all duration-300 active:scale-[0.98] flex flex-col justify-between min-h-[160px] sm:min-h-[175px]"
             >
               {/* Liquid ambient glow orbs */}
               <div
-                className="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-gradient-to-br from-purple-400/40 via-fuchsia-400/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
+                className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-gradient-to-br from-purple-400/40 via-fuchsia-400/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
                 aria-hidden="true"
               />
               <div
-                className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-gradient-to-tr from-indigo-500/40 via-purple-600/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
+                className="absolute -bottom-8 -left-8 w-28 h-28 rounded-full bg-gradient-to-tr from-indigo-500/40 via-purple-600/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
                 aria-hidden="true"
               />
               {/* Specular Liquid Glass Top Sheen & Border Highlights */}
@@ -352,43 +352,43 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
               <div className="relative z-10">
                 {/* Frosted Glass Icon Badge */}
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/20 backdrop-blur-md border border-white/40 text-white flex items-center justify-center font-bold mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7),0_4px_12px_rgba(0,0,0,0.15)] group-hover:scale-110 group-hover:bg-white/30 transition-all duration-300">
-                  <GraduationCap className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow-sm" />
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-white/20 backdrop-blur-md border border-white/40 text-white flex items-center justify-center font-bold mb-2.5 sm:mb-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7),0_4px_12px_rgba(0,0,0,0.15)] group-hover:scale-110 group-hover:bg-white/30 transition-all duration-300">
+                  <GraduationCap className="w-4.5 h-4.5 sm:w-5 sm:h-5 drop-shadow-sm" />
                 </div>
 
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-sm group-hover:text-purple-100 transition-colors">
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight drop-shadow-sm group-hover:text-purple-100 transition-colors">
                   สำหรับนักศึกษา
                 </h2>
-                <p className="text-xs sm:text-sm text-purple-100/90 mt-1.5 leading-relaxed font-normal">
+                <p className="text-[11px] sm:text-xs text-purple-100/90 mt-1 leading-snug font-normal">
                   ตรวจสอบประวัติการเข้าร่วมกิจกรรมหะละเกาะห์ สถิติ และอาจารย์ผู้ดูแลกลุ่ม
                 </p>
               </div>
 
               {/* Bottom Liquid Glass Action Strip */}
-              <div className="relative z-10 mt-6 pt-3 border-t border-white/15 flex items-center justify-between text-xs font-black text-purple-100 group-hover:text-white">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              <div className="relative z-10 mt-3.5 pt-2.5 border-t border-white/15 flex items-center justify-between text-[11px] sm:text-xs font-black text-purple-100 group-hover:text-white">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
                   <span>เข้าสู่ระบบนักศึกษา</span>
                 </span>
-                <div className="w-7 h-7 rounded-full bg-white/15 group-hover:bg-white/30 border border-white/30 flex items-center justify-center transition-all group-hover:translate-x-1 shadow-xs">
-                  <ChevronRight className="w-4 h-4 text-white" />
+                <div className="w-6 h-6 rounded-full bg-white/15 group-hover:bg-white/30 border border-white/30 flex items-center justify-center transition-all group-hover:translate-x-0.5 shadow-xs">
+                  <ChevronRight className="w-3.5 h-3.5 text-white" />
                 </div>
               </div>
             </button>
 
-            {/* BIG LIQUID GLASS BUTTON 2: สำหรับบุคคลากร */}
+            {/* BIG LIQUID GLASS BUTTON 2: สำหรับบุคคลากร (Compact & Sleek) */}
             <button
               type="button"
               onClick={handleOpenFacultyPortal}
-              className="group relative overflow-hidden text-left p-6 sm:p-7 rounded-[2rem] bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950 text-white border border-white/30 hover:border-white/60 shadow-[0_16px_36px_-10px_rgba(79,70,229,0.4)] hover:shadow-[0_22px_45px_-8px_rgba(99,102,241,0.55)] backdrop-blur-2xl transition-all duration-300 active:scale-[0.98] flex flex-col justify-between min-h-[205px]"
+              className="group relative overflow-hidden text-left p-4 sm:p-5 rounded-2xl sm:rounded-[1.75rem] bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950 text-white border border-white/30 hover:border-white/60 shadow-[0_12px_28px_-8px_rgba(79,70,229,0.35)] hover:shadow-[0_16px_36px_-6px_rgba(99,102,241,0.5)] backdrop-blur-2xl transition-all duration-300 active:scale-[0.98] flex flex-col justify-between min-h-[160px] sm:min-h-[175px]"
             >
               {/* Liquid ambient glow orbs */}
               <div
-                className="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-gradient-to-br from-indigo-400/40 via-violet-400/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
+                className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-gradient-to-br from-indigo-400/40 via-violet-400/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
                 aria-hidden="true"
               />
               <div
-                className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-gradient-to-tr from-purple-500/40 via-pink-600/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
+                className="absolute -bottom-8 -left-8 w-28 h-28 rounded-full bg-gradient-to-tr from-purple-500/40 via-pink-600/30 to-transparent blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700 ease-out"
                 aria-hidden="true"
               />
               {/* Specular Liquid Glass Top Sheen & Border Highlights */}
@@ -403,32 +403,32 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
               <div className="relative z-10">
                 {/* Header row with Frosted Icon & Lock Pill */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/20 backdrop-blur-md border border-white/40 text-white flex items-center justify-center font-bold shadow-[inset_0_1px_1px_rgba(255,255,255,0.7),0_4px_12px_rgba(0,0,0,0.15)] group-hover:scale-110 group-hover:bg-white/30 transition-all duration-300">
-                    <Users className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow-sm" />
+                <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-white/20 backdrop-blur-md border border-white/40 text-white flex items-center justify-center font-bold shadow-[inset_0_1px_1px_rgba(255,255,255,0.7),0_4px_12px_rgba(0,0,0,0.15)] group-hover:scale-110 group-hover:bg-white/30 transition-all duration-300">
+                    <Users className="w-4.5 h-4.5 sm:w-5 sm:h-5 drop-shadow-sm" />
                   </div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-[11px] font-bold text-purple-200 shadow-xs">
-                    <Lock className="w-3 h-3 text-amber-300" />
+                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-[10px] font-bold text-purple-200 shadow-xs">
+                    <Lock className="w-2.5 h-2.5 text-amber-300" />
                     <span>มีรหัสผ่าน</span>
                   </div>
                 </div>
 
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-sm group-hover:text-purple-100 transition-colors">
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight drop-shadow-sm group-hover:text-purple-100 transition-colors">
                   สำหรับบุคคลากร
                 </h2>
-                <p className="text-xs sm:text-sm text-purple-100/90 mt-1.5 leading-relaxed font-normal">
+                <p className="text-[11px] sm:text-xs text-purple-100/90 mt-1 leading-snug font-normal">
                   กลุ่มศึกษาอัลกุรอานสำหรับอาจารย์ บันทึกและติดตามผลการเช็คชื่อ มา / ขาด / ลา
                 </p>
               </div>
 
               {/* Bottom Liquid Glass Action Strip */}
-              <div className="relative z-10 mt-6 pt-3 border-t border-white/15 flex items-center justify-between text-xs font-black text-purple-100 group-hover:text-white">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shadow-[0_0_8px_rgba(129,140,248,0.8)]" />
+              <div className="relative z-10 mt-3.5 pt-2.5 border-t border-white/15 flex items-center justify-between text-[11px] sm:text-xs font-black text-purple-100 group-hover:text-white">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse shadow-[0_0_6px_rgba(129,140,248,0.8)]" />
                   <span>เข้าสู่ระบบอาจารย์</span>
                 </span>
-                <div className="w-7 h-7 rounded-full bg-white/15 group-hover:bg-white/30 border border-white/30 flex items-center justify-center transition-all group-hover:translate-x-1 shadow-xs">
-                  <ChevronRight className="w-4 h-4 text-white" />
+                <div className="w-6 h-6 rounded-full bg-white/15 group-hover:bg-white/30 border border-white/30 flex items-center justify-center transition-all group-hover:translate-x-0.5 shadow-xs">
+                  <ChevronRight className="w-3.5 h-3.5 text-white" />
                 </div>
               </div>
             </button>
