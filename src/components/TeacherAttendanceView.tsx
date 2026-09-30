@@ -286,7 +286,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 animate-fadeIn">
+    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-56 sm:pb-36 animate-fadeIn">
       {/* 1. TOP BAR: BACK & LIVE CLOCK */}
       <div className="flex items-center justify-between gap-2">
         {onBackToLanding && (
