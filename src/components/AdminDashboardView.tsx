@@ -35,16 +35,26 @@ import {
   TrendingUp,
   Award,
   ChevronRight,
-  GripVertical
+  GripVertical,
+  Megaphone,
+  Bell,
+  Lock,
+  Key,
+  Database as DatabaseIcon
 } from 'lucide-react';
-import { AttendanceRecord, TeacherSummary, StudentSummary, DailySummary, SubAdmin, Teacher, Student } from '@/lib/types';
+import { AttendanceRecord, TeacherSummary, StudentSummary, DailySummary, SubAdmin, Teacher, Student, Announcement } from '@/lib/types';
 import {
   getActiveTeachers,
   getActiveStudents,
   moveStudentToTeacher,
   updateStudentInfo,
   updateTeacherInfo,
-  resetToInitialData
+  resetToInitialData,
+  getFacultyPassword,
+  saveFacultyPassword,
+  getAnnouncements,
+  addAnnouncement,
+  deleteAnnouncement,
 } from '@/lib/data-store';
 import { exportToExcel, exportToWord, downloadPdfReport, printReport } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
@@ -62,7 +72,7 @@ interface AdminDashboardViewProps {
   isBackingUp?: boolean;
 }
 
-type TabType = 'matrix' | 'analytics' | 'periodic' | 'transfer' | 'editor' | 'export' | 'settings' | 'subadmins';
+type TabType = 'matrix' | 'analytics' | 'periodic' | 'transfer' | 'editor' | 'announcements' | 'system_management' | 'export';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   records,
@@ -139,6 +149,81 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   // Logo file input ref
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // ==================== ANNOUNCEMENTS STATE ====================
+  const [announcementsList, setAnnouncementsList] = useState<Announcement[]>([]);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annContent, setAnnContent] = useState('');
+  const [annPriority, setAnnPriority] = useState<'normal' | 'urgent' | 'warning'>('normal');
+  const [annTargetType, setAnnTargetType] = useState<'all' | 'specific'>('all');
+  const [annTargetIdsStr, setAnnTargetIdsStr] = useState('');
+  const [annToast, setAnnToast] = useState<{ text: string; success: boolean } | null>(null);
+
+  useEffect(() => {
+    setAnnouncementsList(getAnnouncements());
+  }, []);
+
+  const handleCreateAnnouncement = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annTitle.trim() || !annContent.trim()) return;
+
+    let targetIds: string[] = [];
+    if (annTargetType === 'specific') {
+      targetIds = annTargetIdsStr
+        .split(/[,;\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (targetIds.length === 0) {
+        setAnnToast({ text: 'กรุณาระบุรหัสนักศึกษาอย่างน้อย 1 รหัส', success: false });
+        return;
+      }
+    }
+
+    addAnnouncement({
+      title: annTitle.trim(),
+      content: annContent.trim(),
+      priority: annPriority,
+      targetType: annTargetType,
+      targetStudentIds: targetIds,
+      authorName: adminUser?.name || 'แอดมิน',
+    });
+
+    setAnnouncementsList(getAnnouncements());
+    setAnnTitle('');
+    setAnnContent('');
+    setAnnTargetIdsStr('');
+    setAnnToast({ text: 'โพสต์ประกาศส่งไปยังระบบนักศึกษาเรียบร้อยแล้ว!', success: true });
+    setTimeout(() => setAnnToast(null), 4000);
+  };
+
+  const handleDeleteAnnouncement = (id: string) => {
+    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบประกาศนี้?')) {
+      deleteAnnouncement(id);
+      setAnnouncementsList(getAnnouncements());
+    }
+  };
+
+  // ==================== FACULTY PASSWORD STATE ====================
+  const [facultyPass, setFacultyPass] = useState('');
+  const [newFacultyPass, setNewFacultyPass] = useState('');
+  const [facultyPassMsg, setFacultyPassMsg] = useState<{ text: string; success: boolean } | null>(null);
+
+  useEffect(() => {
+    setFacultyPass(getFacultyPassword());
+  }, []);
+
+  const handleSaveFacultyPass = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFacultyPass.trim() || newFacultyPass.trim().length < 4) {
+      setFacultyPassMsg({ text: 'รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร', success: false });
+      return;
+    }
+    saveFacultyPassword(newFacultyPass.trim());
+    setFacultyPass(newFacultyPass.trim());
+    setNewFacultyPass('');
+    setFacultyPassMsg({ text: 'บันทึกรหัสผ่านสำหรับบุคคลากรเรียบร้อยแล้ว', success: true });
+    setTimeout(() => setFacultyPassMsg(null), 4000);
+  };
 
   // Distinct recorded dates across all records
   const distinctRecordedDates = useMemo(() => {
@@ -325,6 +410,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  const handleResetLogo = () => {
+    if (confirm('คุณต้องการรีเซ็ตโลโก้กลับเป็นรูปทางการเริ่มต้นหรือไม่?')) {
+      setSavedLogo('');
+      if (onLogoUpdated) onLogoUpdated('/logo.jpg');
+      alert('รีเซ็ตโลโก้กลับเป็นรูปทางการเริ่มต้นเรียบร้อยแล้ว');
+    }
+  };
+
   // Save student edit
   const handleSaveStudentEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -465,14 +558,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       {/* ==================== 2. MAIN TABS SWITCHER ==================== */}
       <div className="flex bg-white/95 backdrop-blur-md p-1.5 rounded-full border border-purple-200/70 shadow-sm overflow-x-auto space-x-1.5 scrollbar-none print:hidden">
         {[
-          { id: 'matrix', label: '📋 ตารางเช็คชื่อรายอาจารย์ (รูปแนบ 4)' },
+          { id: 'matrix', label: '📋 ตารางเช็คชื่อรายอาจารย์' },
           { id: 'analytics', label: '📊 แดชบอร์ด & กราฟสถิติ' },
           { id: 'periodic', label: '📅 สรุปตาม วัน/เดือน/ปี ที่บันทึกจริง' },
           { id: 'transfer', label: '🔄 โยกย้ายนักศึกษา (ลากวางได้)' },
           { id: 'editor', label: '✏️ แก้ไขข้อมูล (อาจารย์/นศ.)' },
+          { id: 'announcements', label: `📢 ส่งประกาศ ${announcementsList.length > 0 ? `(${announcementsList.length})` : ''}` },
+          { id: 'system_management', label: '⚙️ การจัดการระบบ (รหัสผ่าน/โลโก้)' },
           { id: 'export', label: '📤 ศูนย์ส่งออกไฟล์' },
-          { id: 'settings', label: '⚙️ ตั้งค่า & โลโก้' },
-          { id: 'subadmins', label: '👥 แอดมินรอง' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1545,26 +1638,253 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* ==================== TAB 7: ADMIN SETTINGS & LOGO (เฉพาะแอดมิน) ==================== */}
-      {activeTab === 'settings' && (
+      {/* ==================== TAB: ANNOUNCEMENTS (ระบบส่งประกาศถึงนักศึกษา) ==================== */}
+      {activeTab === 'announcements' && (
         <div className="bg-white rounded-3xl border border-purple-100 p-5 sm:p-7 shadow-card space-y-6 animate-fadeIn">
           <div className="border-b border-purple-100 pb-3">
-            <h2 className="text-base sm:text-lg font-black text-purple-950 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-purple-700" />
-              <span>การตั้งค่าระบบและรูปตราสัญลักษณ์ (เฉพาะแอดมิน)</span>
+            <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-purple-700" />
+              <span>ระบบส่งประกาศและข้อความแจ้งเตือน (ส่งถึงนักศึกษา)</span>
             </h2>
             <p className="text-xs text-purple-800/70 mt-1">
-              จัดการรูปภาพตราสัญลักษณ์ของคณะ และตั้งค่าการเชื่อมต่อฐานข้อมูล Google Sheet
+              แอดมินสามารถส่งประกาศไปยังนักศึกษาทุกคน หรือส่งเจาะจงเฉพาะนักศึกษาบางคน เมื่อนักศึกษาค้นหารหัสนักศึกษาจะเห็นประกาศเด่นๆ ที่หน้าแดชบอร์ดของตนเอง
+            </p>
+          </div>
+
+          {/* Form Create Announcement */}
+          <form onSubmit={handleCreateAnnouncement} className="bg-purple-50/50 p-4 sm:p-6 rounded-3xl border border-purple-200/80 space-y-4">
+            <div className="font-extrabold text-xs sm:text-sm text-purple-950 flex items-center gap-2">
+              <Bell className="w-4 h-4 text-purple-700" />
+              <span>สร้างประกาศใหม่</span>
+            </div>
+
+            {annToast && (
+              <div className={`p-3 rounded-2xl text-xs font-bold ${annToast.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                {annToast.text}
+              </div>
+            )}
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-purple-900 block mb-1">หัวข้อประกาศ *</label>
+                <input
+                  type="text"
+                  placeholder="เช่น กำหนดการสอบประเมินอัลกุรอาน, แจ้งเตือนเวลาเข้ากิจกรรม"
+                  value={annTitle}
+                  onChange={(e) => setAnnTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white text-purple-950 font-bold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-purple-900 block mb-1">ข้อความรายละเอียดประกาศ *</label>
+                <textarea
+                  rows={3}
+                  placeholder="พิมพ์ข้อความที่ต้องการแจ้งให้นักศึกษาทราบ..."
+                  value={annContent}
+                  onChange={(e) => setAnnContent(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white text-purple-950 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-purple-900 block mb-1">ระดับความสำคัญ</label>
+                  <select
+                    value={annPriority}
+                    onChange={(e) => setAnnPriority(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold"
+                  >
+                    <option value="normal">📌 ประกาศทั่วไป (Normal)</option>
+                    <option value="warning">⚠️ แจ้งเตือนสำคัญ (Warning)</option>
+                    <option value="urgent">🚨 ด่วนที่สุด (Urgent)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-purple-900 block mb-1">กลุ่มเป้าหมายผู้รับ</label>
+                  <select
+                    value={annTargetType}
+                    onChange={(e) => setAnnTargetType(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold"
+                  >
+                    <option value="all">📢 ส่งถึงนักศึกษาทุกคนในระบบ</option>
+                    <option value="specific">🎯 ระบุเฉพาะรหัสนักศึกษาบางคน</option>
+                  </select>
+                </div>
+              </div>
+
+              {annTargetType === 'specific' && (
+                <div className="animate-fadeIn">
+                  <label className="font-bold text-purple-900 block mb-1">
+                    ระบุรหัสนักศึกษา (คั่นด้วยเครื่องหมายจุลภาค , หรือเว้นวรรค)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น 681441001, 681441002, 671441010"
+                    value={annTargetIdsStr}
+                    onChange={(e) => setAnnTargetIdsStr(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white text-purple-950 font-mono font-bold"
+                  />
+                  <p className="text-[10px] text-purple-700/70 mt-1">
+                    * นักศึกษาที่มีรหัสตรงกับรายการนี้เท่านั้นที่จะมองเห็นประกาศนี้เมื่อค้นหารหัสตนเอง
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="px-6 py-2.5 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-black text-xs sm:text-sm rounded-2xl shadow-sm transition-all active:scale-95 flex items-center gap-2"
+            >
+              <Megaphone className="w-4 h-4" />
+              <span>โพสต์ประกาศทันที</span>
+            </button>
+          </form>
+
+          {/* Announcements List */}
+          <div className="space-y-3">
+            <h3 className="font-extrabold text-xs sm:text-sm text-purple-950 flex items-center justify-between">
+              <span>รายการประกาศที่กำลังแสดงผล ({announcementsList.length} รายการ)</span>
+            </h3>
+
+            <div className="space-y-2.5">
+              {announcementsList.map((ann) => (
+                <div
+                  key={ann.id}
+                  className="p-4 rounded-2xl bg-white border border-purple-100/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-purple-300 transition-all"
+                >
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                        ann.priority === 'urgent'
+                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                          : ann.priority === 'warning'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : 'bg-purple-100 text-purple-800 border border-purple-200'
+                      }`}>
+                        {ann.priority === 'urgent' ? '🚨 ด่วนที่สุด' : ann.priority === 'warning' ? '⚠️ เตือนสำคัญ' : '📌 ทั่วไป'}
+                      </span>
+
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-800">
+                        {ann.targetType === 'all' ? 'ส่งถึง นศ.ทุกคน' : `ส่งเฉพาะ ${ann.targetStudentIds.length} รหัส`}
+                      </span>
+
+                      <span className="text-[10px] text-gray-400 font-mono">
+                        {new Date(ann.createdAt).toLocaleString('th-TH')}
+                      </span>
+                    </div>
+
+                    <h4 className="font-black text-sm text-purple-950">{ann.title}</h4>
+                    <p className="text-xs text-purple-900/80 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
+
+                    {ann.targetType === 'specific' && (
+                      <div className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg inline-block">
+                        รหัสที่ได้รับ: {ann.targetStudentIds.join(', ')}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAnnouncement(ann.id)}
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all self-end sm:self-center"
+                    title="ลบประกาศนี้"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              {announcementsList.length === 0 && (
+                <div className="py-10 text-center text-xs text-gray-400 bg-purple-50/20 rounded-2xl border border-purple-100">
+                  ยังไม่มีประกาศที่กำลังเผยแพร่ในระบบ
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB: SYSTEM MANAGEMENT (การจัดการระบบ: รหัสผ่าน, โลโก้, แอดมิน) ==================== */}
+      {activeTab === 'system_management' && (
+        <div className="bg-white rounded-3xl border border-purple-100 p-5 sm:p-7 shadow-card space-y-6 animate-fadeIn">
+          <div className="border-b border-purple-100 pb-3">
+            <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-purple-700" />
+              <span>การจัดการระบบ (รหัสผ่านบุคคลากร, แอดมินรอง, โลโก้ และฐานข้อมูล)</span>
+            </h2>
+            <p className="text-xs text-purple-800/70 mt-1">
+              ศูนย์รวมการควบคุมสิทธิ์ รหัสผ่านเข้าใช้งาน รูปตราสัญลักษณ์ และการสำรองข้อมูล
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Logo Settings */}
-            <div className="p-5 rounded-3xl border border-purple-100 bg-purple-50/40 space-y-4">
-              <h3 className="font-extrabold text-purple-950 text-sm flex items-center gap-2">
-                <Upload className="w-4 h-4 text-purple-700" />
-                <span>รูปตราสัญลักษณ์คณะศึกษาศาสตร์</span>
-              </h3>
+            {/* 1. FACULTY PASSWORD MANAGEMENT */}
+            <div className="p-5 rounded-3xl border border-purple-200/80 bg-purple-50/40 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    รหัสผ่านเข้าใช้งานสำหรับบุคคลากร
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    รหัสที่อาจารย์ต้องใช้กรอกเพื่อเข้าสู่หน้าเช็คชื่อ
+                  </p>
+                </div>
+              </div>
+
+              {facultyPassMsg && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold ${facultyPassMsg.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {facultyPassMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveFacultyPass} className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-bold text-purple-900 block mb-1">
+                    ตั้งรหัสผ่านใหม่สำหรับบุคคลากร
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="พิมพ์รหัสผ่านใหม่ (เช่น รหัสที่ต้องการ)"
+                    value={newFacultyPass}
+                    onChange={(e) => setNewFacultyPass(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-bold border border-purple-200 rounded-xl bg-white"
+                  />
+                  <div className="text-[10px] text-purple-700/80 mt-1">
+                    * รหัสตั้งต้นของระบบคือ <span className="font-mono font-bold text-purple-950">edu.sdd</span> (แอดมินสามารถเปลี่ยนได้ที่นี่)
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+                >
+                  บันทึกรหัสผ่านบุคคลากรใหม่
+                </button>
+              </form>
+            </div>
+
+            {/* 2. LOGO MANAGEMENT */}
+            <div className="p-5 rounded-3xl border border-purple-200/80 bg-purple-50/40 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    รูปตราสัญลักษณ์คณะศึกษาศาสตร์ (Logo)
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    รูปตราสัญลักษณ์ที่แสดงตรงกลางหน้าแรกของทุกอุปกรณ์
+                  </p>
+                </div>
+              </div>
 
               <div className="p-3 bg-white rounded-2xl border border-purple-200 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1575,7 +1895,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 />
               </div>
 
-              <div>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -1586,35 +1906,139 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="w-full py-2.5 px-4 bg-purple-800 hover:bg-purple-900 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
+                  className="flex-1 py-2.5 px-4 bg-purple-800 hover:bg-purple-900 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
                 >
                   <Upload className="w-4 h-4" />
-                  <span>เลือกรูปตราสัญลักษณ์ใหม่จากเครื่อง</span>
+                  <span>เลือกรูปใหม่จากเครื่อง</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResetLogo}
+                  className="py-2.5 px-3 bg-white hover:bg-purple-100 active:scale-95 text-purple-900 border border-purple-200 font-bold text-xs rounded-xl transition-all"
+                  title="คืนค่าเป็นรูปทางการ"
+                >
+                  รีเซ็ตเริ่มต้น
                 </button>
               </div>
             </div>
 
-            {/* Google Sheet & Backup */}
-            <div className="p-5 rounded-3xl border border-purple-100 bg-purple-50/40 space-y-4 flex flex-col justify-between">
-              <div className="space-y-3">
-                <h3 className="font-extrabold text-purple-950 text-sm flex items-center gap-2">
-                  <DatabaseIcon className="w-4 h-4 text-purple-700" />
-                  <span>ฐานข้อมูล Google Sheet</span>
-                </h3>
-                <p className="text-xs text-purple-800/80 leading-relaxed">
-                  ระบบเชื่อมต่อกับ Google Sheet สำหรับบันทึกผลการเข้าเรียน แอดมินสามารถเปิดดูชีต หรือกดสำรองข้อมูลทั้งหมดขึ้นชีตได้ทันที
-                </p>
+            {/* 3. SUB-ADMINS MANAGEMENT */}
+            <div className="p-5 rounded-3xl border border-purple-200/80 bg-purple-50/40 space-y-4 md:col-span-2">
+              <div className="flex items-center justify-between border-b border-purple-200/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-purple-950 text-sm">
+                      จัดการผู้ดูแลระบบและแอดมินรอง (Sub-Admins)
+                    </h3>
+                    <p className="text-[11px] text-purple-700/70">
+                      แอดมินหลักใช้รหัสผ่าน <span className="font-mono font-bold text-purple-950">71300807</span> และสามารถเพิ่มแอดมินรองพร้อมรหัสเฉพาะตัวได้
+                    </p>
+                  </div>
+                </div>
               </div>
 
+              {/* Form add sub-admin */}
+              <form onSubmit={handleAddSubAdmin} className="bg-white p-4 rounded-2xl border border-purple-200 space-y-3">
+                <div className="font-bold text-xs text-purple-950 flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4 text-purple-700" />
+                  <span>เพิ่มผู้ดูแลระบบรองคนใหม่</span>
+                </div>
+
+                {subAdminMsg && (
+                  <div className={`p-2.5 rounded-xl text-xs font-bold ${subAdminMsg.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                    {subAdminMsg.text}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-purple-900 block mb-1">ชื่อแอดมินรอง</label>
+                    <input
+                      type="text"
+                      placeholder="เช่น อ.ฟาฏิมะห์, ครูสุไลมาน"
+                      value={newSubName}
+                      onChange={(e) => setNewSubName(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl bg-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-purple-900 block mb-1">รหัสผ่านสำหรับล็อกอิน</label>
+                    <input
+                      type="password"
+                      placeholder="ระบุรหัสผ่าน (อย่างน้อย 4 หลัก)"
+                      value={newSubPasscode}
+                      onChange={(e) => setNewSubPasscode(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl bg-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                >
+                  เพิ่มแอดมินรอง
+                </button>
+              </form>
+
+              {/* Sub-admins list */}
               <div className="space-y-2">
+                <div className="font-bold text-xs text-purple-950">รายชื่อแอดมินรองในระบบ ({subAdminsList.length} ท่าน)</div>
+                <div className="divide-y divide-purple-100 border border-purple-200 rounded-2xl overflow-hidden bg-white">
+                  {subAdminsList.map((sub) => (
+                    <div key={sub.id} className="p-3 flex items-center justify-between text-xs hover:bg-purple-50/30">
+                      <div>
+                        <div className="font-bold text-purple-950">{sub.name}</div>
+                        <div className="text-[11px] text-purple-700/70 font-mono">เพิ่มเมื่อ: {sub.createdAt}</div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSubAdmin(sub.id)}
+                        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                        title="ลบแอดมินรอง"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {subAdminsList.length === 0 && (
+                    <div className="p-6 text-center text-xs text-gray-400">ยังไม่มีแอดมินรองในระบบ</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. GOOGLE SHEET & BACKUP */}
+            <div className="p-5 rounded-3xl border border-purple-200/80 bg-purple-50/40 space-y-4 md:col-span-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                  <DatabaseIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    ฐานข้อมูล Google Sheet & สำรองข้อมูล
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    จัดการการเชื่อมต่อ API และสำรองข้อมูลทั้งหมดขึ้น Google Sheet
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
                 {onBackupAll && (
                   <button
                     type="button"
                     onClick={onBackupAll}
                     disabled={isBackingUp}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
+                    className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
                   >
-                    <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูลทั้งหมดขึ้น Google Sheet'}</span>
+                    <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูลทั้งหมดขึ้น Google Sheet ทันที'}</span>
                   </button>
                 )}
 
@@ -1622,100 +2046,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <button
                     type="button"
                     onClick={onOpenSettings}
-                    className="w-full py-2.5 px-4 bg-white hover:bg-purple-50 active:scale-95 text-purple-950 border border-purple-200 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
+                    className="py-2.5 px-4 bg-white hover:bg-purple-100 active:scale-95 text-purple-950 border border-purple-200 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
                   >
                     <Settings className="w-4 h-4 text-purple-700" />
                     <span>แก้ไข URL การเชื่อมต่อ Web App</span>
                   </button>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== TAB 8: SUB-ADMINS (จัดการแอดมินรอง) ==================== */}
-      {activeTab === 'subadmins' && (
-        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-6 animate-fadeIn">
-          <div className="border-b border-purple-100 pb-3">
-            <h2 className="text-base sm:text-lg font-black text-purple-950 flex items-center gap-2">
-              <KeyRound className="w-5 h-5 text-purple-700" />
-              <span>จัดการสิทธิ์แอดมินรอง (Sub-Admins)</span>
-            </h2>
-            <p className="text-xs text-purple-800/70 mt-1">
-              แอดมินหลักใช้รหัสผ่าน <span className="font-mono font-bold text-purple-950">71300807</span> และสามารถเพิ่มแอดมินรองพร้อมรหัสเฉพาะตัวได้
-            </p>
-          </div>
-
-          {/* Form add sub-admin */}
-          <form onSubmit={handleAddSubAdmin} className="bg-purple-50/50 p-4 sm:p-5 rounded-2xl border border-purple-100 space-y-3">
-            <div className="font-bold text-xs text-purple-950 flex items-center gap-1.5">
-              <UserPlus className="w-4 h-4 text-purple-700" />
-              <span>เพิ่มผู้ดูแลระบบรองคนใหม่</span>
-            </div>
-
-            {subAdminMsg && (
-              <div className={`p-2.5 rounded-xl text-xs font-bold ${subAdminMsg.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                {subAdminMsg.text}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-bold text-purple-900 block mb-1">ชื่อแอดมินรอง</label>
-                <input
-                  type="text"
-                  placeholder="เช่น อ.ฟาฏิมะห์, ครูสุไลมาน"
-                  value={newSubName}
-                  onChange={(e) => setNewSubName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl bg-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-purple-900 block mb-1">รหัสผ่านสำหรับล็อกอิน</label>
-                <input
-                  type="password"
-                  placeholder="ระบุรหัสผ่าน (อย่างน้อย 4 หลัก)"
-                  value={newSubPasscode}
-                  onChange={(e) => setNewSubPasscode(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl bg-white"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full sm:w-auto px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
-            >
-              เพิ่มแอดมินรอง
-            </button>
-          </form>
-
-          {/* Sub-admins list */}
-          <div className="space-y-3">
-            <h3 className="font-extrabold text-xs text-purple-950">รายชื่อแอดมินรองในระบบ ({subAdminsList.length} ท่าน)</h3>
-            <div className="divide-y divide-purple-100 border border-purple-100 rounded-2xl overflow-hidden">
-              {subAdminsList.map((sub) => (
-                <div key={sub.id} className="p-3 bg-white flex items-center justify-between text-xs hover:bg-purple-50/30">
-                  <div>
-                    <div className="font-bold text-purple-950">{sub.name}</div>
-                    <div className="text-[11px] text-purple-700/70 font-mono">เพิ่มเมื่อ: {sub.createdAt}</div>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteSubAdmin(sub.id)}
-                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                    title="ลบแอดมินรอง"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              {subAdminsList.length === 0 && (
-                <div className="p-6 text-center text-xs text-gray-400">ยังไม่มีแอดมินรองในระบบ</div>
-              )}
             </div>
           </div>
         </div>
@@ -1780,23 +2117,3 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   );
 };
 
-function DatabaseIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5V19A9 3 0 0 0 21 19V5" />
-      <path d="M3 12A9 3 0 0 0 21 12" />
-    </svg>
-  );
-}

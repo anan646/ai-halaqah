@@ -17,13 +17,22 @@ import {
   Award,
   BookOpen,
   Sparkles,
-  UserCheck
+  Lock,
+  Megaphone,
+  Bell,
+  X
 } from 'lucide-react';
-import { getActiveTeachers, getActiveStudents } from '@/lib/data-store';
-import { AttendanceRecord, Student } from '@/lib/types';
+import {
+  getActiveTeachers,
+  getActiveStudents,
+  getFacultyPassword,
+  getAnnouncements,
+} from '@/lib/data-store';
+import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 
 interface LandingPageViewProps {
   records?: AttendanceRecord[];
+  landingResetSignal?: number;
   onSelectTeacher: (teacherName: string) => void;
   onGoToAdmin: () => void;
   onOpenSettings: () => void;
@@ -33,24 +42,50 @@ interface LandingPageViewProps {
 
 export const LandingPageView: React.FC<LandingPageViewProps> = ({
   records = [],
+  landingResetSignal,
   onSelectTeacher,
   onGoToAdmin,
   customLogo,
 }) => {
   // 1. Three distinct views:
-  // 'select' = Landing Screen with ONLY 2 Big Buttons (สำหรับนักศึกษา & สำหรับบุคคลากร)
+  // 'select' = Landing Screen with ONLY 2 Big Minimalist Buttons
   // 'student' = Dedicated Student Window
   // 'faculty' = Dedicated Faculty/Teacher Window
   const [portalView, setPortalView] = useState<'select' | 'student' | 'faculty'>('select');
 
-  // Faculty state
+  // Reset to 'select' screen when user clicks Home button
+  useEffect(() => {
+    if (landingResetSignal !== undefined && landingResetSignal > 0) {
+      setPortalView('select');
+      setSelectedStudent(null);
+      setIsFacultyAuthModalOpen(false);
+    }
+  }, [landingResetSignal]);
+
+  // Faculty authentication state
+  const [isFacultyAuthModalOpen, setIsFacultyAuthModalOpen] = useState(false);
+  const [facultyPassInput, setFacultyPassInput] = useState('');
+  const [facultyAuthError, setFacultyAuthError] = useState('');
+  const [isFacultySessionActive, setIsFacultySessionActive] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem('halaqah_faculty_session') === 'true';
+  });
+
+  // Faculty portal state
   const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
   const [selectedGender, setSelectedGender] = useState<'ชาย' | 'หญิง'>('ชาย');
 
-  // Student state
+  // Student portal state (STRICTLY studentId, no name search)
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Announcements state
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  useEffect(() => {
+    setAnnouncements(getAnnouncements());
+  }, [portalView, selectedStudent]);
 
   const allTeachers = useMemo(() => getActiveTeachers(), []);
   const allStudents = useMemo(() => getActiveStudents(), []);
@@ -110,8 +145,36 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     setSelectedStudent(null);
     setStudentSearchTerm('');
     setHasSearched(false);
+    setIsFacultyAuthModalOpen(false);
     if (typeof window !== 'undefined') {
       window.history.pushState({ landingView: 'select' }, '', window.location.href);
+    }
+  };
+
+  // Click on Faculty button: verify session or open password modal
+  const handleOpenFacultyPortal = () => {
+    if (isFacultySessionActive) {
+      navigateToView('faculty');
+    } else {
+      setFacultyPassInput('');
+      setFacultyAuthError('');
+      setIsFacultyAuthModalOpen(true);
+    }
+  };
+
+  // Submit faculty login password
+  const handleFacultyLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const correctPass = getFacultyPassword();
+    if (facultyPassInput === correctPass) {
+      setIsFacultySessionActive(true);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('halaqah_faculty_session', 'true');
+      }
+      setIsFacultyAuthModalOpen(false);
+      navigateToView('faculty');
+    } else {
+      setFacultyAuthError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง');
     }
   };
 
@@ -127,56 +190,44 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     });
   }, [allTeachers, teacherSearchTerm, selectedGender]);
 
-  const maleCount = useMemo(() => allTeachers.filter(t => t.gender === 'ชาย').length, [allTeachers]);
-  const femaleCount = useMemo(() => allTeachers.filter(t => t.gender === 'หญิง').length, [allTeachers]);
+  const maleCount = useMemo(() => allTeachers.filter((t) => t.gender === 'ชาย').length, [allTeachers]);
+  const femaleCount = useMemo(() => allTeachers.filter((t) => t.gender === 'หญิง').length, [allTeachers]);
 
   const getStudentCount = (teacherName: string) => {
     return unifiedStudents.filter((s) => s.teacherName === teacherName).length;
   };
 
-  // Intelligent student search query matcher (strips spaces, hyphens, case-insensitive)
+  // STUDENT SEARCH: STRICTLY BY STUDENT ID (NO NAMES ALLOWED)
   const matchingStudents = useMemo(() => {
-    const q = studentSearchTerm.trim();
+    const q = studentSearchTerm.trim().replace(/[\s-]/g, '').toLowerCase();
     if (!q) return [];
 
-    const cleanQ = q.replace(/[\s-]/g, '').toLowerCase();
-
-    return unifiedStudents.filter((s) => {
-      const cleanId = (s.studentId || '').replace(/[\s-]/g, '').toLowerCase();
-      const cleanName = (s.fullName || '').toLowerCase();
-      return cleanId.includes(cleanQ) || cleanName.includes(q.toLowerCase());
-    }).slice(0, 10);
+    return unifiedStudents
+      .filter((s) => {
+        const cleanId = (s.studentId || '').replace(/[\s-]/g, '').toLowerCase();
+        return cleanId.includes(q);
+      })
+      .slice(0, 10);
   }, [unifiedStudents, studentSearchTerm]);
 
-  // Execute student search (on Enter or on Submit)
+  // Execute student search (on Enter or submit)
   const executeStudentSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setHasSearched(true);
 
-    const q = studentSearchTerm.trim();
+    const q = studentSearchTerm.trim().replace(/[\s-]/g, '').toLowerCase();
     if (!q) return;
 
-    const cleanQ = q.replace(/[\s-]/g, '').toLowerCase();
-
-    // 1. Exact ID match
+    // Exact ID match
     const exact = unifiedStudents.find(
-      (s) => (s.studentId || '').replace(/[\s-]/g, '').toLowerCase() === cleanQ
+      (s) => (s.studentId || '').replace(/[\s-]/g, '').toLowerCase() === q
     );
     if (exact) {
       setSelectedStudent(exact);
       return;
     }
 
-    // 2. Exact Name match
-    const nameMatch = unifiedStudents.find(
-      (s) => (s.fullName || '').toLowerCase().trim() === q.toLowerCase()
-    );
-    if (nameMatch) {
-      setSelectedStudent(nameMatch);
-      return;
-    }
-
-    // 3. First partial match if available
+    // First partial ID match
     if (matchingStudents.length > 0) {
       setSelectedStudent(matchingStudents[0]);
     }
@@ -187,6 +238,15 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     setStudentSearchTerm('');
     setHasSearched(false);
   };
+
+  // Announcements targeted to the currently viewed student
+  const studentAnnouncements = useMemo(() => {
+    if (!selectedStudent) return [];
+    const sid = (selectedStudent.studentId || '').trim();
+    return announcements.filter(
+      (a) => a.targetType === 'all' || a.targetStudentIds.includes(sid)
+    );
+  }, [selectedStudent, announcements]);
 
   // Student Attendance Analytics
   const studentStats = useMemo(() => {
@@ -257,72 +317,138 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 2. INITIAL SELECTION SCREEN: ให้เห็นแค่ 2 ปุ่มใหญ่ๆ เท่านั้น */}
+      {/* 2. INITIAL SELECTION SCREEN: 2 BIG MINIMALIST BUTTONS */}
       {/* ============================================================== */}
       {portalView === 'select' && (
-        <div className="space-y-4 sm:space-y-6 max-w-2xl mx-auto animate-fadeIn">
+        <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn pt-1">
           <div className="text-center">
-            <span className="inline-block text-xs sm:text-sm font-extrabold text-purple-900 bg-purple-100/80 px-4 py-1.5 rounded-full border border-purple-200/70 shadow-xs">
-              กรุณาเลือกประเภทผู้ใช้งานเพื่อเข้าสู่ระบบ
+            <span className="text-[11px] font-bold tracking-wider text-purple-900/80 bg-purple-100/70 px-4 py-1.5 rounded-full border border-purple-200/60">
+              กรุณาเลือกประเภทผู้ใช้งาน
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            {/* BIG BUTTON 1: สำหรับนักศึกษา */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+            {/* BIG MINIMAL BUTTON 1: สำหรับนักศึกษา */}
             <button
               type="button"
               onClick={() => navigateToView('student')}
-              className="group relative overflow-hidden rounded-3xl p-6 sm:p-7 bg-white hover:bg-gradient-to-br hover:from-white hover:to-purple-50/70 border-2 border-purple-200/90 hover:border-purple-600 shadow-card hover:shadow-xl transition-all duration-300 text-left active:scale-[0.98] flex flex-col justify-between min-h-[190px]"
+              className="group relative text-left p-6 sm:p-7 rounded-3xl bg-white hover:bg-purple-50/50 border border-purple-200/90 hover:border-purple-600 shadow-card hover:shadow-lg transition-all duration-300 active:scale-[0.98] flex flex-col justify-between min-h-[185px]"
             >
-              <div className="space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center shadow-md shadow-purple-900/25 group-hover:scale-110 transition-transform duration-300">
-                  <GraduationCap className="w-7 h-7" />
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold mb-3.5 group-hover:scale-105 transition-transform">
+                  <GraduationCap className="w-6 h-6" />
                 </div>
-                <div>
-                  <h2 className="text-lg sm:text-2xl font-black text-purple-950 group-hover:text-purple-800 transition-colors">
-                    สำหรับนักศึกษา
-                  </h2>
-                  <p className="text-xs sm:text-sm text-purple-800/70 font-medium mt-1 leading-relaxed">
-                    ค้นหารหัสนักศึกษา ตรวจสอบผลการเข้าร่วมกิจกรรม สถิติ และอาจารย์ผู้ดูแลกลุ่ม
-                  </p>
-                </div>
+                <h2 className="text-lg sm:text-xl font-black text-purple-950 tracking-tight group-hover:text-purple-800 transition-colors">
+                  สำหรับนักศึกษา
+                </h2>
+                <p className="text-xs text-purple-800/70 mt-1 leading-relaxed">
+                  ตรวจสอบประวัติการเข้าร่วมกิจกรรมหะละเกาะห์ สถิติ และอาจารย์ผู้ดูแลกลุ่ม
+                </p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-purple-100/80 flex items-center justify-between text-xs font-black text-purple-800 group-hover:text-purple-950">
+              <div className="mt-5 pt-3 border-t border-purple-100 flex items-center justify-between text-xs font-black text-purple-800 group-hover:text-purple-950">
                 <span>เข้าสู่ระบบนักศึกษา</span>
-                <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center group-hover:translate-x-1 group-hover:bg-purple-800 group-hover:text-white transition-all">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-purple-400 group-hover:text-purple-800" />
               </div>
             </button>
 
-            {/* BIG BUTTON 2: สำหรับบุคคลากร */}
+            {/* BIG MINIMAL BUTTON 2: สำหรับบุคคลากร */}
             <button
               type="button"
-              onClick={() => navigateToView('faculty')}
-              className="group relative overflow-hidden rounded-3xl p-6 sm:p-7 bg-white hover:bg-gradient-to-br hover:from-white hover:to-purple-50/70 border-2 border-purple-200/90 hover:border-purple-600 shadow-card hover:shadow-xl transition-all duration-300 text-left active:scale-[0.98] flex flex-col justify-between min-h-[190px]"
+              onClick={handleOpenFacultyPortal}
+              className="group relative text-left p-6 sm:p-7 rounded-3xl bg-white hover:bg-purple-50/50 border border-purple-200/90 hover:border-purple-600 shadow-card hover:shadow-lg transition-all duration-300 active:scale-[0.98] flex flex-col justify-between min-h-[185px]"
             >
-              <div className="space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-800 to-purple-950 text-white flex items-center justify-center shadow-md shadow-purple-900/25 group-hover:scale-110 transition-transform duration-300">
-                  <Users className="w-7 h-7" />
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-purple-900 text-white flex items-center justify-center font-bold mb-3.5 group-hover:scale-105 transition-transform shadow-xs">
+                  <Users className="w-6 h-6" />
                 </div>
-                <div>
-                  <h2 className="text-lg sm:text-2xl font-black text-purple-950 group-hover:text-purple-800 transition-colors">
-                    สำหรับบุคคลากร
-                  </h2>
-                  <p className="text-xs sm:text-sm text-purple-800/70 font-medium mt-1 leading-relaxed">
-                    กลุ่มศึกษาอัลกุรอานสำหรับอาจารย์ บันทึกและติดตามการเช็คชื่อ มา / ขาด / ลา
-                  </p>
-                </div>
+                <h2 className="text-lg sm:text-xl font-black text-purple-950 tracking-tight flex items-center gap-1.5 group-hover:text-purple-800 transition-colors">
+                  <span>สำหรับบุคคลากร</span>
+                  <Lock className="w-3.5 h-3.5 text-purple-400" />
+                </h2>
+                <p className="text-xs text-purple-800/70 mt-1 leading-relaxed">
+                  กลุ่มศึกษาอัลกุรอานสำหรับอาจารย์ บันทึกและติดตามผลการเช็คชื่อ มา / ขาด / ลา
+                </p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-purple-100/80 flex items-center justify-between text-xs font-black text-purple-800 group-hover:text-purple-950">
+              <div className="mt-5 pt-3 border-t border-purple-100 flex items-center justify-between text-xs font-black text-purple-800 group-hover:text-purple-950">
                 <span>เข้าสู่ระบบอาจารย์</span>
-                <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center group-hover:translate-x-1 group-hover:bg-purple-800 group-hover:text-white transition-all">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-purple-400 group-hover:text-purple-800" />
               </div>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 2B. FACULTY LOGIN MODAL (ป้องกันรหัสผ่าน ปลอดภัย ไม่แสดงรหัส) */}
+      {/* ============================================================== */}
+      {isFacultyAuthModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 w-full max-w-sm border border-purple-200 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <h3 className="font-black text-base text-purple-950">
+                  เข้าสู่ระบบสำหรับบุคคลากร
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFacultyAuthModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-purple-800/80 leading-relaxed">
+              กรุณาระบุรหัสผ่านเข้าใช้งานกลุ่มศึกษาอัลกุรอานสำหรับอาจารย์ผู้ดูแล
+            </p>
+
+            {facultyAuthError && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 animate-fadeIn">
+                {facultyAuthError}
+              </div>
+            )}
+
+            <form onSubmit={handleFacultyLoginSubmit} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-purple-900 block mb-1">
+                  รหัสผ่านบุคคลากร
+                </label>
+                <input
+                  type="password"
+                  placeholder="กรอกรหัสผ่าน..."
+                  value={facultyPassInput}
+                  onChange={(e) => {
+                    setFacultyPassInput(e.target.value);
+                    setFacultyAuthError('');
+                  }}
+                  autoFocus
+                  required
+                  className="w-full px-3.5 py-2.5 text-sm border border-purple-200 rounded-xl bg-purple-50/40 text-purple-950 font-bold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFacultyAuthModalOpen(false)}
+                  className="px-4 py-2 border border-purple-200 rounded-xl text-purple-800 font-bold text-xs hover:bg-purple-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+                >
+                  เข้าสู่ระบบ
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -497,14 +623,14 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             </span>
           </div>
 
-          {/* Student Search Box */}
+          {/* Student Search Box (STRICTLY STUDENT ID) */}
           <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-3">
             <div>
               <h2 className="text-sm sm:text-base font-black text-purple-950">
-                ค้นหารหัสนักศึกษา หรือชื่อ-นามสกุล
+                กรอกรหัสนักศึกษาของท่าน
               </h2>
               <p className="text-[11px] text-purple-700/80 font-medium">
-                พิมพ์รหัสนักศึกษา (เช่น 681441001 หรือ 67...) หรือพิมพ์ชื่อของท่าน
+                กรุณาระบุรหัสนักศึกษา (ตัวเลข เช่น 681441001 หรือ 67...) เพื่อค้นหาข้อมูล
               </p>
             </div>
 
@@ -515,13 +641,14 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </div>
                 <input
                   type="text"
-                  placeholder="พิมพ์รหัสนักศึกษา หรือชื่อ-สกุล..."
+                  inputMode="numeric"
+                  placeholder="กรอกรหัสนักศึกษาของท่านเท่านั้น (เช่น 681441001)..."
                   value={studentSearchTerm}
                   onChange={(e) => {
                     setStudentSearchTerm(e.target.value);
                     setHasSearched(false);
                   }}
-                  className="w-full pl-12 pr-10 py-3 text-xs sm:text-sm bg-purple-50/50 border border-purple-200/90 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-600 text-purple-950 font-medium placeholder-purple-400"
+                  className="w-full pl-12 pr-10 py-3 text-xs sm:text-sm bg-purple-50/50 border border-purple-200/90 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-600 text-purple-950 font-mono font-bold placeholder-purple-400"
                 />
                 {studentSearchTerm && (
                   <button
@@ -549,7 +676,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             {matchingStudents.length > 0 && !selectedStudent && (
               <div className="space-y-1.5 pt-2 border-t border-purple-50">
                 <div className="text-[11px] font-bold text-purple-900/70 px-1">
-                  ผลการค้นหาที่ตรงกัน ({matchingStudents.length} คน):
+                  รหัสนักศึกษาที่พบในระบบ ({matchingStudents.length} รหัส):
                 </div>
                 <div className="divide-y divide-purple-100 border border-purple-100 rounded-2xl overflow-hidden bg-purple-50/30">
                   {matchingStudents.map((st) => (
@@ -585,7 +712,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             {/* Not Found State */}
             {hasSearched && matchingStudents.length === 0 && !selectedStudent && (
               <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center text-xs text-rose-800 font-semibold">
-                ไม่พบข้อมูลนักศึกษาที่ตรงกับ &ldquo;{studentSearchTerm}&rdquo; กรุณาตรวจสอบรหัสนักศึกษาอีกครั้ง
+                ไม่พบข้อมูลนักศึกษาที่ตรงกับรหัส &ldquo;{studentSearchTerm}&rdquo; กรุณาตรวจสอบรหัสนักศึกษาอีกครั้ง
               </div>
             )}
           </div>
@@ -593,6 +720,53 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           {/* Selected Student Dashboard View */}
           {selectedStudent && studentStats && (
             <div className="space-y-5 animate-fadeIn">
+              {/* ==================== 4A. PROMINENT ANNOUNCEMENTS BANNER (เด่นๆ) ==================== */}
+              {studentAnnouncements.length > 0 && (
+                <div className="space-y-3">
+                  {studentAnnouncements.map((ann) => (
+                    <div
+                      key={ann.id}
+                      className={`relative overflow-hidden rounded-3xl p-5 border-2 shadow-lg animate-fadeIn ${
+                        ann.priority === 'urgent'
+                          ? 'bg-gradient-to-br from-rose-900 via-rose-800 to-purple-950 border-rose-500 text-white shadow-rose-900/25'
+                          : ann.priority === 'warning'
+                          ? 'bg-gradient-to-br from-amber-900 via-amber-800 to-purple-950 border-amber-500 text-white shadow-amber-900/25'
+                          : 'bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-950 border-purple-500 text-white shadow-purple-900/25'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/25">
+                          <Megaphone className="w-5 h-5 text-white animate-bounce" />
+                        </div>
+
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-white/25 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-white/30">
+                              {ann.priority === 'urgent'
+                                ? '🚨 ประกาศด่วนที่สุด'
+                                : ann.priority === 'warning'
+                                ? '⚠️ แจ้งเตือนสำคัญ'
+                                : '📢 ประกาศสำหรับท่าน'}
+                            </span>
+                            <span className="text-[10px] text-white/70 font-mono">
+                              {new Date(ann.createdAt).toLocaleDateString('th-TH')}
+                            </span>
+                          </div>
+
+                          <h3 className="text-base sm:text-lg font-black tracking-tight text-white pt-0.5">
+                            {ann.title}
+                          </h3>
+
+                          <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap font-medium pt-1">
+                            {ann.content}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Profile Card with Supervisor Info */}
               <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950 text-white p-5 sm:p-6 shadow-xl shadow-purple-900/15 border border-purple-700/60">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -608,7 +782,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                         {selectedStudent.yearLevel}
                       </span>
                     </div>
-                    {/* Student Full Name Prominent */}
+
                     <div className="text-[11px] text-purple-300 font-semibold uppercase tracking-wider">
                       ชื่อ - สกุล นักศึกษา:
                     </div>
@@ -625,7 +799,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                     }}
                     className="self-start sm:self-auto text-xs font-extrabold px-3.5 py-2 rounded-full bg-white/15 hover:bg-white/25 text-purple-100 border border-white/20 transition-all active:scale-95"
                   >
-                    ค้นหาคนอื่น
+                    ค้นหารหัสอื่น
                   </button>
                 </div>
 
@@ -809,7 +983,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 กรุณาพิมพ์รหัสนักศึกษาเพื่อดูข้อมูล
               </h3>
               <p className="text-xs text-purple-700/70 max-w-sm mx-auto">
-                ระบบจะค้นหาชื่อ-นามสกุล ผลการเข้าร่วมกิจกรรมหะละเกาะห์ อัตราการเข้าเรียน และหัวหน้าหะละเกาะห์โดยอัตโนมัติ
+                ระบบจะค้นหาชื่อ-นามสกุล ประกาศ ผลการเข้าร่วมกิจกรรมหะละเกาะห์ อัตราการเข้าเรียน และหัวหน้าหะละเกาะห์โดยอัตโนมัติ
               </p>
             </div>
           )}

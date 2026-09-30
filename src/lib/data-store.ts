@@ -1,8 +1,10 @@
-import { Student, Teacher } from './types';
+import { Student, Teacher, Announcement } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 
 const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v3';
 const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v3';
+const STORAGE_KEY_FACULTY_PASS = 'halaqah_faculty_password_v1';
+const STORAGE_KEY_ANNOUNCEMENTS = 'halaqah_announcements_v1';
 
 export function getActiveStudents(): Student[] {
   if (typeof window === 'undefined') return INITIAL_STUDENTS;
@@ -166,3 +168,56 @@ export function resetToInitialData(): void {
   localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
   localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(INITIAL_TEACHERS));
 }
+
+// 5. จัดการรหัสผ่านบุคคลากร (ค่าเริ่มต้นคือ edu.sdd)
+export function getFacultyPassword(): string {
+  if (typeof window === 'undefined') return 'edu.sdd';
+  try {
+    return localStorage.getItem(STORAGE_KEY_FACULTY_PASS) || 'edu.sdd';
+  } catch {
+    return 'edu.sdd';
+  }
+}
+
+export function saveFacultyPassword(newPass: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_FACULTY_PASS, newPass.trim() || 'edu.sdd');
+}
+
+// 6. จัดการระบบประกาศ (Announcements) สำหรับนักศึกษา
+export function getAnnouncements(): Announcement[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ANNOUNCEMENTS);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export function saveAnnouncements(list: Announcement[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_ANNOUNCEMENTS, JSON.stringify(list));
+}
+
+export function addAnnouncement(
+  data: Omit<Announcement, 'id' | 'createdAt'>
+): Announcement {
+  const current = getAnnouncements();
+  const newAnn: Announcement = {
+    ...data,
+    id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    createdAt: new Date().toISOString(),
+  };
+  const updated = [newAnn, ...current];
+  saveAnnouncements(updated);
+  return newAnn;
+}
+
+export function deleteAnnouncement(id: string): void {
+  const current = getAnnouncements();
+  const updated = current.filter((a) => a.id !== id);
+  saveAnnouncements(updated);
+}
+

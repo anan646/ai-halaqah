@@ -96,3 +96,15 @@ export interface AppSettings {
   lastSyncTime?: string;
   subAdmins?: SubAdmin[];
 }
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'normal' | 'urgent' | 'warning';
+  targetType: 'all' | 'specific';
+  targetStudentIds: string[];
+  createdAt: string;
+  authorName: string;
+}
+

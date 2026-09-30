@@ -75,18 +75,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               <button
-                onClick={() => setCurrentTab('teacher')}
-                className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
-                  currentTab === 'teacher'
-                    ? 'bg-purple-800 text-white shadow-md shadow-purple-900/20'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/50'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>อาจารย์</span>
-              </button>
-
-              <button
                 onClick={() => setCurrentTab('admin')}
                 className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
                   currentTab === 'admin'

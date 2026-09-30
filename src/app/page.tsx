@@ -113,11 +113,18 @@ export default function HomePage() {
     }
   };
 
+  const [landingResetSignal, setLandingResetSignal] = useState(0);
+
+  const handleGoToLandingHome = () => {
+    setLandingResetSignal((prev) => prev + 1);
+    navigateToTab('landing');
+  };
+
   // Admin Logout
   const handleAdminLogout = () => {
     setAdminSession(null);
     setAdminUser(null);
-    navigateToTab('landing');
+    handleGoToLandingHome();
   };
 
   return (
@@ -125,7 +132,7 @@ export default function HomePage() {
       {/* Navigation */}
       <Navbar
         currentTab={currentTab}
-        setCurrentTab={(tab) => navigateToTab(tab)}
+        setCurrentTab={(tab) => (tab === 'landing' ? handleGoToLandingHome() : navigateToTab(tab))}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onRefreshData={loadData}
         onBackupAll={handleBackupAll}
@@ -141,6 +148,7 @@ export default function HomePage() {
         {currentTab === 'landing' && (
           <LandingPageView
             records={records}
+            landingResetSignal={landingResetSignal}
             onSelectTeacher={handleSelectTeacher}
             onGoToAdmin={() => navigateToTab('admin')}
             onOpenSettings={() => setIsSettingsOpen(true)}
