@@ -291,19 +291,70 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
   return (
     <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 sm:space-y-7 animate-fadeIn">
-      {/* 1. TOP PROMINENT OFFICIAL LOGO (NEW FTU EDU ANIMATION WITH LIGHT SWEEP) */}
-      <div className="relative flex flex-col items-center justify-center text-center space-y-4 pt-1 sm:pt-3 pb-2">
-        {/* Animated New Logo Showcase matching C:\Users\Lenovo\Downloads\อินโทรคณะ ใหม่.mp4 */}
-        <div className="relative w-full max-w-[360px] sm:max-w-lg md:max-w-xl flex items-center justify-center py-1 group">
-          <div className="w-full overflow-hidden rounded-2xl sm:rounded-3xl shadow-[0_10px_32px_-6px_rgba(88,28,135,0.14)] border border-purple-200/80 bg-white transition-all duration-300 hover:shadow-[0_14px_40px_-6px_rgba(88,28,135,0.22)]">
-            <video
-              src="/faculty-intro.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-auto object-contain block"
+      {/* 1. TOP PROMINENT OFFICIAL LOGO (ORIGINAL LOGO WITH REALISTIC LIGHT SWEEP EFFECT) */}
+      <div className="relative flex flex-col items-center justify-center text-center space-y-3 pt-2 sm:pt-4 pb-1">
+        {/* Main Logo with Light Sweep across the logo body */}
+        <div className="relative w-full max-w-[340px] sm:max-w-md md:max-w-lg lg:max-w-xl flex items-center justify-center py-2 group select-none">
+          {/* Base Logo Image */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoSrc}
+            alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
+            className="w-full h-32 sm:h-44 md:h-52 lg:h-60 object-contain block transition-transform duration-300 group-hover:scale-[1.02] drop-shadow-[0_10px_20px_rgba(88,28,135,0.14)]"
+          />
+
+          {/* Light Sweep Mask Layer (Clipped precisely to the logo artwork) */}
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden"
+            style={{
+              WebkitMaskImage: `url(${logoSrc})`,
+              maskImage: `url(${logoSrc})`,
+              WebkitMaskSize: 'contain',
+              maskSize: 'contain',
+              WebkitMaskRepeat: 'no-repeat',
+              maskRepeat: 'no-repeat',
+              WebkitMaskPosition: 'center',
+              maskPosition: 'center',
+            }}
+            aria-hidden="true"
+          >
+            {/* The sweeping bright light beam */}
+            <div
+              className="absolute inset-y-0 w-[55%] animate-light-sweep"
+              style={{
+                background:
+                  'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.1) 80%, transparent 100%)',
+                filter: 'drop-shadow(0 0 12px rgba(255,255,255,0.95))',
+              }}
             />
+          </div>
+
+          {/* Sparkle Glint 1 (Left emblem highlight) */}
+          <div
+            className="absolute left-[12%] sm:left-[15%] top-[18%] sm:top-[22%] pointer-events-none animate-glint-1"
+            aria-hidden="true"
+          >
+            <svg
+              className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.95)]"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+            </svg>
+          </div>
+
+          {/* Sparkle Glint 2 (Center calligraphy accent highlight) */}
+          <div
+            className="absolute right-[28%] sm:right-[30%] top-[12%] sm:top-[16%] pointer-events-none animate-glint-2"
+            aria-hidden="true"
+          >
+            <svg
+              className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.95)]"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+            </svg>
           </div>
         </div>
 
