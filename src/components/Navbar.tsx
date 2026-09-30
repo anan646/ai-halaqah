@@ -24,7 +24,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onBackupAll,
   isSyncing,
   isBackingUp,
-  totalStudents,
   customLogo,
   isAdminLoggedIn,
 }) => {
@@ -33,13 +32,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-5xl mx-auto pointer-events-auto">
         <div className="bg-white/90 backdrop-blur-xl border border-purple-200/70 shadow-[0_8px_30px_rgb(126,34,206,0.08)] rounded-full px-3 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between gap-2 transition-all duration-300">
           
-          {/* Brand & Logo */}
+          {/* Brand & Logo with Subtitle */}
           <button
             onClick={() => setCurrentTab('landing')}
             className="flex items-center space-x-2 text-left shrink-0 group focus:outline-none"
           >
             <div className="p-0.5 rounded-full bg-gradient-to-tr from-purple-700 via-purple-600 to-indigo-600 shadow-sm transition-transform duration-300 group-hover:scale-105 active:scale-95">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white flex items-center justify-center overflow-hidden">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white flex items-center justify-center overflow-hidden">
                 {customLogo ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={customLogo} alt="Logo" className="w-full h-full object-contain p-0.5" />
@@ -48,12 +47,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-purple-950 text-xs sm:text-sm tracking-tight group-hover:text-purple-700 transition-colors">
+            <div className="flex flex-col text-left">
+              <span className="font-extrabold text-purple-950 text-xs sm:text-sm tracking-tight group-hover:text-purple-700 transition-colors leading-tight">
                 หะละเกาะห์
               </span>
-              <span className="text-[10px] font-mono bg-purple-100/90 text-purple-800 font-bold px-2 py-0.5 rounded-full border border-purple-200/50">
-                {totalStudents} นศ.
+              <span className="text-[10px] text-purple-800/80 font-medium leading-tight">
+                ระบบบันทึกและติดตามการเข้าร่วม
               </span>
             </div>
           </button>
@@ -97,17 +96,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </nav>
 
-          {/* Quick Action Buttons */}
+          {/* Quick Action Buttons (Settings & Backup restricted to Admin only) */}
           <div className="flex items-center space-x-1 shrink-0">
-            <button
-              onClick={onBackupAll}
-              disabled={isBackingUp}
-              title="สำรองข้อมูลทั้งหมดขึ้น Google Sheet"
-              className="p-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 transition-all duration-200 flex items-center gap-1 active:scale-95 disabled:opacity-50 shadow-sm"
-            >
-              <CloudUpload className={`w-3.5 h-3.5 text-purple-700 ${isBackingUp ? 'animate-bounce' : ''}`} />
-              <span className="hidden md:inline">{isBackingUp ? 'กำลังสำรอง...' : 'สำรองชีต'}</span>
-            </button>
+            {isAdminLoggedIn && (
+              <>
+                <button
+                  onClick={onBackupAll}
+                  disabled={isBackingUp}
+                  title="สำรองข้อมูลทั้งหมดขึ้น Google Sheet"
+                  className="p-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 transition-all duration-200 flex items-center gap-1 active:scale-95 disabled:opacity-50 shadow-sm"
+                >
+                  <CloudUpload className={`w-3.5 h-3.5 text-purple-700 ${isBackingUp ? 'animate-bounce' : ''}`} />
+                  <span className="hidden md:inline">{isBackingUp ? 'กำลังสำรอง...' : 'สำรองชีต'}</span>
+                </button>
+
+                <button
+                  onClick={onOpenSettings}
+                  title="ตั้งค่าเชื่อมต่อระบบ"
+                  className="p-1.5 sm:p-2 text-purple-700 hover:text-purple-950 hover:bg-purple-100/60 rounded-full transition-all active:scale-90"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
 
             <button
               onClick={onRefreshData}
@@ -116,14 +127,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="p-1.5 sm:p-2 text-purple-700 hover:text-purple-950 hover:bg-purple-100/60 rounded-full transition-all active:scale-90 disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            </button>
-
-            <button
-              onClick={onOpenSettings}
-              title="ตั้งค่าเชื่อมต่อ"
-              className="p-1.5 sm:p-2 text-purple-700 hover:text-purple-950 hover:bg-purple-100/60 rounded-full transition-all active:scale-90"
-            >
-              <Settings className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

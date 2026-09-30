@@ -114,6 +114,11 @@ export default function HomePage() {
               adminUser={adminUser}
               onLogout={handleAdminLogout}
               onBackToLanding={() => setCurrentTab('landing')}
+              customLogo={customLogo}
+              onLogoUpdated={(logo) => setCustomLogo(logo)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onBackupAll={handleBackupAll}
+              isBackingUp={isBackingUp}
             />
           ) : (
             <AdminLoginView

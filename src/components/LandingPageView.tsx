@@ -1,20 +1,14 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Users,
   ShieldCheck,
-  Upload,
   ChevronRight,
-  User,
-  Settings,
-  Sparkles,
-  ArrowRight,
-  BookOpen
+  Sparkles
 } from 'lucide-react';
 import { getActiveTeachers, getActiveStudents } from '@/lib/data-store';
-import { setSavedLogo } from '@/lib/api-client';
 
 interface LandingPageViewProps {
   onSelectTeacher: (teacherName: string) => void;
@@ -27,36 +21,13 @@ interface LandingPageViewProps {
 export const LandingPageView: React.FC<LandingPageViewProps> = ({
   onSelectTeacher,
   onGoToAdmin,
-  onOpenSettings,
   customLogo,
-  onLogoUpdated,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGender, setSelectedGender] = useState<'ชาย' | 'หญิง'>('ชาย');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const allTeachers = useMemo(() => getActiveTeachers(), []);
   const allStudents = useMemo(() => getActiveStudents(), []);
-
-  // Handle Logo Upload
-  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        alert('กรุณาเลือกรูปภาพขนาดไม่เกิน 3MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        if (base64) {
-          setSavedLogo(base64);
-          onLogoUpdated(base64);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   // Filtered teachers
   const filteredTeachers = useMemo(() => {
@@ -80,75 +51,53 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const logoSrc = customLogo || '/logo.jpg';
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 animate-fadeIn">
-      {/* 1. TOP CENTER OFFICIAL LOGO WITH DOUBLE-BEZEL ARCHITECTURE */}
-      <div className="flex flex-col items-center justify-center text-center space-y-3">
-        <div className="relative group">
-          {/* Outer Shell */}
-          <div className="p-2 sm:p-2.5 rounded-3xl bg-purple-100/60 border border-purple-200/70 shadow-card transition-all duration-300 hover:shadow-card-hover">
-            {/* Inner Core */}
-            <div className="bg-white rounded-[1.25rem] px-5 py-3 sm:py-4 shadow-sm flex items-center justify-center max-w-xs sm:max-w-md mx-auto">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={logoSrc}
-                alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
-                className="max-h-16 sm:max-h-20 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.02]"
-              />
-            </div>
-          </div>
-
-          {/* Change Logo Action */}
-          <div className="flex justify-center mt-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="เปลี่ยนรูปตราสัญลักษณ์"
-              className="inline-flex items-center space-x-1.5 text-[11px] font-semibold text-purple-700/80 hover:text-purple-950 bg-white/80 hover:bg-white border border-purple-200/80 px-3 py-1 rounded-full shadow-sm transition-all duration-200 active:scale-95"
-            >
-              <Upload className="w-3 h-3 text-purple-600" />
-              <span>เปลี่ยนรูปโลโก้</span>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleLogoFileChange}
+    <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-fadeIn">
+      {/* 1. TOP CENTER PROMINENT OFFICIAL LOGO */}
+      <div className="flex flex-col items-center justify-center text-center space-y-3 sm:space-y-4">
+        {/* Outer Double-Bezel Shell */}
+        <div className="w-full max-w-sm sm:max-w-lg md:max-w-xl p-2.5 sm:p-3.5 rounded-3xl bg-purple-100/60 border border-purple-200/70 shadow-card transition-all duration-300 hover:shadow-card-hover">
+          {/* Inner Core with generous dimensions for crystal-clear readability */}
+          <div className="bg-white rounded-[1.25rem] px-4 py-3 sm:px-8 sm:py-5 shadow-sm flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSrc}
+              alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
+              className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto object-contain transition-transform duration-300 hover:scale-[1.01]"
             />
           </div>
         </div>
 
-        {/* Title & Eyebrow */}
+        {/* Title & Organization Name */}
         <div className="space-y-1 pt-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-purple-100/80 border border-purple-200/60 text-purple-900 text-[11px] font-bold">
             <Sparkles className="w-3 h-3 text-purple-600" />
             <span>ระบบบันทึกและติดตามการเข้าร่วม</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-purple-950 tracking-tight text-balance">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-purple-950 tracking-tight text-balance">
             กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
           </h1>
-          <p className="text-xs text-purple-800/80 font-medium">
+          <p className="text-xs sm:text-sm text-purple-800/80 font-medium">
             คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี
           </p>
         </div>
       </div>
 
-      {/* 2. TACTILE GENDER SELECTOR (2 Sculpted Cards) */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* 2. TACTILE GENDER SELECTOR (No emoji icons as requested) */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 max-w-2xl mx-auto">
         {/* Male Group */}
         <button
           type="button"
           onClick={() => setSelectedGender('ชาย')}
-          className={`p-4 sm:p-5 rounded-3xl text-left border transition-all duration-300 relative overflow-hidden group active:scale-[0.98] ${
+          className={`p-4 sm:p-5 rounded-3xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
             selectedGender === 'ชาย'
-              ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-900 text-white border-purple-700 shadow-lg shadow-purple-900/15'
+              ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-lg shadow-purple-900/15'
               : 'bg-white text-purple-950 border-purple-200/80 hover:border-purple-300 hover:shadow-card'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-2xl sm:text-3xl">👨‍💼</span>
+            <span className="text-base sm:text-xl font-black tracking-tight">กลุ่มชาย</span>
             <span
-              className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
+              className={`text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full ${
                 selectedGender === 'ชาย'
                   ? 'bg-white/20 text-white'
                   : 'bg-purple-100 text-purple-800'
@@ -157,10 +106,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               {maleCount} กลุ่ม
             </span>
           </div>
-          <div className="mt-3">
-            <div className="text-base sm:text-lg font-black tracking-tight">กลุ่มชาย</div>
+          <div className="mt-2 sm:mt-3">
             <div
-              className={`text-[11px] mt-0.5 font-medium ${
+              className={`text-xs font-medium ${
                 selectedGender === 'ชาย' ? 'text-purple-200' : 'text-purple-700/70'
               }`}
             >
@@ -173,16 +121,16 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         <button
           type="button"
           onClick={() => setSelectedGender('หญิง')}
-          className={`p-4 sm:p-5 rounded-3xl text-left border transition-all duration-300 relative overflow-hidden group active:scale-[0.98] ${
+          className={`p-4 sm:p-5 rounded-3xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
             selectedGender === 'หญิง'
-              ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-900 text-white border-purple-700 shadow-lg shadow-purple-900/15'
+              ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-lg shadow-purple-900/15'
               : 'bg-white text-purple-950 border-purple-200/80 hover:border-purple-300 hover:shadow-card'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-2xl sm:text-3xl">👩‍💼</span>
+            <span className="text-base sm:text-xl font-black tracking-tight">กลุ่มหญิง</span>
             <span
-              className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
+              className={`text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full ${
                 selectedGender === 'หญิง'
                   ? 'bg-white/20 text-white'
                   : 'bg-purple-100 text-purple-800'
@@ -191,10 +139,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               {femaleCount} กลุ่ม
             </span>
           </div>
-          <div className="mt-3">
-            <div className="text-base sm:text-lg font-black tracking-tight">กลุ่มหญิง</div>
+          <div className="mt-2 sm:mt-3">
             <div
-              className={`text-[11px] mt-0.5 font-medium ${
+              className={`text-xs font-medium ${
                 selectedGender === 'หญิง' ? 'text-purple-200' : 'text-purple-700/70'
               }`}
             >
@@ -204,8 +151,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         </button>
       </div>
 
-      {/* 3. SEARCH BOX WITH NESTED PILL ARCHITECTURE */}
-      <div className="relative">
+      {/* 3. SEARCH BOX */}
+      <div className="relative max-w-2xl mx-auto">
         <div className="absolute left-3.5 top-3 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center pointer-events-none">
           <Search className="w-3.5 h-3.5 text-purple-700" />
         </div>
@@ -227,8 +174,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         )}
       </div>
 
-      {/* 4. TEACHER LIST CARDS (With Button-in-Button Trailing Action) */}
-      <div className="space-y-3">
+      {/* 4. TEACHER LIST CARDS */}
+      <div className="space-y-3 max-w-2xl mx-auto">
         <div className="flex items-center justify-between px-1 text-xs font-bold text-purple-900/70">
           <span>รายชื่ออาจารย์ผู้รับผิดชอบ ({filteredTeachers.length} กลุ่ม)</span>
           <span className="text-[11px] font-mono text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-full">
@@ -280,24 +227,15 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         )}
       </div>
 
-      {/* 5. FOOTER QUICK ACTIONS */}
-      <div className="pt-4 border-t border-purple-100/80 flex items-center justify-center gap-2">
+      {/* 5. FOOTER QUICK ACTIONS (Admin link only, no public settings button) */}
+      <div className="pt-4 border-t border-purple-100/80 flex items-center justify-center">
         <button
           type="button"
           onClick={onGoToAdmin}
-          className="inline-flex items-center space-x-1.5 text-xs font-bold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-4 py-2.5 rounded-full shadow-sm transition-all duration-200 active:scale-95"
+          className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-5 py-2.5 rounded-full shadow-sm transition-all duration-200 active:scale-95"
         >
           <ShieldCheck className="w-4 h-4 text-purple-700" />
-          <span>เข้าสู่ระบบแอดมิน (Admin)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="inline-flex items-center space-x-1 text-xs font-bold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3.5 py-2.5 rounded-full transition-all duration-200 active:scale-95"
-        >
-          <Settings className="w-3.5 h-3.5 text-purple-700" />
-          <span>ตั้งค่า</span>
+          <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
         </button>
       </div>
     </div>
