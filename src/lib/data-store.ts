@@ -1,8 +1,8 @@
 import { Student, Teacher } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 
-const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v2';
-const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v2';
+const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v3';
+const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v3';
 
 export function getActiveStudents(): Student[] {
   if (typeof window === 'undefined') return INITIAL_STUDENTS;
@@ -12,7 +12,12 @@ export function getActiveStudents(): Student[] {
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
       return INITIAL_STUDENTS;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length < INITIAL_STUDENTS.length) {
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+      return INITIAL_STUDENTS;
+    }
+    return parsed;
   } catch {
     return INITIAL_STUDENTS;
   }
