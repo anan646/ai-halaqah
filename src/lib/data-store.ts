@@ -169,7 +169,7 @@ export function resetToInitialData(): void {
   localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(INITIAL_TEACHERS));
 }
 
-// 5. จัดการรหัสผ่านบุคคลากร (ค่าเริ่มต้นคือ edu.sdd)
+// 5. จัดการรหัสผ่านบุคลากร (ค่าเริ่มต้นคือ edu.sdd)
 export function getFacultyPassword(): string {
   if (typeof window === 'undefined') return 'edu.sdd';
   try {

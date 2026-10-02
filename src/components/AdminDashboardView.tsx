@@ -221,7 +221,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     saveFacultyPassword(newFacultyPass.trim());
     setFacultyPass(newFacultyPass.trim());
     setNewFacultyPass('');
-    setFacultyPassMsg({ text: 'บันทึกรหัสผ่านสำหรับบุคคลากรเรียบร้อยแล้ว', success: true });
+    setFacultyPassMsg({ text: 'บันทึกรหัสผ่านสำหรับบุคลากรเรียบร้อยแล้ว', success: true });
     setTimeout(() => setFacultyPassMsg(null), 4000);
   };
 
@@ -1814,7 +1814,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <div className="border-b border-purple-100 pb-3">
             <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
               <Settings className="w-5 h-5 text-purple-700" />
-              <span>การจัดการระบบ (รหัสผ่านบุคคลากร, แอดมินรอง, โลโก้ และฐานข้อมูล)</span>
+              <span>การจัดการระบบ (รหัสผ่านบุคลากร, แอดมินรอง, โลโก้ และฐานข้อมูล)</span>
             </h2>
             <p className="text-xs text-purple-800/70 mt-1">
               ศูนย์รวมการควบคุมสิทธิ์ รหัสผ่านเข้าใช้งาน รูปตราสัญลักษณ์ และการสำรองข้อมูล
@@ -1830,7 +1830,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
                 <div>
                   <h3 className="font-extrabold text-purple-950 text-sm">
-                    รหัสผ่านเข้าใช้งานสำหรับบุคคลากร
+                    รหัสผ่านเข้าใช้งานสำหรับบุคลากร
                   </h3>
                   <p className="text-[11px] text-purple-700/70">
                     รหัสที่อาจารย์ต้องใช้กรอกเพื่อเข้าสู่หน้าเช็คชื่อ
@@ -1847,7 +1847,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <form onSubmit={handleSaveFacultyPass} className="space-y-3">
                 <div>
                   <label className="text-[11px] font-bold text-purple-900 block mb-1">
-                    ตั้งรหัสผ่านใหม่สำหรับบุคคลากร
+                    ตั้งรหัสผ่านใหม่สำหรับบุคลากร
                   </label>
                   <input
                     type="text"
@@ -1865,7 +1865,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   type="submit"
                   className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
                 >
-                  บันทึกรหัสผ่านบุคคลากรใหม่
+                  บันทึกรหัสผ่านบุคลากรใหม่
                 </button>
               </form>
             </div>

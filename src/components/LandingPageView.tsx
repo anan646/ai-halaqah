@@ -425,7 +425,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               </div>
             </button>
 
-            {/* BUTTON 2: สำหรับบุคคลากร (สีทองอำพัน #f1b000 ไล่เกรเดี้ยนหรูโทนสว่าง + ไอคอนลางๆ) */}
+            {/* BUTTON 2: สำหรับบุคลากร (สีทองอำพัน #f1b000 ไล่เกรเดี้ยนหรูโทนสว่าง + ไอคอนลางๆ) */}
             <button
               type="button"
               onClick={handleOpenFacultyPortal}
@@ -466,7 +466,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </div>
 
                 <h2 className="text-xl sm:text-2xl font-black text-amber-950 tracking-tight group-hover:text-[#9a6d00] transition-colors">
-                  สำหรับบุคคลากร
+                  สำหรับบุคลากร
                 </h2>
                 <p className="text-xs sm:text-sm text-amber-950/80 mt-1.5 leading-relaxed font-medium">
                   กลุ่มศึกษาอัลกุรอานสำหรับอาจารย์ บันทึกและติดตามผลการเช็คชื่อ มา / ขาด / ลา
@@ -500,7 +500,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                   <Lock className="w-4 h-4" />
                 </div>
                 <h3 className="font-black text-base text-purple-950">
-                  เข้าสู่ระบบสำหรับบุคคลากร
+                  เข้าสู่ระบบสำหรับบุคลากร
                 </h3>
               </div>
               <button
@@ -525,7 +525,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             <form onSubmit={handleFacultyLoginSubmit} className="space-y-3">
               <div>
                 <label className="text-xs font-bold text-purple-900 block mb-1">
-                  รหัสผ่านบุคคลากร
+                  รหัสผ่านบุคลากร
                 </label>
                 <input
                   type="password"
@@ -578,7 +578,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             </button>
 
             <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
-              สำหรับบุคคลากร
+              สำหรับบุคลากร
             </span>
           </div>
 
@@ -711,7 +711,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       )}
 
       {/* ============================================================== */}
-      {/* 4. DEDICATED STUDENT WINDOW (แยกหน้าต่าง ไม่เห็นสำหรับบุคคลากร) */}
+      {/* 4. DEDICATED STUDENT WINDOW (แยกหน้าต่าง ไม่เห็นสำหรับบุคลากร) */}
       {/* ============================================================== */}
       {portalView === 'student' && (
         <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">

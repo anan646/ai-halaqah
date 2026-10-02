@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Calendar,
+  CalendarDays,
   CheckCircle2,
   XCircle,
   Clock,
@@ -65,6 +66,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   };
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const changeDay = (deltaDays: number) => {
     try {
@@ -77,6 +79,21 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       setSelectedDate(`${y}-${m}-${day}`);
     } catch {
       // fallback
+    }
+  };
+
+  const handleOpenCalendar = () => {
+    if (dateInputRef.current) {
+      if ('showPicker' in HTMLInputElement.prototype) {
+        try {
+          dateInputRef.current.showPicker();
+          return;
+        } catch {
+          // fallback
+        }
+      }
+      dateInputRef.current.focus();
+      dateInputRef.current.click();
     }
   };
 
@@ -148,6 +165,19 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       records.some((r) => r.date === selectedDate && r.studentId === st.studentId)
     );
   }, [currentTeacher, groupStudents, records, selectedDate]);
+
+  // List of all dates where this teacher has existing attendance records
+  const pastRecordedDates = useMemo(() => {
+    if (!currentTeacher) return [];
+    const dates = Array.from(
+      new Set(
+        records
+          .filter((r) => r.teacherName === currentTeacher.name)
+          .map((r) => r.date)
+      )
+    ).filter(Boolean);
+    return dates.sort((a, b) => b.localeCompare(a));
+  }, [records, currentTeacher]);
 
   // Change single status with realtime timestamp
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
@@ -347,35 +377,41 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         </div>
       </div>
 
-      {/* 3. DATE SELECTOR & STATUS CARDS */}
+      {/* 3. DATE SELECTOR & STATUS CARDS (เลือกวันเดือนปีย้อนหลังได้ครบวงจร) */}
       <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-4">
-        {/* Minimalist Date Navigation Row */}
+        {/* Date Navigation & Selector Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
               <Calendar className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-extrabold text-purple-950">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-base font-black text-purple-950">
                   {formatThaiDate(selectedDate)}
                 </span>
-                {selectedDate === getTodayString() && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                {selectedDate === getTodayString() ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
                     วันนี้
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-200">
+                    ย้อนหลัง
                   </span>
                 )}
               </div>
-              <div className="text-[10px] text-purple-700/80 font-medium mt-0.5">
+              <div className="text-[11px] text-purple-700/80 font-medium mt-0.5">
                 {isDateAlreadySaved ? (
                   <span className="text-emerald-700 font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    บันทึกแล้ว (สามารถแก้ไขได้)
+                    บันทึกแล้ว (สามารถแก้ไขและบันทึกซ้ำได้)
                   </span>
                 ) : (
                   <span className="text-purple-600/90 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-purple-400 inline-block" />
-                    ยังไม่มีบันทึกของวันนี้
+                    {selectedDate === getTodayString()
+                      ? 'ยังไม่มีบันทึกของวันนี้'
+                      : 'ยังไม่มีบันทึกของวันที่นี้ (สามารถบันทึกย้อนหลังได้)'}
                   </span>
                 )}
               </div>
@@ -383,41 +419,39 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           </div>
 
           {/* Minimalist Tactile Date Picker & Navigator */}
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            {/* Quick Today Pill (if not on today) */}
+          <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
+            {/* Quick Today Button (if viewing a past or future date) */}
             {selectedDate !== getTodayString() && (
               <button
                 type="button"
                 onClick={() => setSelectedDate(getTodayString())}
                 className="text-xs font-bold px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200/80 transition-all active:scale-95"
               >
-                วันนี้
+                กลับสู่วันนี้
               </button>
             )}
 
-            {/* Stepper with embedded date picker */}
+            {/* Stepper Pill with Date Trigger (From user screenshot) */}
             <div className="inline-flex items-center bg-purple-50/90 border border-purple-200/80 rounded-full p-0.5 shadow-sm">
               <button
                 type="button"
                 onClick={() => changeDay(-1)}
-                title="วันก่อนหน้า"
+                title="วันก่อนหน้า (ย้อนหลัง 1 วัน)"
                 className="w-7 h-7 rounded-full flex items-center justify-center text-purple-800 hover:bg-white transition-all active:scale-90"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
 
               {/* Minimalist Date Trigger */}
-              <label className="relative px-3 py-1 flex items-center gap-1.5 text-xs font-extrabold text-purple-950 hover:bg-white rounded-full transition-all cursor-pointer">
+              <button
+                type="button"
+                onClick={handleOpenCalendar}
+                title="คลิกเพื่อเลือกวันเดือนปีจากปฏิทิน"
+                className="px-3 py-1 flex items-center gap-1.5 text-xs font-extrabold text-purple-950 bg-white hover:bg-purple-100/60 rounded-full transition-all cursor-pointer shadow-xs active:scale-95"
+              >
                 <Calendar className="w-3.5 h-3.5 text-purple-700" />
                 <span className="select-none">{formatThaiDate(selectedDate)}</span>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                  title="คลิกเพื่อเลือกวันเดือนปีจากปฏิทิน"
-                />
-              </label>
+              </button>
 
               <button
                 type="button"
@@ -428,8 +462,77 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Explicit Calendar Button */}
+            <button
+              type="button"
+              onClick={handleOpenCalendar}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 shadow-xs transition-all active:scale-95"
+              title="เปิดปฏิทินเลือกวันเดือนปีย้อนหลัง"
+            >
+              <CalendarDays className="w-3.5 h-3.5 text-purple-700" />
+              <span>เลือกวันย้อนหลัง</span>
+            </button>
+
+            {/* Native date input invoked by showPicker */}
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) setSelectedDate(e.target.value);
+              }}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
           </div>
         </div>
+
+        {/* Quick Past-Record History Selector Row */}
+        {pastRecordedDates.length > 0 && (
+          <div className="pt-2 border-t border-purple-50 flex flex-wrap items-center justify-between gap-2 bg-purple-50/40 p-2.5 rounded-2xl border border-purple-100/80">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+              <History className="w-3.5 h-3.5 text-purple-700" />
+              <span>ประวัติวันที่มีการเช็คชื่อย้อนหลัง ({pastRecordedDates.length} วัน):</span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-3 py-1 text-xs font-bold font-mono rounded-xl bg-white border border-purple-200 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-xs cursor-pointer"
+              >
+                <option value={selectedDate} disabled>
+                  -- เลือกจากประวัติวันที่บันทึกแล้ว --
+                </option>
+                {pastRecordedDates.map((d) => (
+                  <option key={d} value={d}>
+                    {formatThaiDate(d)} {d === getTodayString() ? '(วันนี้)' : '(ย้อนหลัง)'}
+                  </option>
+                ))}
+              </select>
+
+              {/* Quick Jump to last 3 dates */}
+              <div className="hidden sm:flex items-center gap-1">
+                {pastRecordedDates.slice(0, 3).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setSelectedDate(d)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
+                      selectedDate === d
+                        ? 'bg-purple-800 text-white shadow-xs'
+                        : 'bg-white hover:bg-purple-100 text-purple-900 border border-purple-200'
+                    }`}
+                  >
+                    {formatThaiDate(d)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Live Counts Cards (Tactile 3-Card Bento) */}
         <div className="grid grid-cols-3 gap-2.5 text-center pt-3 border-t border-purple-50">
