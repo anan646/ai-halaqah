@@ -20,7 +20,8 @@ import {
   Lock,
   Megaphone,
   Bell,
-  X
+  X,
+  HelpCircle
 } from 'lucide-react';
 import {
   getActiveTeachers,
@@ -38,6 +39,7 @@ interface LandingPageViewProps {
   onOpenSettings: () => void;
   customLogo: string;
   onLogoUpdated: (newLogo: string) => void;
+  onOpenTutorial?: () => void;
 }
 
 export const LandingPageView: React.FC<LandingPageViewProps> = ({
@@ -46,6 +48,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   onSelectTeacher,
   onGoToAdmin,
   customLogo,
+  onOpenTutorial,
 }) => {
   // 1. Three distinct views:
   // 'select' = Landing Screen with ONLY 2 Big Minimalist Buttons
@@ -1074,12 +1077,23 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         </div>
       )}
 
-      {/* 5. FOOTER QUICK ACTIONS (Admin link only) */}
-      <div className="pt-4 border-t border-purple-100/80 flex items-center justify-center">
+      {/* 5. FOOTER QUICK ACTIONS (Tutorial & Admin links) */}
+      <div className="pt-4 border-t border-purple-100/80 flex flex-wrap items-center justify-center gap-3">
+        {onOpenTutorial && (
+          <button
+            type="button"
+            onClick={onOpenTutorial}
+            className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-4 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
+          >
+            <HelpCircle className="w-4 h-4 text-purple-700" />
+            <span>สอนการใช้งานระบบ</span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onGoToAdmin}
-          className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-5 py-2.5 rounded-full shadow-sm transition-all duration-200 active:scale-95"
+          className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-5 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
         >
           <ShieldCheck className="w-4 h-4 text-purple-700" />
           <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>

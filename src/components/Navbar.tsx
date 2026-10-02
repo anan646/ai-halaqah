@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BookOpen, BarChart3, UserCheck, Settings, RefreshCw, Home, CloudUpload, Lock } from 'lucide-react';
+import { BookOpen, BarChart3, UserCheck, Settings, RefreshCw, Home, CloudUpload, Lock, HelpCircle } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: 'landing' | 'teacher' | 'admin';
@@ -14,6 +14,7 @@ interface NavbarProps {
   totalStudents: number;
   customLogo?: string;
   isAdminLoggedIn?: boolean;
+  onOpenTutorial?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,6 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isBackingUp,
   customLogo,
   isAdminLoggedIn,
+  onOpenTutorial,
 }) => {
   const logoSrc = customLogo || '/logo.png';
 
@@ -109,6 +111,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Settings className="w-3.5 h-3.5" />
                   </button>
                 </>
+              )}
+
+              {onOpenTutorial && (
+                <button
+                  onClick={onOpenTutorial}
+                  title="สอนการใช้งานระบบ"
+                  className="p-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 transition-all flex items-center gap-1.5 active:scale-95 shadow-2xs"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-purple-700" />
+                  <span className="hidden sm:inline">คู่มือ</span>
+                </button>
               )}
 
               <button

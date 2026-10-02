@@ -7,10 +7,14 @@ import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { AdminDashboardView } from '@/components/AdminDashboardView';
 import { AdminLoginView } from '@/components/AdminLoginView';
 import { SettingsModal } from '@/components/SettingsModal';
+import { OnboardingTutorialModal } from '@/components/OnboardingTutorialModal';
 import { AttendanceRecord } from '@/lib/types';
 import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllToGoogleSheet } from '@/lib/api-client';
 import { getAdminSession, setAdminSession } from '@/lib/admin-auth';
 import { getActiveStudents } from '@/lib/data-store';
+import { HelpCircle } from 'lucide-react';
+
+const TUTORIAL_DISMISSED_KEY = 'halaqah_tutorial_never_show_v1';
 
 export default function HomePage() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'teacher' | 'admin'>('landing');
@@ -20,6 +24,24 @@ export default function HomePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [customLogo, setCustomLogo] = useState<string>('');
   const [activeTeacherName, setActiveTeacherName] = useState<string>('');
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+
+  // Show tutorial on initial load every time unless dismissed forever
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const dismissed = localStorage.getItem(TUTORIAL_DISMISSED_KEY);
+      if (dismissed !== 'true') {
+        setIsTutorialOpen(true);
+      }
+    }
+  }, []);
+
+  const handleDismissTutorialForever = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TUTORIAL_DISMISSED_KEY, 'true');
+    }
+    setIsTutorialOpen(false);
+  };
 
   // Admin authentication state
   const [adminUser, setAdminUser] = useState<{ id: string; name: string; role: 'admin' | 'subadmin' } | null>(null);
@@ -141,6 +163,7 @@ export default function HomePage() {
         totalStudents={getActiveStudents().length}
         customLogo={customLogo}
         isAdminLoggedIn={!!adminUser}
+        onOpenTutorial={() => setIsTutorialOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -154,6 +177,7 @@ export default function HomePage() {
             onOpenSettings={() => setIsSettingsOpen(true)}
             customLogo={customLogo}
             onLogoUpdated={(logo) => setCustomLogo(logo)}
+            onOpenTutorial={() => setIsTutorialOpen(true)}
           />
         )}
 
@@ -205,6 +229,28 @@ export default function HomePage() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaved={loadData}
+      />
+
+      {/* Floating Tutorial / Help Button (เปิดดูคู่มือซ้ำได้ตลอดเวลา) */}
+      <div className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-30 print:hidden animate-fadeIn">
+        <button
+          type="button"
+          onClick={() => setIsTutorialOpen(true)}
+          className="group flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-white/95 hover:bg-white text-purple-950 font-extrabold text-xs rounded-full border border-purple-200/90 shadow-[0_8px_25px_rgba(107,33,168,0.18)] hover:shadow-[0_12px_30px_rgba(107,33,168,0.28)] backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95"
+          title="สอนการใช้งานระบบ (5 ขั้นตอน)"
+        >
+          <div className="w-6 h-6 rounded-full bg-purple-100 group-hover:bg-purple-800 text-purple-700 group-hover:text-white flex items-center justify-center transition-colors">
+            <HelpCircle className="w-3.5 h-3.5" />
+          </div>
+          <span className="font-bold">สอนการใช้งาน</span>
+        </button>
+      </div>
+
+      {/* Onboarding Tutorial Step-by-Step Modal */}
+      <OnboardingTutorialModal
+        isOpen={isTutorialOpen}
+        onClose={() => setIsTutorialOpen(false)}
+        onDismissForever={handleDismissTutorialForever}
       />
 
       {/* Clean Footer */}
