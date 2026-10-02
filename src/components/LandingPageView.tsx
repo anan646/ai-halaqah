@@ -30,6 +30,10 @@ import {
   getAnnouncements,
 } from '@/lib/data-store';
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
+import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
+
+const STUDENT_TUTORIAL_KEY = 'halaqah_tutorial_student_dismissed_v1';
+const FACULTY_TUTORIAL_KEY = 'halaqah_tutorial_faculty_dismissed_v1';
 
 interface LandingPageViewProps {
   records?: AttendanceRecord[];
@@ -50,6 +54,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   customLogo,
   onOpenTutorial,
 }) => {
+  // Role-based tutorial state
+  const [activeTutorialRole, setActiveTutorialRole] = useState<TutorialRole | null>(null);
+
   // 1. Three distinct views:
   // 'select' = Landing Screen with ONLY 2 Big Minimalist Buttons
   // 'student' = Dedicated Student Window
@@ -136,10 +143,33 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  const checkAndOpenTutorial = (role: TutorialRole) => {
+    if (typeof window === 'undefined') return;
+    const key = role === 'student' ? STUDENT_TUTORIAL_KEY : FACULTY_TUTORIAL_KEY;
+    const dismissed = localStorage.getItem(key);
+    if (dismissed !== 'true') {
+      setActiveTutorialRole(role);
+    }
+  };
+
+  const handleDismissRoleTutorialForever = () => {
+    if (typeof window !== 'undefined' && activeTutorialRole) {
+      const key = activeTutorialRole === 'student' ? STUDENT_TUTORIAL_KEY : FACULTY_TUTORIAL_KEY;
+      localStorage.setItem(key, 'true');
+    }
+    setActiveTutorialRole(null);
+  };
+
   const navigateToView = (view: 'select' | 'student' | 'faculty') => {
     setPortalView(view);
     if (typeof window !== 'undefined') {
       window.history.pushState({ landingView: view }, '', window.location.href);
+    }
+
+    if (view === 'student') {
+      checkAndOpenTutorial('student');
+    } else if (view === 'faculty') {
+      checkAndOpenTutorial('faculty');
     }
   };
 
@@ -149,6 +179,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     setStudentSearchTerm('');
     setHasSearched(false);
     setIsFacultyAuthModalOpen(false);
+    setActiveTutorialRole(null);
     if (typeof window !== 'undefined') {
       window.history.pushState({ landingView: 'select' }, '', window.location.href);
     }
@@ -569,8 +600,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* ============================================================== */}
       {portalView === 'faculty' && (
         <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
-          {/* Back Navigation Bar */}
-          <div className="flex items-center justify-between">
+          {/* Back Navigation Bar & Quick Tutorial */}
+          <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={handleBackToSelect}
@@ -580,9 +611,20 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               <span>ย้อนกลับไปหน้าเลือกประเภท</span>
             </button>
 
-            <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
-              สำหรับบุคลากร
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTutorialRole('faculty')}
+                className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-amber-950 bg-[#fff8e6] hover:bg-[#fdeec4] border border-[#f1b000]/40 px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
+                title="เปิดดูคู่มือการใช้งานสำหรับบุคลากร"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-amber-700" />
+                <span>คู่มือบุคลากร</span>
+              </button>
+              <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
+                สำหรับบุคลากร
+              </span>
+            </div>
           </div>
 
           {/* Gender Selector */}
@@ -718,8 +760,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* ============================================================== */}
       {portalView === 'student' && (
         <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
-          {/* Back Navigation Bar */}
-          <div className="flex items-center justify-between">
+          {/* Back Navigation Bar & Quick Tutorial */}
+          <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={handleBackToSelect}
@@ -729,9 +771,20 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               <span>ย้อนกลับไปหน้าเลือกประเภท</span>
             </button>
 
-            <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
-              สำหรับนักศึกษา
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTutorialRole('student')}
+                className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
+                title="เปิดดูคู่มือการใช้งานสำหรับนักศึกษา"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-purple-700" />
+                <span>คู่มือนักศึกษา</span>
+              </button>
+              <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
+                สำหรับนักศึกษา
+              </span>
+            </div>
           </div>
 
           {/* Student Search Box (STRICTLY EXACT STUDENT ID ONLY) */}
@@ -1099,6 +1152,16 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
         </button>
       </div>
+
+      {/* Role-Specific Onboarding Tutorial Modal */}
+      {activeTutorialRole && (
+        <OnboardingTutorialModal
+          isOpen={!!activeTutorialRole}
+          role={activeTutorialRole}
+          onClose={() => setActiveTutorialRole(null)}
+          onDismissForever={handleDismissRoleTutorialForever}
+        />
+      )}
     </div>
   );
 };

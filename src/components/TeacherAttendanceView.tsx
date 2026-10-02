@@ -17,7 +17,8 @@ import {
   ArrowLeft,
   Check,
   UserX,
-  FileText
+  FileText,
+  HelpCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
@@ -30,6 +31,7 @@ interface TeacherAttendanceViewProps {
   activeTeacherName?: string;
   onTeacherChanged?: (name: string) => void;
   onBackToLanding?: () => void;
+  onOpenTutorial?: () => void;
 }
 
 export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
@@ -38,6 +40,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   activeTeacherName,
   onTeacherChanged,
   onBackToLanding,
+  onOpenTutorial,
 }) => {
   const teachers = useMemo(() => getActiveTeachers(), []);
   const allStudents = useMemo(() => getActiveStudents(), []);
@@ -317,20 +320,34 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-56 sm:pb-36 animate-fadeIn">
-      {/* 1. TOP BAR: BACK & LIVE CLOCK */}
-      <div className="flex items-center justify-between gap-2">
-        {onBackToLanding && (
-          <button
-            type="button"
-            onClick={onBackToLanding}
-            className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 hover:text-purple-950 bg-white/90 hover:bg-white border border-purple-200/80 px-3.5 py-2 rounded-full shadow-card hover:shadow-card-hover transition-all duration-300 ease-spring active:scale-95 group"
-          >
-            <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center group-hover:-translate-x-0.5 transition-transform duration-200">
-              <ArrowLeft className="w-3.5 h-3.5" />
-            </div>
-            <span>เปลี่ยนอาจารย์ / หน้าแรก</span>
-          </button>
-        )}
+      {/* 1. TOP BAR: BACK, TUTORIAL & LIVE CLOCK */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          {onBackToLanding && (
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 hover:text-purple-950 bg-white/90 hover:bg-white border border-purple-200/80 px-3.5 py-2 rounded-full shadow-card hover:shadow-card-hover transition-all duration-300 ease-spring active:scale-95 group"
+            >
+              <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center group-hover:-translate-x-0.5 transition-transform duration-200">
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </div>
+              <span>เปลี่ยนอาจารย์ / หน้าแรก</span>
+            </button>
+          )}
+
+          {onOpenTutorial && (
+            <button
+              type="button"
+              onClick={onOpenTutorial}
+              className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-amber-950 bg-[#fff8e6] hover:bg-[#fdeec4] border border-[#f1b000]/40 px-3 py-2 rounded-full shadow-2xs transition-all active:scale-95"
+              title="เปิดดูคู่มือการใช้งานสำหรับบุคลากร"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-700" />
+              <span>คู่มือบุคลากร</span>
+            </button>
+          )}
+        </div>
 
         {/* Real-time Clock with Pulsing Dot */}
         <div className="inline-flex items-center space-x-2 bg-white/90 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold text-purple-950 border border-purple-200/80 shadow-card ml-auto">
