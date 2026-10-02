@@ -41,7 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setCurrentTab('landing')}
               className="flex items-center space-x-2.5 sm:space-x-3 text-left shrink-0 group focus:outline-none"
             >
-              <div className="h-8 sm:h-9 max-w-[140px] sm:max-w-[180px] flex items-center justify-center overflow-hidden">
+              <div className="h-9 sm:h-10 max-w-[150px] sm:max-w-[200px] flex items-center justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logoSrc}

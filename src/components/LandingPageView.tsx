@@ -280,13 +280,13 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* 1. TOP PROMINENT OFFICIAL LOGO (ORIGINAL LOGO WITH REALISTIC LIGHT SWEEP EFFECT) */}
       <div className="relative flex flex-col items-center justify-center text-center space-y-3 pt-2 sm:pt-4 pb-1">
         {/* Main Logo with Light Sweep across the logo body */}
-        <div className="relative w-full max-w-[340px] sm:max-w-md md:max-w-lg lg:max-w-xl flex items-center justify-center py-2 group select-none">
+        <div className="relative w-full max-w-[360px] sm:max-w-lg md:max-w-xl lg:max-w-2xl flex items-center justify-center py-2 sm:py-3 group select-none">
           {/* Base Logo Image */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logoSrc}
             alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
-            className="w-full h-32 sm:h-44 md:h-52 lg:h-60 object-contain block transition-transform duration-300 group-hover:scale-[1.02] drop-shadow-[0_10px_20px_rgba(88,28,135,0.14)]"
+            className="w-full h-36 sm:h-48 md:h-56 lg:h-64 object-contain block transition-transform duration-300 group-hover:scale-[1.02] drop-shadow-[0_12px_24px_rgba(88,28,135,0.15)]"
           />
 
           {/* Light Sweep Mask Layer (Clipped precisely to the logo artwork) */}
@@ -306,18 +306,18 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           >
             {/* The sweeping bright light beam */}
             <div
-              className="absolute inset-y-0 w-[55%] animate-light-sweep"
+              className="absolute inset-y-0 w-[45%] animate-light-sweep"
               style={{
                 background:
                   'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.1) 80%, transparent 100%)',
-                filter: 'drop-shadow(0 0 12px rgba(255,255,255,0.95))',
+                filter: 'drop-shadow(0 0 14px rgba(255,255,255,0.95))',
               }}
             />
           </div>
 
-          {/* Sparkle Glint 1 (Left emblem highlight) */}
+          {/* Sparkle Glint 1 (Highlight on FTU curves) */}
           <div
-            className="absolute left-[12%] sm:left-[15%] top-[18%] sm:top-[22%] pointer-events-none animate-glint-1"
+            className="absolute left-[10%] sm:left-[12%] top-[20%] sm:top-[22%] pointer-events-none animate-glint-1"
             aria-hidden="true"
           >
             <svg
@@ -329,9 +329,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             </svg>
           </div>
 
-          {/* Sparkle Glint 2 (Center calligraphy accent highlight) */}
+          {/* Sparkle Glint 2 (Highlight on EDU open book symbol) */}
           <div
-            className="absolute right-[28%] sm:right-[30%] top-[12%] sm:top-[16%] pointer-events-none animate-glint-2"
+            className="absolute right-[16%] sm:right-[18%] top-[8%] sm:top-[12%] pointer-events-none animate-glint-2"
             aria-hidden="true"
           >
             <svg
