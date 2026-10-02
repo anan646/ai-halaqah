@@ -197,44 +197,30 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     return unifiedStudents.filter((s) => s.teacherName === teacherName).length;
   };
 
-  // STUDENT SEARCH: STRICTLY BY STUDENT ID (NO NAMES ALLOWED)
-  const matchingStudents = useMemo(() => {
-    const q = studentSearchTerm.trim().replace(/[\s-]/g, '').toLowerCase();
-    if (!q) return [];
-
-    return unifiedStudents
-      .filter((s) => {
-        const cleanId = (s.studentId || '').replace(/[\s-]/g, '').toLowerCase();
-        return cleanId.includes(q);
-      })
-      .slice(0, 10);
-  }, [unifiedStudents, studentSearchTerm]);
-
-  // Execute student search (on Enter or submit)
+  // STUDENT SEARCH: STRICTLY BY EXACT STUDENT ID (NO AUTOCOMPLETE LEAKAGE)
   const executeStudentSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setHasSearched(true);
 
     const q = studentSearchTerm.trim().replace(/[\s-]/g, '').toLowerCase();
-    if (!q) return;
+    if (!q) {
+      setSelectedStudent(null);
+      return;
+    }
 
-    // Exact ID match
+    // Exact ID match only
     const exact = unifiedStudents.find(
       (s) => (s.studentId || '').replace(/[\s-]/g, '').toLowerCase() === q
     );
     if (exact) {
       setSelectedStudent(exact);
-      return;
-    }
-
-    // First partial ID match
-    if (matchingStudents.length > 0) {
-      setSelectedStudent(matchingStudents[0]);
+    } else {
+      setSelectedStudent(null);
     }
   };
 
-  const handleSelectStudent = (st: Student) => {
-    setSelectedStudent(st);
+  const handleClearStudent = () => {
+    setSelectedStudent(null);
     setStudentSearchTerm('');
     setHasSearched(false);
   };
@@ -745,15 +731,23 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             </span>
           </div>
 
-          {/* Student Search Box (STRICTLY STUDENT ID) */}
-          <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-3">
-            <div>
-              <h2 className="text-sm sm:text-base font-black text-purple-950">
-                กรอกรหัสนักศึกษาของท่าน
-              </h2>
-              <p className="text-[11px] text-purple-700/80 font-medium">
-                กรุณาระบุรหัสนักศึกษา (ตัวเลข เช่น 681441001 หรือ 67...) เพื่อค้นหาข้อมูล
-              </p>
+          {/* Student Search Box (STRICTLY EXACT STUDENT ID ONLY) */}
+          <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm sm:text-base font-black text-purple-950 flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-purple-700" />
+                  <span>ตรวจสอบข้อมูลเฉพาะบุคคลตามรหัสนักศึกษา</span>
+                </h2>
+                <p className="text-[11px] text-purple-700/80 font-medium mt-0.5">
+                  ระบุรหัสนักศึกษาของท่านให้ครบถ้วนเพื่อเข้าดูข้อมูลส่วนบุคคลเท่านั้น
+                </p>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200/80 rounded-full text-[10px] font-extrabold text-purple-800 self-start sm:self-auto">
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                <span>เห็นเฉพาะข้อมูลของตนเอง</span>
+              </div>
             </div>
 
             <form onSubmit={executeStudentSearch} className="flex gap-2">
@@ -764,7 +758,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 <input
                   type="text"
                   inputMode="numeric"
-                  placeholder="กรอกรหัสนักศึกษาของท่านเท่านั้น (เช่น 681441001)..."
+                  placeholder="กรอกรหัสนักศึกษาของท่าน เช่น 681441001..."
                   value={studentSearchTerm}
                   onChange={(e) => {
                     setStudentSearchTerm(e.target.value);
@@ -788,53 +782,24 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
               <button
                 type="submit"
-                className="px-5 py-3 bg-gradient-to-r from-purple-800 to-purple-900 text-white text-xs sm:text-sm font-extrabold rounded-2xl shadow-sm hover:from-purple-900 hover:to-purple-950 transition-all active:scale-95 shrink-0"
+                className="px-6 py-3 bg-gradient-to-r from-purple-800 to-purple-900 text-white text-xs sm:text-sm font-extrabold rounded-2xl shadow-sm hover:from-purple-900 hover:to-purple-950 transition-all active:scale-95 shrink-0"
               >
                 ค้นหา
               </button>
             </form>
 
-            {/* Instant Matching Results Dropdown List */}
-            {matchingStudents.length > 0 && !selectedStudent && (
-              <div className="space-y-1.5 pt-2 border-t border-purple-50">
-                <div className="text-[11px] font-bold text-purple-900/70 px-1">
-                  รหัสนักศึกษาที่พบในระบบ ({matchingStudents.length} รหัส):
-                </div>
-                <div className="divide-y divide-purple-100 border border-purple-100 rounded-2xl overflow-hidden bg-purple-50/30">
-                  {matchingStudents.map((st) => (
-                    <button
-                      key={st.studentId}
-                      type="button"
-                      onClick={() => handleSelectStudent(st)}
-                      className="w-full text-left p-3 hover:bg-white flex items-center justify-between transition-colors group"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-black text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md">
-                            {st.studentId}
-                          </span>
-                          <span className="font-black text-xs sm:text-sm text-purple-950 group-hover:text-purple-700">
-                            {st.fullName}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-purple-700/80 mt-1">
-                          {st.yearLevel} • {st.groupName} • {st.teacherName}
-                        </div>
-                      </div>
-                      <div className="text-xs font-bold text-purple-700 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                        <span>ดูข้อมูล</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-purple-50/60 border border-purple-100/80 text-[11px] text-purple-900/80 font-medium">
+              <Lock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              <span>ระบบรักษาความปลอดภัย: ไม่แสดงรายชื่อเพื่อนนักศึกษา จะแสดงข้อมูลเฉพาะเจ้าของรหัสที่ระบุถูกต้องเท่านั้น</span>
+            </div>
 
             {/* Not Found State */}
-            {hasSearched && matchingStudents.length === 0 && !selectedStudent && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center text-xs text-rose-800 font-semibold">
-                ไม่พบข้อมูลนักศึกษาที่ตรงกับรหัส &ldquo;{studentSearchTerm}&rdquo; กรุณาตรวจสอบรหัสนักศึกษาอีกครั้ง
+            {hasSearched && !selectedStudent && studentSearchTerm.trim() && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center text-xs text-rose-800 font-semibold space-y-1 animate-fadeIn">
+                <div className="font-bold">ไม่พบข้อมูลรหัสนักศึกษา &ldquo;{studentSearchTerm}&rdquo; ในระบบ</div>
+                <div className="text-[11px] text-rose-600 font-normal">
+                  กรุณาตรวจสอบรหัสนักศึกษาให้ถูกต้องครบถ้วน หรือติดต่ออาจารย์ผู้ดูแลกลุ่มหะละเกาะห์
+                </div>
               </div>
             )}
           </div>
@@ -915,13 +880,10 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedStudent(null);
-                      setStudentSearchTerm('');
-                    }}
+                    onClick={handleClearStudent}
                     className="self-start sm:self-auto text-xs font-extrabold px-3.5 py-2 rounded-full bg-white/15 hover:bg-white/25 text-purple-100 border border-white/20 transition-all active:scale-95"
                   >
-                    ค้นหารหัสอื่น
+                    ค้นหารหัสอื่น / ออกจากข้อมูล
                   </button>
                 </div>
 
@@ -1096,16 +1058,16 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           )}
 
           {/* Empty State when no student selected */}
-          {!selectedStudent && matchingStudents.length === 0 && !hasSearched && (
+          {!selectedStudent && !hasSearched && (
             <div className="py-12 px-4 text-center bg-white rounded-3xl border border-dashed border-purple-200 space-y-2">
               <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center mx-auto">
-                <BookOpen className="w-6 h-6" />
+                <Lock className="w-6 h-6" />
               </div>
               <h3 className="text-sm font-extrabold text-purple-950">
-                กรุณาพิมพ์รหัสนักศึกษาเพื่อดูข้อมูล
+                กรุณาระบุรหัสนักศึกษาของท่านเพื่อเข้าดูข้อมูล
               </h3>
               <p className="text-xs text-purple-700/70 max-w-sm mx-auto">
-                ระบบจะค้นหาชื่อ-นามสกุล ประกาศ ผลการเข้าร่วมกิจกรรมหะละเกาะห์ อัตราการเข้าเรียน และหัวหน้าหะละเกาะห์โดยอัตโนมัติ
+                ระบบรักษาความเป็นส่วนตัว จะแสดงประวัติการเช็คชื่อ สถิติ และประกาศเฉพาะบุคคลตามรหัสที่ระบุเท่านั้น
               </p>
             </div>
           )}
