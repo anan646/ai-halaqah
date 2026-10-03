@@ -5,23 +5,145 @@ const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v3';
 const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v3';
 const STORAGE_KEY_FACULTY_PASS = 'halaqah_faculty_password_v1';
 const STORAGE_KEY_ANNOUNCEMENTS = 'halaqah_announcements_v1';
+const STORAGE_KEY_MAJORS = 'halaqah_active_majors_v1';
+
+// รหัสสาขาวิชาจากรหัสนักศึกษาคณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี (หลักที่ 4-6 เช่น 681441001 -> 441)
+export const DEFAULT_MAJOR_MAP: Record<string, string> = {
+  '441': 'อิสลามศึกษา',
+  '442': 'ภาษาอาหรับ',
+  '443': 'ภาษาอังกฤษ',
+  '444': 'ภาษามลายู',
+  '445': 'วิทยาศาสตร์ทั่วไป',
+  '446': 'การศึกษาปฐมวัย',
+  '447': 'การสอนวิทยาศาสตร์',
+};
+
+export const DEFAULT_MAJORS: string[] = [
+  'อิสลามศึกษา',
+  'ภาษาอาหรับ',
+  'ภาษาอังกฤษ',
+  'ภาษามลายู',
+  'วิทยาศาสตร์ทั่วไป',
+  'การศึกษาปฐมวัย',
+  'การสอนวิทยาศาสตร์',
+];
+
+/**
+ * ดึงสาขาวิชาจากรหัสนักศึกษา 9 หลักโดยอัตโนมัติ
+ * หลักที่ 4-6 คือรหัสสาขา เช่น 681441001 -> 441 = อิสลามศึกษา
+ */
+export function inferMajorFromStudentId(studentId: string): string {
+  if (!studentId) return 'ไม่ระบุสาขา';
+  const clean = studentId.replace(/\D/g, '');
+  if (clean.length >= 6) {
+    const code = clean.slice(3, 6);
+    if (DEFAULT_MAJOR_MAP[code]) {
+      return DEFAULT_MAJOR_MAP[code];
+    }
+  }
+  return 'ไม่ระบุสาขา';
+}
+
+/**
+ * ดึงสาขาวิชาของนักศึกษา โดย優先ค่าที่บันทึกไว้ในฟิลด์ major ก่อน
+ * หากไม่มี ให้วิเคราะห์จากรหัสนักศึกษาโดยอัตโนมัติ
+ */
+export function getStudentMajor(student?: Partial<Student> | null): string {
+  if (!student) return 'ไม่ระบุสาขา';
+  if (student.major && student.major.trim()) {
+    return student.major.trim();
+  }
+  if (student.studentId) {
+    const inferred = inferMajorFromStudentId(student.studentId);
+    if (inferred !== 'ไม่ระบุสาขา') return inferred;
+  }
+  return 'ทั่วไป/ไม่ระบุสาขา';
+}
+
+/**
+ * ดึงรายการสาขาวิชาทั้งหมดในระบบ (รวมค่าเริ่มต้นและสาขาใหม่ที่แอดมินเพิ่มในอนาคต)
+ */
+export function getActiveMajors(): string[] {
+  if (typeof window === 'undefined') return DEFAULT_MAJORS;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_MAJORS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEY_MAJORS, JSON.stringify(DEFAULT_MAJORS));
+      return DEFAULT_MAJORS;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const merged = Array.from(new Set([...DEFAULT_MAJORS, ...parsed.map((s: string) => String(s).trim())])).filter(Boolean);
+      return merged;
+    }
+    return DEFAULT_MAJORS;
+  } catch {
+    return DEFAULT_MAJORS;
+  }
+}
+
+/**
+ * บันทึกรายการสาขาวิชา
+ */
+export function saveActiveMajors(majors: string[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_MAJORS, JSON.stringify(majors));
+}
+
+/**
+ * เพิ่มสาขาวิชาใหม่เข้าสู่ระบบ สำหรับขยายเพิ่มในอนาคต
+ */
+export function addNewMajor(majorName: string): { success: boolean; message: string; majors: string[] } {
+  const clean = majorName.trim();
+  if (!clean) {
+    return { success: false, message: 'กรุณาระบุชื่อสาขาวิชา', majors: getActiveMajors() };
+  }
+  const current = getActiveMajors();
+  if (current.some((m) => m.toLowerCase() === clean.toLowerCase())) {
+    return { success: false, message: `สาขาวิชา "${clean}" มีอยู่ในระบบแล้ว`, majors: current };
+  }
+  const updated = [...current, clean];
+  saveActiveMajors(updated);
+  return { success: true, message: `เพิ่มสาขาวิชา "${clean}" เรียบร้อยแล้ว`, majors: updated };
+}
+
+/**
+ * ลบสาขาวิชาที่สร้างขึ้นเอง (ไม่ลบค่าเริ่มต้นของระบบ)
+ */
+export function deleteCustomMajor(majorName: string): { success: boolean; message: string; majors: string[] } {
+  const clean = majorName.trim();
+  if (DEFAULT_MAJORS.includes(clean)) {
+    return { success: false, message: `ไม่สามารถลบสาขาวิชาหลักเริ่มต้นของระบบได้`, majors: getActiveMajors() };
+  }
+  const current = getActiveMajors();
+  const updated = current.filter((m) => m !== clean);
+  saveActiveMajors(updated);
+  return { success: true, message: `ลบสาขาวิชา "${clean}" เรียบร้อยแล้ว`, majors: updated };
+}
+
+const hydrateStudentWithMajor = (s: Student): Student => ({
+  ...s,
+  major: s.major || inferMajorFromStudentId(s.studentId),
+});
 
 export function getActiveStudents(): Student[] {
-  if (typeof window === 'undefined') return INITIAL_STUDENTS;
+  if (typeof window === 'undefined') return INITIAL_STUDENTS.map(hydrateStudentWithMajor);
   try {
     const raw = localStorage.getItem(STORAGE_KEY_STUDENTS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
+      const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
+      return initHydrated;
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length < INITIAL_STUDENTS.length) {
-      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
+      const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
+      return initHydrated;
     }
-    return parsed;
+    return parsed.map(hydrateStudentWithMajor);
   } catch {
-    return INITIAL_STUDENTS;
+    return INITIAL_STUDENTS.map(hydrateStudentWithMajor);
   }
 }
 
@@ -257,6 +379,7 @@ export function addStudentsBatch(newStudents: Student[]): {
       groupName: (item.groupName || '').trim() || 'กลุ่มศึกษา',
       teacherName: (item.teacherName || '').trim() || 'ไม่ระบุอาจารย์',
       groupId: item.groupId || '',
+      major: (item.major || '').trim() || inferMajorFromStudentId(cleanId),
     });
   }
 

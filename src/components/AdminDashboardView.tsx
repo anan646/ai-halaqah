@@ -40,7 +40,9 @@ import {
   Bell,
   Lock,
   Key,
-  Database as DatabaseIcon
+  Database as DatabaseIcon,
+  GraduationCap,
+  BookOpen
 } from 'lucide-react';
 import { AttendanceRecord, TeacherSummary, StudentSummary, DailySummary, SubAdmin, Teacher, Student, Announcement } from '@/lib/types';
 import {
@@ -59,6 +61,12 @@ import {
   addTeachersBatch,
   deleteStudent,
   deleteTeacher,
+  getActiveMajors,
+  addNewMajor,
+  deleteCustomMajor,
+  getStudentMajor,
+  inferMajorFromStudentId,
+  DEFAULT_MAJORS,
 } from '@/lib/data-store';
 import { exportToExcel, exportToWord, downloadPdfReport, printReport } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
@@ -91,13 +99,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('matrix');
 
-  // Active Teachers & Students state from data-store
+  // Active Teachers, Students, & Majors state from data-store
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [majorsList, setMajorsList] = useState<string[]>([]);
+  const [newMajorInput, setNewMajorInput] = useState('');
+  const [majorMsg, setMajorMsg] = useState<{ text: string; success: boolean } | null>(null);
 
   const reloadDataStore = () => {
     setTeachers(getActiveTeachers());
     setStudents(getActiveStudents());
+    setMajorsList(getActiveMajors());
   };
 
   useEffect(() => {
@@ -135,7 +147,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   }, [teachers, dragSourceTeacher, dragTargetTeacher]);
 
   // ==================== EDIT MODAL STATE ====================
-  const [editorSubTab, setEditorSubTab] = useState<'students' | 'teachers'>('students');
+  const [editorSubTab, setEditorSubTab] = useState<'students' | 'teachers' | 'majors'>('students');
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [editorMsg, setEditorMsg] = useState<{ text: string; success: boolean } | null>(null);
@@ -338,6 +350,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       return {
         studentId: st.studentId,
         fullName: st.fullName,
+        major: getStudentMajor(st),
         groupName: st.groupName,
         teacherName: st.teacherName,
         yearLevel: st.yearLevel,
@@ -478,6 +491,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     yearLevel: 'ปี 2',
     teacherName: '',
     groupName: '',
+    major: '',
   });
 
   const handleCreateStudent = (e: React.FormEvent) => {
@@ -486,23 +500,49 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       alert('กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุลให้ครบถ้วน');
       return;
     }
+    const cleanId = newStudentData.studentId.trim();
     const t = teachers.find((item) => item.name === newStudentData.teacherName) || teachers[0];
     const res = addStudentsBatch([
       {
-        studentId: newStudentData.studentId.trim(),
+        studentId: cleanId,
         fullName: newStudentData.fullName.trim(),
         gender: newStudentData.gender || 'ชาย',
         yearLevel: newStudentData.yearLevel || t?.yearLevel || 'ปี 2',
         groupName: newStudentData.groupName?.trim() || t?.groupName || 'กลุ่มศึกษา',
         teacherName: t ? t.name : 'ไม่ระบุอาจารย์',
         groupId: t ? t.groupId : '',
+        major: (newStudentData.major || '').trim() || inferMajorFromStudentId(cleanId),
       },
     ]);
     setEditorMsg({ text: res.message, success: res.success });
     if (res.success) {
       reloadDataStore();
       setIsAddStudentModalOpen(false);
-      setNewStudentData({ studentId: '', fullName: '', gender: 'ชาย', yearLevel: 'ปี 2', teacherName: '', groupName: '' });
+      setNewStudentData({ studentId: '', fullName: '', gender: 'ชาย', yearLevel: 'ปี 2', teacherName: '', groupName: '', major: '' });
+    }
+  };
+
+  // Major Management Handlers
+  const handleAddNewMajor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMajorInput.trim()) return;
+    const res = addNewMajor(newMajorInput.trim());
+    setMajorMsg({ text: res.message, success: res.success });
+    if (res.success) {
+      reloadDataStore();
+      setNewMajorInput('');
+    }
+    setTimeout(() => setMajorMsg(null), 4000);
+  };
+
+  const handleDeleteMajor = (name: string) => {
+    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบสาขาวิชา "${name}"?`)) {
+      const res = deleteCustomMajor(name);
+      setMajorMsg({ text: res.message, success: res.success });
+      if (res.success) {
+        reloadDataStore();
+      }
+      setTimeout(() => setMajorMsg(null), 4000);
     }
   };
 
@@ -1386,7 +1426,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
 
             {/* Sub-tabs */}
-            <div className="bg-purple-100/70 p-1 rounded-full border border-purple-200 flex">
+            <div className="bg-purple-100/70 p-1 rounded-full border border-purple-200 flex flex-wrap gap-1">
               <button
                 type="button"
                 onClick={() => setEditorSubTab('students')}
@@ -1405,73 +1445,92 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               >
                 อาจารย์ ({teachers.length})
               </button>
+              <button
+                type="button"
+                onClick={() => setEditorSubTab('majors')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  editorSubTab === 'majors' ? 'bg-purple-800 text-white shadow-sm' : 'text-purple-900'
+                }`}
+              >
+                สาขาวิชา ({majorsList.length})
+              </button>
             </div>
           </div>
 
           {/* Feedback Message */}
-          {editorMsg && (
+          {(editorMsg || majorMsg) && (
             <div
               className={`p-3 rounded-xl text-xs font-bold border flex items-center justify-between ${
-                editorMsg.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
+                (editorMsg?.success || majorMsg?.success)
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
               }`}
             >
-              <span>{editorMsg.text}</span>
-              <button onClick={() => setEditorMsg(null)}><X className="w-3.5 h-3.5" /></button>
+              <span>{editorMsg?.text || majorMsg?.text}</span>
+              <button onClick={() => { setEditorMsg(null); setMajorMsg(null); }}>
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
-          {/* Action & Search Row */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-purple-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder={editorSubTab === 'students' ? 'ค้นหารหัส, ชื่อ นศ., อาจารย์...' : 'ค้นหาชื่ออาจารย์, กลุ่ม...'}
-                value={editorSearch}
-                onChange={(e) => setEditorSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 placeholder-purple-300"
-              />
-            </div>
+          {/* Action & Search Row (for students / teachers) */}
+          {editorSubTab !== 'majors' && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-purple-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder={
+                    editorSubTab === 'students'
+                      ? 'ค้นหารหัส, ชื่อ นศ., สาขาวิชา, อาจารย์...'
+                      : 'ค้นหาชื่ออาจารย์, กลุ่ม...'
+                  }
+                  value={editorSearch}
+                  onChange={(e) => setEditorSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 placeholder-purple-300"
+                />
+              </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Button: Add Single */}
-              {editorSubTab === 'students' ? (
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Button: Add Single */}
+                {editorSubTab === 'students' ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddStudentModalOpen(true)}
+                    className="px-3.5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>เพิ่มนักศึกษา</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddTeacherModalOpen(true)}
+                    className="px-3.5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>เพิ่มอาจารย์</span>
+                  </button>
+                )}
+
+                {/* Button: Bulk Paste / Import */}
                 <button
                   type="button"
-                  onClick={() => setIsAddStudentModalOpen(true)}
-                  className="px-3.5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                  onClick={() => {
+                    setBulkImportType(editorSubTab as 'students' | 'teachers');
+                    setBulkRawText('');
+                    if (teachers.length > 0 && !bulkDefaultTeacher) setBulkDefaultTeacher(teachers[0].name);
+                    setIsBulkImportModalOpen(true);
+                  }}
+                  className="px-3.5 py-2.5 bg-purple-100 hover:bg-purple-200 text-purple-950 border border-purple-200 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+                  title="คัดลอกและวางข้อมูลจาก Excel / ชีต หรือข้อความ"
                 >
-                  <UserPlus className="w-4 h-4" />
-                  <span>เพิ่มนักศึกษา</span>
+                  <Upload className="w-4 h-4 text-purple-700" />
+                  <span>คัดลอก/วาง ข้อมูล ({editorSubTab === 'students' ? 'นศ.' : 'อาจารย์'})</span>
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsAddTeacherModalOpen(true)}
-                  className="px-3.5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>เพิ่มอาจารย์</span>
-                </button>
-              )}
-
-              {/* Button: Bulk Paste / Import */}
-              <button
-                type="button"
-                onClick={() => {
-                  setBulkImportType(editorSubTab);
-                  setBulkRawText('');
-                  if (teachers.length > 0 && !bulkDefaultTeacher) setBulkDefaultTeacher(teachers[0].name);
-                  setIsBulkImportModalOpen(true);
-                }}
-                className="px-3.5 py-2.5 bg-purple-100 hover:bg-purple-200 text-purple-950 border border-purple-200 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
-                title="คัดลอกและวางข้อมูลจาก Excel / ชีต หรือข้อความ"
-              >
-                <Upload className="w-4 h-4 text-purple-700" />
-                <span>คัดลอก/วาง ข้อมูล ({editorSubTab === 'students' ? 'นศ.' : 'อาจารย์'})</span>
-              </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Students List */}
           {editorSubTab === 'students' && (
@@ -1481,6 +1540,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <tr className="bg-purple-100/60 text-purple-950 font-bold border-b border-purple-200">
                     <th className="py-2.5 px-3">รหัส</th>
                     <th className="py-2.5 px-3">ชื่อ - นามสกุล</th>
+                    <th className="py-2.5 px-3">สาขาวิชา</th>
                     <th className="py-2.5 px-3 text-center">เพศ</th>
                     <th className="py-2.5 px-3 text-center">ชั้นปี</th>
                     <th className="py-2.5 px-3">กลุ่ม</th>
@@ -1495,13 +1555,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         !editorSearch ||
                         s.fullName.toLowerCase().includes(editorSearch.toLowerCase()) ||
                         s.studentId.includes(editorSearch) ||
-                        s.teacherName.toLowerCase().includes(editorSearch.toLowerCase())
+                        s.teacherName.toLowerCase().includes(editorSearch.toLowerCase()) ||
+                        getStudentMajor(s).toLowerCase().includes(editorSearch.toLowerCase())
                     )
                     .slice(0, 100)
                     .map((st) => (
                       <tr key={st.studentId} className="hover:bg-purple-50/40">
                         <td className="py-2 px-3 font-mono font-bold text-purple-900">{st.studentId}</td>
                         <td className="py-2 px-3 font-bold text-purple-950">{st.fullName}</td>
+                        <td className="py-2 px-3">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200 whitespace-nowrap">
+                            {getStudentMajor(st)}
+                          </span>
+                        </td>
                         <td className="py-2 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             st.gender === 'ชาย' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
@@ -1604,6 +1670,117 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           )}
 
+          {/* Majors List & Management View */}
+          {editorSubTab === 'majors' && (
+            <div className="space-y-4">
+              {/* Form: Add New Major */}
+              <div className="bg-purple-50/70 border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-200/70 text-purple-900 flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-purple-950">เพิ่มสาขาวิชาใหม่สำหรับนักศึกษา</h3>
+                    <p className="text-[11px] text-purple-800/70">
+                      เพิ่มสาขาวิชาใหม่เพื่อรองรับนักศึกษาและหลักสูตรที่เปิดสอนเพิ่มเติมในอนาคต
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleAddNewMajor} className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="ระบุชื่อสาขาวิชาใหม่ เช่น วิศวกรรมซอฟต์แวร์, นวัตกรรมดิจิทัล..."
+                      value={newMajorInput}
+                      onChange={(e) => setNewMajorInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs border border-purple-200 rounded-xl bg-white text-purple-950 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>เพิ่มสาขาวิชาใหม่</span>
+                  </button>
+                </form>
+
+                <div className="text-[11px] text-purple-900/80 bg-white/80 p-2.5 rounded-xl border border-purple-100 flex items-start gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-700 shrink-0 mt-0.5" />
+                  <span>
+                    ระบบตรวจจับสาขาวิชาจากรหัสนักศึกษาเดิม 9 หลักให้อัตโนมัติ (เช่น 441 = อิสลามศึกษา, 442 = ภาษาอาหรับ, 443 = ภาษาอังกฤษ, 444 = ภาษามลายู, 445 = วิทยาศาสตร์ทั่วไป, 446 = การศึกษาปฐมวัย, 447 = การสอนวิทยาศาสตร์) และสาขาวิชาใหม่ที่เพิ่มนี้จะสามารถเลือกให้นักศึกษาได้ทันที
+                  </span>
+                </div>
+              </div>
+
+              {/* Majors Table */}
+              <div className="overflow-x-auto border border-purple-100 rounded-2xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-purple-100/60 text-purple-950 font-bold border-b border-purple-200">
+                      <th className="py-2.5 px-3">ลำดับ</th>
+                      <th className="py-2.5 px-3">ชื่อสาขาวิชา</th>
+                      <th className="py-2.5 px-3 text-center">ประเภท</th>
+                      <th className="py-2.5 px-3 text-center">จำนวนนักศึกษา</th>
+                      <th className="py-2.5 px-3 text-center">สัดส่วน</th>
+                      <th className="py-2.5 px-3 text-center">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-purple-50">
+                    {majorsList.map((major, idx) => {
+                      const count = students.filter((s) => getStudentMajor(s) === major).length;
+                      const percent = students.length > 0 ? ((count / students.length) * 100).toFixed(1) : '0';
+                      const isDefault = DEFAULT_MAJORS.includes(major);
+
+                      return (
+                        <tr key={major} className="hover:bg-purple-50/40">
+                          <td className="py-2.5 px-3 font-mono font-bold text-purple-900">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-extrabold text-purple-950 flex items-center gap-1.5">
+                            <GraduationCap className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                            <span>{major}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isDefault
+                                  ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                  : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                              }`}
+                            >
+                              {isDefault ? 'สาขาหลักของระบบ' : 'เพิ่มใหม่โดยแอดมิน'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-bold text-purple-950 tabular-nums">
+                            {count} คน
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-mono font-semibold text-purple-700">
+                            {percent}%
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {isDefault ? (
+                              <span className="text-[10px] text-gray-400 font-medium">สาขาตั้งต้น</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMajor(major)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-all"
+                                title="ลบสาขาวิชานี้"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>ลบ</span>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* EDIT STUDENT MODAL */}
           {editingStudent && (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
@@ -1699,6 +1876,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl"
                       required
                     />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-purple-900">สาขาวิชา</label>
+                    <select
+                      value={editingStudent.major || getStudentMajor(editingStudent)}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, major: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                    >
+                      {majorsList.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="flex items-center justify-end space-x-2 pt-2">
@@ -1909,6 +2101,27 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     />
                   </div>
 
+                  <div>
+                    <label className="font-bold text-purple-900 flex items-center justify-between">
+                      <span>สาขาวิชา</span>
+                      <span className="text-[10px] text-purple-600 font-normal">
+                        *หากไม่เลือก จะตรวจจับจากรหัสให้อัตโนมัติ
+                      </span>
+                    </label>
+                    <select
+                      value={newStudentData.major || ''}
+                      onChange={(e) => setNewStudentData({ ...newStudentData, major: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                    >
+                      <option value="">-- ตรวจจับอัตโนมัติตามรหัสนักศึกษา --</option>
+                      {majorsList.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="flex items-center justify-end space-x-2 pt-2">
                     <button
                       type="button"
@@ -2047,7 +2260,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     {bulkImportType === 'students' ? (
                       <p className="text-[11px] text-purple-900/80 leading-relaxed font-mono">
                         รหัสนักศึกษา [Tab หรือวรรค] ชื่อ-นามสกุล [Tab หรือวรรค] เพศ [Tab] ชั้นปี<br />
-                        <span className="text-purple-600 font-sans">* หรือวางเฉพาะ <strong>รหัสนักศึกษา</strong> และ <strong>ชื่อ-นามสกุล</strong> จาก Excel ได้ทันที</span>
+                        <span className="text-purple-600 font-sans">* ระบบตรวจจับ <strong>สาขาวิชา</strong> ให้โดยอัตโนมัติจากรหัส 9 หลัก หรือวางเฉพาะ <strong>รหัสนักศึกษา</strong> และ <strong>ชื่อ-นามสกุล</strong> ได้ทันที</span>
                       </p>
                     ) : (
                       <p className="text-[11px] text-purple-900/80 leading-relaxed font-mono">

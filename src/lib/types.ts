@@ -8,6 +8,7 @@ export interface Student {
   groupName: string; // e.g. 'ชั้นปีที่ 2 กลุ่มที่ 1'
   teacherName: string; // e.g. 'อาจารย์มุสลิม หะยีสะมะแอ'
   groupId: string;
+  major?: string; // สาขาวิชา เช่น 'อิสลามศึกษา', 'การสอนวิทยาศาสตร์'
 }
 
 export interface Teacher {
@@ -39,6 +40,7 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   timestamp?: string; // ISO or formatted
   recordedTime?: string; // Real-time clock e.g. "16:04:15"
+  major?: string; // สาขาวิชา
 }
 
 export interface DailySummary {
@@ -72,6 +74,7 @@ export interface StudentSummary {
   teacherName: string;
   yearLevel: string;
   gender: string;
+  major?: string;
   totalDays: number;
   presentDays: number;
   absentDays: number;

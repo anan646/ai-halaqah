@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
-import { getActiveTeachers, getActiveStudents } from '@/lib/data-store';
+import { getActiveTeachers, getActiveStudents, getStudentMajor } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
 
 interface TeacherAttendanceViewProps {
@@ -271,6 +271,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         status: item.status,
         timestamp: nowISO,
         recordedTime: item.time || currentTime,
+        major: getStudentMajor(st),
       };
     });
 
@@ -650,12 +651,16 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                     <div className="text-sm font-extrabold text-purple-950 truncate">
                       {st.fullName}
                     </div>
-                    <div className="text-[11px] font-mono text-purple-800/70 flex items-center gap-2 mt-0.5">
+                    <div className="text-[11px] font-mono text-purple-800/70 flex items-center gap-2 mt-0.5 flex-wrap">
                       <span>รหัส {st.studentId}</span>
                       <span>•</span>
                       <span className="text-purple-700 font-semibold flex items-center gap-1">
                         <Clock className="w-3 h-3 text-purple-500" />
                         <span className="tabular-nums">{entry.time || '-'}</span>
+                      </span>
+                      <span>•</span>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-sans font-bold border border-purple-200">
+                        🎓 {getStudentMajor(st)}
                       </span>
                     </div>
                   </div>

@@ -28,6 +28,7 @@ import {
   getActiveStudents,
   getFacultyPassword,
   getAnnouncements,
+  getStudentMajor,
 } from '@/lib/data-store';
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
@@ -1091,7 +1092,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950 text-white p-5 sm:p-6 shadow-xl shadow-purple-900/15 border border-purple-700/60">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="bg-white/20 text-white text-xs font-mono font-black px-3 py-1 rounded-full border border-white/20">
                         {selectedStudent.studentId}
                       </span>
@@ -1100,6 +1101,10 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                       </span>
                       <span className="bg-purple-300/25 text-purple-200 text-[10px] font-bold px-2.5 py-1 rounded-full border border-purple-300/30">
                         {selectedStudent.yearLevel}
+                      </span>
+                      <span className="bg-amber-400/25 text-amber-200 text-[10px] font-bold px-2.5 py-1 rounded-full border border-amber-300/30 flex items-center gap-1">
+                        <GraduationCap className="w-3 h-3 text-amber-300" />
+                        <span>สาขาวิชา: {getStudentMajor(selectedStudent)}</span>
                       </span>
                     </div>
 
