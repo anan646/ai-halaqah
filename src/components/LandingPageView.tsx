@@ -90,7 +90,28 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
   // Faculty portal state
   const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
-  const [selectedGender, setSelectedGender] = useState<'ชาย' | 'หญิง'>('ชาย');
+  const [selectedGender, setSelectedGender] = useState<'ชาย' | 'หญิง'>(() => {
+    if (typeof window === 'undefined') return 'ชาย';
+    return (localStorage.getItem('halaqah_faculty_selected_gender') as 'ชาย' | 'หญิง') || 'ชาย';
+  });
+  const [selectedYearLevel, setSelectedYearLevel] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'ทั้งหมด';
+    return localStorage.getItem('halaqah_faculty_year_level') || 'ทั้งหมด';
+  });
+
+  const handleGenderChange = (gender: 'ชาย' | 'หญิง') => {
+    setSelectedGender(gender);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('halaqah_faculty_selected_gender', gender);
+    }
+  };
+
+  const handleYearLevelChange = (year: string) => {
+    setSelectedYearLevel(year);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('halaqah_faculty_year_level', year);
+    }
+  };
 
   // Student portal state (STRICTLY studentId, no name search)
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
@@ -213,23 +234,40 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         sessionStorage.setItem('halaqah_faculty_session', 'true');
       }
       setIsFacultyAuthModalOpen(false);
+      setFacultyPassInput('');
+      setFacultyAuthError('');
       navigateToView('faculty');
+      // Open tutorial modal immediately after entering password
+      setActiveTutorialRole('faculty');
     } else {
       setFacultyAuthError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง');
     }
   };
 
+  // Year level group counts for the selected gender
+  const yearCounts = useMemo(() => {
+    const genderTeachers = allTeachers.filter((t) => t.gender === selectedGender);
+    return {
+      total: genderTeachers.length,
+      y2: genderTeachers.filter((t) => t.yearLevel.includes('2')).length,
+      y3: genderTeachers.filter((t) => t.yearLevel.includes('3')).length,
+      y4: genderTeachers.filter((t) => t.yearLevel.includes('4')).length,
+    };
+  }, [allTeachers, selectedGender]);
+
   // Filtered teachers for faculty view
   const filteredTeachers = useMemo(() => {
     return allTeachers.filter((t) => {
       const matchGender = t.gender === selectedGender;
+      const matchYear =
+        selectedYearLevel === 'ทั้งหมด' || t.yearLevel === selectedYearLevel;
       const matchSearch =
         !teacherSearchTerm.trim() ||
         t.name.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
         t.groupName.toLowerCase().includes(teacherSearchTerm.toLowerCase());
-      return matchGender && matchSearch;
+      return matchGender && matchYear && matchSearch;
     });
-  }, [allTeachers, teacherSearchTerm, selectedGender]);
+  }, [allTeachers, teacherSearchTerm, selectedGender, selectedYearLevel]);
 
   const maleCount = useMemo(() => allTeachers.filter((t) => t.gender === 'ชาย').length, [allTeachers]);
   const femaleCount = useMemo(() => allTeachers.filter((t) => t.gender === 'หญิง').length, [allTeachers]);
@@ -653,7 +691,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
             <button
               type="button"
-              onClick={() => setSelectedGender('ชาย')}
+              onClick={() => handleGenderChange('ชาย')}
               className={`p-3 sm:p-4 rounded-2xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
                 selectedGender === 'ชาย'
                   ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-md shadow-purple-900/15 ring-2 ring-purple-600/50'
@@ -681,7 +719,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
             <button
               type="button"
-              onClick={() => setSelectedGender('หญิง')}
+              onClick={() => handleGenderChange('หญิง')}
               className={`p-3 sm:p-4 rounded-2xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
                 selectedGender === 'หญิง'
                   ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-md shadow-purple-900/15 ring-2 ring-purple-600/50'
@@ -706,6 +744,99 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 นักศึกษาและอาจารย์หญิง
               </div>
             </button>
+          </div>
+
+          {/* Year Level Selector (ชั้นปี 2, 3, 4) */}
+          <div className="bg-white/90 backdrop-blur-xs p-2 sm:p-2.5 rounded-2xl border border-purple-100 shadow-2xs space-y-1.5">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] sm:text-xs font-extrabold text-purple-950 flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5 text-purple-700" />
+                <span>เลือกระดับชั้นปี</span>
+              </span>
+              <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                {selectedYearLevel === 'ทั้งหมด'
+                  ? `ทั้งหมด ${yearCounts.total} กลุ่ม`
+                  : `${selectedYearLevel} (${filteredTeachers.length} กลุ่ม)`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => handleYearLevelChange('ทั้งหมด')}
+                className={`py-2 px-1.5 sm:px-2 rounded-xl text-center text-xs font-extrabold transition-all duration-200 active:scale-95 flex flex-col items-center justify-center gap-0.5 ${
+                  selectedYearLevel === 'ทั้งหมด'
+                    ? 'bg-purple-800 text-white shadow-xs shadow-purple-900/20'
+                    : 'bg-purple-50/70 hover:bg-purple-100/70 text-purple-900 border border-purple-100/80'
+                }`}
+              >
+                <span className="text-[11px] sm:text-xs font-black">ทั้งหมด</span>
+                <span
+                  className={`text-[9px] sm:text-[10px] font-mono font-bold ${
+                    selectedYearLevel === 'ทั้งหมด' ? 'text-purple-200' : 'text-purple-600'
+                  }`}
+                >
+                  {yearCounts.total} กลุ่ม
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleYearLevelChange('ปี 2')}
+                className={`py-2 px-1.5 sm:px-2 rounded-xl text-center text-xs font-extrabold transition-all duration-200 active:scale-95 flex flex-col items-center justify-center gap-0.5 ${
+                  selectedYearLevel === 'ปี 2'
+                    ? 'bg-purple-800 text-white shadow-xs shadow-purple-900/20'
+                    : 'bg-purple-50/70 hover:bg-purple-100/70 text-purple-900 border border-purple-100/80'
+                }`}
+              >
+                <span className="text-[11px] sm:text-xs font-black">ชั้นปี 2</span>
+                <span
+                  className={`text-[9px] sm:text-[10px] font-mono font-bold ${
+                    selectedYearLevel === 'ปี 2' ? 'text-purple-200' : 'text-purple-600'
+                  }`}
+                >
+                  {yearCounts.y2} กลุ่ม
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleYearLevelChange('ปี 3')}
+                className={`py-2 px-1.5 sm:px-2 rounded-xl text-center text-xs font-extrabold transition-all duration-200 active:scale-95 flex flex-col items-center justify-center gap-0.5 ${
+                  selectedYearLevel === 'ปี 3'
+                    ? 'bg-purple-800 text-white shadow-xs shadow-purple-900/20'
+                    : 'bg-purple-50/70 hover:bg-purple-100/70 text-purple-900 border border-purple-100/80'
+                }`}
+              >
+                <span className="text-[11px] sm:text-xs font-black">ชั้นปี 3</span>
+                <span
+                  className={`text-[9px] sm:text-[10px] font-mono font-bold ${
+                    selectedYearLevel === 'ปี 3' ? 'text-purple-200' : 'text-purple-600'
+                  }`}
+                >
+                  {yearCounts.y3} กลุ่ม
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleYearLevelChange('ปี 4')}
+                className={`py-2 px-1.5 sm:px-2 rounded-xl text-center text-xs font-extrabold transition-all duration-200 active:scale-95 flex flex-col items-center justify-center gap-0.5 ${
+                  selectedYearLevel === 'ปี 4'
+                    ? 'bg-purple-800 text-white shadow-xs shadow-purple-900/20'
+                    : 'bg-purple-50/70 hover:bg-purple-100/70 text-purple-900 border border-purple-100/80'
+                }`}
+              >
+                <span className="text-[11px] sm:text-xs font-black">ชั้นปี 4</span>
+                <span
+                  className={`text-[9px] sm:text-[10px] font-mono font-bold ${
+                    selectedYearLevel === 'ปี 4' ? 'text-purple-200' : 'text-purple-600'
+                  }`}
+                >
+                  {yearCounts.y4} กลุ่ม
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Teacher Search */}
@@ -735,9 +866,16 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between px-1 text-xs font-bold text-purple-900/70">
               <span>รายชื่ออาจารย์ผู้รับผิดชอบ ({filteredTeachers.length} กลุ่ม)</span>
-              <span className="text-[11px] font-mono text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-full">
-                กลุ่ม{selectedGender}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-mono text-purple-700 bg-purple-100/80 px-2.5 py-0.5 rounded-full">
+                  กลุ่ม{selectedGender}
+                </span>
+                {selectedYearLevel !== 'ทั้งหมด' && (
+                  <span className="text-[11px] font-mono font-bold text-white bg-purple-800 px-2.5 py-0.5 rounded-full shadow-2xs">
+                    {selectedYearLevel}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2.5">
@@ -778,7 +916,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
             {filteredTeachers.length === 0 && (
               <div className="py-12 text-center bg-white rounded-3xl border border-purple-100 text-purple-400 text-xs">
-                ไม่พบรายชื่ออาจารย์ที่ตรงกับ &ldquo;{teacherSearchTerm}&rdquo; ในกลุ่ม{selectedGender}
+                ไม่พบรายชื่ออาจารย์ที่ตรงกับ {teacherSearchTerm ? `“${teacherSearchTerm}” ` : ''}ในกลุ่ม{selectedGender} {selectedYearLevel !== 'ทั้งหมด' ? `(${selectedYearLevel})` : ''}
               </div>
             )}
           </div>
