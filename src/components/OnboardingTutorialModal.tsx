@@ -24,7 +24,7 @@ interface OnboardingTutorialModalProps {
   isOpen: boolean;
   role: TutorialRole;
   onClose: () => void;
-  onDismissForever: () => void;
+  onDismissForever?: () => void;
 }
 
 interface TutorialStep {
@@ -40,169 +40,169 @@ interface TutorialStep {
 
 const STUDENT_TUTORIAL_STEPS: TutorialStep[] = [
   {
-    title: 'การค้นหาข้อมูลด้วยรหัสนักศึกษา',
-    subtitle: 'ระบุรหัสนักศึกษาของท่านเพื่อดูผลการเข้าหะละเกาะห์',
-    badge: 'ขั้นตอนที่ 1 จาก 3 • สำหรับนักศึกษา',
+    title: 'ค้นหาด้วยรหัสนักศึกษา',
+    subtitle: 'ระบุรหัสนักศึกษาเพื่อดูผลการเข้าหะละเกาะห์',
+    badge: '1/3 • สำหรับนักศึกษา',
     icon: GraduationCap,
     iconBg: 'bg-purple-100 text-purple-700',
     description:
-      'ระบบถูกออกแบบมาให้นักศึกษาตรวจสอบประวัติและสถิติการเข้าร่วมกลุ่มศึกษาอัลกุรอานของตนเองได้อย่างสะดวกรวดเร็ว',
+      'ตรวจสอบประวัติและสถิติการเข้าร่วมกลุ่มศึกษาอัลกุรอานของตนเองได้สะดวกรวดเร็ว',
     highlights: [
       {
         title: 'กรอกรหัสนักศึกษาของตนเอง',
-        desc: 'พิมพ์รหัสนักศึกษาให้ถูกต้องครบถ้วน (เช่น 681441001 หรือ 67...) ในช่องค้นหา',
+        desc: 'พิมพ์รหัสให้ครบถ้วน (เช่น 681441001 หรือ 67...) ในช่องค้นหา',
         icon: Lock,
       },
       {
-        title: 'กดปุ่ม "ค้นหา" หรือกด Enter',
-        desc: 'ระบบจะตรวจสอบและดึงข้อมูลสถิติของรหัสที่ระบุมาแสดงผลทันที',
+        title: 'กดปุ่ม "ค้นหา" หรือ Enter',
+        desc: 'ระบบจะตรวจสอบและแสดงผลข้อมูลสถิติของรหัสท่านทันที',
         icon: ChevronRight,
       },
       {
         title: 'หากไม่พบข้อมูล',
-        desc: 'กรุณาตรวจสอบตัวเลขรหัสนักศึกษาอีกครั้ง หรือติดต่ออาจารย์ผู้ดูแลกลุ่มหะละเกาะห์',
+        desc: 'ตรวจสอบตัวเลขอีกครั้ง หรือติดต่ออาจารย์ผู้ดูแลกลุ่มของท่าน',
         icon: Sparkles,
       },
     ],
-    tip: 'ท่านสามารถเข้าดูข้อมูลได้ทุกที่ทุกเวลา ทั้งบนมือถือ แท็บเล็ต หรือคอมพิวเตอร์',
+    tip: 'เข้าดูข้อมูลได้ทุกที่ทุกเวลา ทั้งบนมือถือ แท็บเล็ต และคอมพิวเตอร์',
   },
   {
-    title: 'ระบบความเป็นส่วนตัวและความปลอดภัย',
+    title: 'ความปลอดภัยและความเป็นส่วนตัว',
     subtitle: 'แสดงเฉพาะข้อมูลของเจ้าของรหัสเท่านั้น 100%',
-    badge: 'ขั้นตอนที่ 2 จาก 3 • ความเป็นส่วนตัว',
+    badge: '2/3 • ความเป็นส่วนตัว',
     icon: ShieldCheck,
     iconBg: 'bg-purple-100 text-purple-700',
     description:
       'ระบบให้ความสำคัญสูงสุดกับความเป็นส่วนตัวของข้อมูลนักศึกษาทุกคน',
     highlights: [
       {
-        title: 'ไม่แสดงรายชื่อเพื่อนนักศึกษาอื่น',
-        desc: 'ระบบจะไม่แสดงรายชื่อ แนะนำ หรือดรอปดาวน์ของเพื่อน เพื่อป้องกันการเข้าถึงข้อมูลของผู้อื่น',
+        title: 'ไม่แสดงรายชื่อเพื่อนนักศึกษา',
+        desc: 'ไม่มีรายชื่อหรือการเดาคำ เพื่อป้องกันผู้อื่นเข้าถึงข้อมูล',
         icon: ShieldCheck,
       },
       {
-        title: 'เข้าถึงได้เฉพาะเจ้าของรหัสที่ถูกต้อง',
-        desc: 'จะแสดงผลเมื่อระบุรหัสนักศึกษาถูกต้องครบถ้วนเท่านั้น',
+        title: 'ดูได้เฉพาะรหัสที่ถูกต้อง',
+        desc: 'จะแสดงข้อมูลเมื่อระบุรหัสนักศึกษาถูกต้องครบถ้วนเท่านั้น',
         icon: Lock,
       },
       {
-        title: 'ปุ่ม "ค้นหารหัสอื่น / ออกจากข้อมูล"',
-        desc: 'เมื่อดูข้อมูลเสร็จแล้ว สามารถกดปุ่มนี้เพื่อล้างหน้าจอและปิดข้อมูลได้อย่างปลอดภัย',
+        title: 'ปุ่ม "ออกจากข้อมูล"',
+        desc: 'กดเพื่อล้างหน้าจอและปิดข้อมูลเมื่อใช้งานเสร็จสิ้น',
         icon: X,
       },
     ],
-    tip: 'หากใช้งานในเครื่องสาธารณะ อย่าลืมกดปุ่ม "ค้นหารหัสอื่น / ออกจากข้อมูล" ทุกครั้งหลังใช้งาน',
+    tip: 'เมื่อใช้งานบนเครื่องสาธารณะ อย่าลืมกดปุ่ม "ออกจากข้อมูล" เสมอ',
   },
   {
-    title: 'การดูผลการเข้ากลุ่ม สถิติ และประกาศ',
+    title: 'ผลการเข้ากลุ่ม สถิติ และประกาศ',
     subtitle: 'ตรวจสอบอัตราการเข้าร่วมและประวัติการเช็คชื่อ',
-    badge: 'ขั้นตอนที่ 3 จาก 3 • สถิติและประวัติ',
+    badge: '3/3 • สถิติและประกาศ',
     icon: CheckCircle2,
     iconBg: 'bg-emerald-100 text-emerald-800',
     description:
-      'หน้าแดชบอร์ดส่วนบุคคลจะสรุปผลการเข้าร่วมกิจกรรมหะละเกาะห์ของท่านอย่างครบถ้วน',
+      'หน้าแดชบอร์ดส่วนบุคคลสรุปผลการเข้าร่วมกิจกรรมหะละเกาะห์ครบถ้วน',
     highlights: [
       {
-        title: 'อัตราการเข้าร่วมกิจกรรม (เกณฑ์ผ่าน 80%)',
-        desc: 'แถบวัดผลและสรุปจำนวนครั้งที่ มา / ขาด / ลา ทั้งหมดอย่างชัดเจน',
+        title: 'อัตราการเข้าร่วม (เกณฑ์ผ่าน 80%)',
+        desc: 'สรุปเปอร์เซ็นต์และจำนวนครั้งที่ มา / ขาด / ลา ทั้งหมด',
         icon: Award,
       },
       {
-        title: 'ประวัติการเช็คชื่อรายวัน',
-        desc: 'ดูวันที่ เวลาที่เช็คชื่อ และชื่ออาจารย์ผู้บันทึกในแต่ละครั้ง',
+        title: 'ประวัติเช็คชื่อรายวัน',
+        desc: 'ดูวันที่ เวลาที่บันทึก และชื่ออาจารย์ผู้ดูแลกลุ่ม',
         icon: Clock,
       },
       {
-        title: 'ประกาศเฉพาะบุคคลจากอาจารย์',
-        desc: 'หากมีประกาศด่วนหรือข้อความสำคัญถึงท่าน จะแสดงขึ้นมาที่ด้านบนสุดทันที',
+        title: 'ประกาศสำคัญจากอาจารย์',
+        desc: 'ข้อความด่วนหรือประกาศเฉพาะบุคคลจะแสดงด้านบนสุด',
         icon: Sparkles,
       },
     ],
-    tip: 'หากมีข้อสงสัยเกี่ยวกับจำนวนวัน มา/ขาด/ลา สามารถติดต่ออาจารย์ผู้ดูแลกลุ่มที่ระบุในหน้าจอได้ทันที',
+    tip: 'หากมีข้อสงสัยเรื่องจำนวนครั้ง สามารถติดต่ออาจารย์ผู้ดูแลกลุ่มได้ทันที',
   },
 ];
 
 const FACULTY_TUTORIAL_STEPS: TutorialStep[] = [
   {
-    title: 'การเลือกกลุ่มและเช็คชื่อนักศึกษา',
-    subtitle: 'บันทึกการเข้าร่วม มา / ขาด / ลา สะดวก รวดเร็ว',
-    badge: 'ขั้นตอนที่ 1 จาก 3 • สำหรับบุคลากร',
+    title: 'การเลือกกลุ่มและเช็คชื่อ',
+    subtitle: 'บันทึกสถานะ มา / ขาด / ลา สะดวก รวดเร็ว',
+    badge: '1/3 • สำหรับบุคลากร',
     icon: Users,
     iconBg: 'bg-amber-100 text-amber-800',
     description:
-      'อาจารย์และบุคลากรผู้ดูแลกลุ่ม สามารถเลือกกลุ่มและบันทึกเวลาของนักศึกษาได้อย่างง่ายดาย',
+      'อาจารย์และบุคลากรเลือกกลุ่มและบันทึกเวลาของนักศึกษาได้อย่างง่ายดาย',
     highlights: [
       {
-        title: 'เลือกกลุ่มชาย หรือ กลุ่มหญิง',
-        desc: 'เลือกแท็บกลุ่มนักศึกษาชายหรือหญิง จากนั้นค้นหาหรือคลิกที่ชื่ออาจารย์ผู้ดูแล',
+        title: 'เลือกกลุ่มชาย หรือ หญิง',
+        desc: 'เลือกแท็บกลุ่ม จากนั้นคลิกที่ชื่ออาจารย์ผู้ดูแล',
         icon: Users,
       },
       {
-        title: 'เปลี่ยนสถานะ มา / ขาด / ลา รายบุคคล',
-        desc: 'แตะที่ปุ่มสถานะของนักศึกษาแต่ละคนเพื่อเปลี่ยนสถานะได้ในคลิกเดียว',
+        title: 'แตะเปลี่ยน มา / ขาด / ลา',
+        desc: 'แตะที่ปุ่มสถานะของนักศึกษาแต่ละคนเพื่อเปลี่ยนได้ในคลิกเดียว',
         icon: CheckCircle2,
       },
       {
         title: 'ปุ่มลัด "มาทุกคน"',
-        desc: 'ใช้ปุ่ม "มาทุกคน" ด้านบนเพื่อตั้งค่าให้นักศึกษาในกลุ่มมาครบทุกคนได้ทันที',
+        desc: 'ตั้งค่านักศึกษาในกลุ่มให้มาครบทุกคนได้ในคลิกเดียว',
         icon: Sparkles,
       },
     ],
-    tip: 'ระบบจะลงเวลาแบบเรียลไทม์อัตโนมัติเมื่อกดบันทึกสถานะของนักศึกษาแต่ละคน',
+    tip: 'ระบบจะลงเวลาแบบเรียลไทม์ให้อัตโนมัติเมื่อเลือกสถานะ',
   },
   {
-    title: 'การเลือกวันเดือนปีย้อนหลัง',
-    subtitle: 'ยืดหยุ่นในการดูและบันทึกข้อมูลย้อนหลังได้ทุกวัน',
-    badge: 'ขั้นตอนที่ 2 จาก 3 • ระบบวันที่',
+    title: 'การเลือกวันย้อนหลัง',
+    subtitle: 'ดูและบันทึกข้อมูลย้อนหลังได้ทุกวันอย่างยืดหยุ่น',
+    badge: '2/3 • ระบบวันที่',
     icon: CalendarDays,
     iconBg: 'bg-indigo-100 text-indigo-700',
     description:
-      'อาจารย์สามารถดูประวัติการเช็คชื่อหรือบันทึกข้อมูลย้อนหลังของวันก่อนๆ ได้อย่างครบถ้วน',
+      'อาจารย์สามารถดูประวัติการเช็คชื่อหรือแก้ไขข้อมูลย้อนหลังได้ครบถ้วน',
     highlights: [
       {
         title: 'คลิกแถบวันที่เพื่อเปิดปฏิทิน',
-        desc: 'คลิกที่แถบ < 📅 วัน เดือน ปี > หรือปุ่ม "เลือกวันย้อนหลัง" เพื่อเลือกวันที่จากปฏิทินของเครื่อง',
+        desc: 'คลิก < 📅 วันที่ > หรือ "เลือกวันย้อนหลัง" เพื่อเลือกวันจากปฏิทิน',
         icon: Calendar,
       },
       {
-        title: 'เลือกจากประวัติที่เคยบันทึกไว้',
-        desc: 'มีเมนูดรอปดาวน์รวบรวมวันที่มีการเช็คชื่อย้อนหลัง สามารถคลิกสลับวันได้ทันที',
+        title: 'เลือกจากประวัติที่เคยบันทึก',
+        desc: 'มีเมนูดรอปดาวน์รวบรวมวันที่มีการเช็คชื่อ สลับดูได้ทันที',
         icon: CalendarDays,
       },
       {
-        title: 'ปุ่มลัด "กลับสู่วันนี้"',
-        desc: 'เมื่อดูข้อมูลย้อนหลัง สามารถกดปุ่ม "กลับสู่วันนี้" เพื่อกลับมายังวันปัจจุบันได้อย่างรวดเร็ว',
+        title: 'ปุ่ม "กลับสู่วันนี้"',
+        desc: 'เมื่อดูวันย้อนหลังเสร็จ กดเพื่อกลับสู่วันปัจจุบันได้ทันที',
         icon: Clock,
       },
     ],
-    tip: 'สามารถแก้ไขข้อมูลย้อนหลังและกดบันทึกใหม่ได้ตลอดเวลา ข้อมูลจะอัปเดตอัตโนมัติ',
+    tip: 'สามารถแก้ไขและกดบันทึกใหม่ได้ตลอดเวลา ข้อมูลจะอัปเดตอัตโนมัติ',
   },
   {
-    title: 'การบันทึกข้อมูลและซิงค์ Google Sheets',
-    subtitle: 'ส่งข้อมูลขึ้นคลาวด์อัตโนมัติ ปลอดภัย ไม่สูญหาย',
-    badge: 'ขั้นตอนที่ 3 จาก 3 • บันทึกและสำรองข้อมูล',
+    title: 'บันทึกและซิงค์ข้อมูล',
+    subtitle: 'ส่งข้อมูลขึ้น Google Sheets อัตโนมัติ ปลอดภัย ไม่สูญหาย',
+    badge: '3/3 • บันทึกและสำรองข้อมูล',
     icon: Database,
     iconBg: 'bg-emerald-100 text-emerald-800',
     description:
-      'เมื่อเช็คชื่อเรียบร้อย ให้กดปุ่ม "บันทึกข้อมูล" ระบบจะเก็บข้อมูลและซิงค์ทันที',
+      'เมื่อเช็คชื่อเสร็จ ให้กดปุ่มบันทึกข้อมูล ระบบจะซิงค์ขึ้นระบบทันที',
     highlights: [
       {
-        title: 'กดปุ่ม "บันทึกข้อมูล" ด้านล่าง',
-        desc: 'ระบบจะแสดงแอนิเมชันยืนยันว่าข้อมูลถูกบันทึกสำเร็จเรียบร้อย',
+        title: 'กดปุ่ม "บันทึกข้อมูล"',
+        desc: 'ระบบจะแสดงแอนิเมชันยืนยันเมื่อบันทึกข้อมูลสำเร็จ',
         icon: CheckCircle2,
       },
       {
         title: 'ซิงค์ Google Sheets ทันที',
-        desc: 'ข้อมูลจะถูกอัปเดตไปยังสเปรดชีตของคณะศึกษาศาสตร์อย่างถูกต้อง',
+        desc: 'ข้อมูลจะอัปเดตไปยังสเปรดชีตของคณะศึกษาศาสตร์อัตโนมัติ',
         icon: Database,
       },
       {
-        title: 'ปลอดภัยและสำรองข้อมูลเสมอ',
-        desc: 'ข้อมูลเก็บทั้งในเครื่องและระบบออนไลน์ สามารถเรียกดูหรือพิมพ์รายงานได้ตลอดเวลา',
+        title: 'สำรองข้อมูลปลอดภัย',
+        desc: 'ข้อมูลถูกเก็บทั้งในเครื่องและคลาวด์ ปลอดภัย ไม่สูญหาย',
         icon: ShieldCheck,
       },
     ],
-    tip: 'หากต้องการกลับมาดูคู่มือนี้อีก สามารถกดปุ่ม "💡 คู่มือ" ที่มุมจอได้ทุกเมื่อ',
+    tip: 'สามารถเปิดดูคู่มือซ้ำได้ตลอดเวลาโดยกดปุ่ม "คู่มือ" ที่มุมจอ',
   },
 ];
 
@@ -213,7 +213,6 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
   onDismissForever,
 }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [neverShowAgain, setNeverShowAgain] = useState(false);
 
   const steps = role === 'student' ? STUDENT_TUTORIAL_STEPS : FACULTY_TUTORIAL_STEPS;
   const totalSteps = steps.length;
@@ -222,7 +221,6 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
   useEffect(() => {
     if (isOpen) {
       setCurrentStepIndex(0);
-      setNeverShowAgain(false);
     }
   }, [isOpen, role]);
 
@@ -234,7 +232,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
 
   const handleNext = () => {
     if (isLastStep) {
-      handleComplete();
+      onClose();
     } else {
       setCurrentStepIndex((prev) => prev + 1);
     }
@@ -246,35 +244,19 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
     }
   };
 
-  const handleComplete = () => {
-    if (neverShowAgain) {
-      onDismissForever();
-    } else {
-      onClose();
-    }
-  };
-
-  const handleSkip = () => {
-    if (neverShowAgain) {
-      onDismissForever();
-    } else {
-      onClose();
-    }
-  };
-
   const StepIcon = currentStep.icon;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-purple-950/60 backdrop-blur-md animate-fadeIn select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-purple-950/65 backdrop-blur-md animate-fadeIn select-none"
     >
-      <div className="relative w-full max-w-lg bg-white rounded-3xl sm:rounded-[32px] shadow-2xl border border-purple-200/90 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh]">
+      <div className="relative w-full max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-purple-200/90 overflow-hidden flex flex-col max-h-[96vh]">
         {/* Top Progress Bar */}
-        <div className="w-full bg-purple-100 h-1.5 overflow-hidden">
+        <div className="w-full bg-purple-100 h-1 overflow-hidden">
           <div
-            className={`h-full transition-all duration-500 ease-out ${
+            className={`h-full transition-all duration-300 ease-out ${
               role === 'student'
                 ? 'bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800'
                 : 'bg-gradient-to-r from-amber-500 via-purple-700 to-amber-600'
@@ -283,17 +265,17 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
           />
         </div>
 
-        {/* Modal Header */}
-        <div className="p-4 sm:p-5 pb-3 sm:pb-4 flex items-center justify-between border-b border-purple-100/80 bg-gradient-to-b from-purple-50/50 to-white">
-          <div className="flex items-center gap-2.5">
-            <div className={`w-10 h-10 rounded-2xl ${currentStep.iconBg} flex items-center justify-center shadow-xs border border-purple-200/60`}>
-              <StepIcon className="w-5 h-5" />
+        {/* Modal Header (Compact) */}
+        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between border-b border-purple-100/80 bg-gradient-to-b from-purple-50/60 to-white">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-8 h-8 rounded-xl ${currentStep.iconBg} flex items-center justify-center shrink-0 shadow-2xs border border-purple-200/60`}>
+              <StepIcon className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-[11px] font-extrabold font-mono text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold font-mono text-purple-700 bg-purple-100 px-2 py-0.2 rounded-full inline-block">
                 {currentStep.badge}
               </span>
-              <h2 className="text-sm sm:text-base font-black text-purple-950 tracking-tight mt-0.5">
+              <h2 className="text-xs sm:text-sm font-black text-purple-950 tracking-tight truncate">
                 {currentStep.title}
               </h2>
             </div>
@@ -301,43 +283,43 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
 
           <button
             type="button"
-            onClick={handleSkip}
-            className="w-8 h-8 rounded-full bg-purple-100/70 hover:bg-purple-200 text-purple-800 flex items-center justify-center transition-all active:scale-95"
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-purple-100/70 hover:bg-purple-200 text-purple-800 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-1"
             title="ปิดคู่มือ"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1">
+        {/* Modal Body (Compact & Guaranteed No-Scroll on all screens) */}
+        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 space-y-2 overflow-y-auto">
           {/* Subtitle & Description */}
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-extrabold text-purple-900">
+          <div className="space-y-0.5">
+            <h3 className="text-xs font-black text-purple-900 leading-tight">
               {currentStep.subtitle}
             </h3>
-            <p className="text-xs sm:text-sm text-purple-950/80 leading-relaxed font-medium">
+            <p className="text-[11px] sm:text-xs text-purple-950/80 leading-snug font-medium">
               {currentStep.description}
             </p>
           </div>
 
-          {/* Highlights Bento */}
-          <div className="space-y-2 pt-1">
+          {/* Highlights Bento (Clean, Compact rows) */}
+          <div className="space-y-1.5 pt-0.5">
             {currentStep.highlights.map((item, idx) => {
               const ItemIcon = item.icon;
               return (
                 <div
                   key={idx}
-                  className="p-3 rounded-2xl bg-purple-50/50 hover:bg-purple-50 border border-purple-100/90 transition-all flex items-start gap-2.5"
+                  className="p-2 sm:p-2.5 rounded-xl bg-purple-50/60 hover:bg-purple-50 border border-purple-100/90 flex items-start gap-2"
                 >
-                  <div className="w-7 h-7 rounded-xl bg-white text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
-                    <ItemIcon className="w-3.5 h-3.5" />
+                  <div className="w-6 h-6 rounded-lg bg-white text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                    <ItemIcon className="w-3 h-3" />
                   </div>
                   <div className="space-y-0.5 flex-1 min-w-0">
-                    <h4 className="text-xs sm:text-sm font-bold text-purple-950">
+                    <h4 className="text-[11px] sm:text-xs font-extrabold text-purple-950 leading-tight">
                       {item.title}
                     </h4>
-                    <p className="text-[11px] sm:text-xs text-purple-800/80 leading-relaxed font-medium">
+                    <p className="text-[10px] sm:text-[11px] text-purple-850/80 leading-normal font-medium">
                       {item.desc}
                     </p>
                   </div>
@@ -348,86 +330,70 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
 
           {/* Useful Tip Box */}
           {currentStep.tip && (
-            <div className="p-2.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-950 flex items-center gap-2 font-medium">
+            <div className="p-2 rounded-xl bg-amber-50/90 border border-amber-200/80 text-[10px] sm:text-[11px] text-amber-950 flex items-center gap-1.5 font-medium leading-tight">
               <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span>{currentStep.tip}</span>
             </div>
           )}
         </div>
 
-        {/* Modal Footer Controls */}
-        <div className="p-4 sm:p-5 pt-3 border-t border-purple-100 bg-purple-50/30 space-y-2.5">
-          {/* Stepper Dots & Checkbox */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            {/* Dots */}
-            <div className="flex items-center gap-1.5">
-              {steps.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setCurrentStepIndex(idx)}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    idx === currentStepIndex
-                      ? 'w-7 bg-purple-800'
-                      : idx < currentStepIndex
-                      ? 'w-2 bg-purple-400'
-                      : 'w-2 bg-purple-200 hover:bg-purple-300'
-                  }`}
-                  title={`ไปขั้นตอนที่ ${idx + 1}`}
-                />
-              ))}
-              <span className="text-[10px] font-mono font-bold text-purple-700 ml-1">
-                {currentStepIndex + 1}/{totalSteps}
-              </span>
-            </div>
-
-            {/* Do not show again checkbox */}
-            <label className="inline-flex items-center gap-2 text-xs text-purple-900/80 font-bold cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={neverShowAgain}
-                onChange={(e) => setNeverShowAgain(e.target.checked)}
-                className="w-4 h-4 rounded text-purple-700 focus:ring-purple-600 border-purple-300 cursor-pointer"
+        {/* Modal Footer Controls (Compact, No Checkbox) */}
+        <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-t border-purple-100 bg-purple-50/40 flex items-center justify-between gap-2">
+          {/* Stepper Dots */}
+          <div className="flex items-center gap-1.5">
+            {steps.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentStepIndex(idx)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  idx === currentStepIndex
+                    ? 'w-6 bg-purple-800'
+                    : idx < currentStepIndex
+                    ? 'w-1.5 bg-purple-400'
+                    : 'w-1.5 bg-purple-200 hover:bg-purple-300'
+                }`}
+                title={`ไปขั้นตอนที่ ${idx + 1}`}
               />
-              <span>ไม่ต้องแสดงคู่มือนี้อีก</span>
-            </label>
+            ))}
+            <span className="text-[10px] font-mono font-bold text-purple-700 ml-1">
+              {currentStepIndex + 1}/{totalSteps}
+            </span>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={handleSkip}
-              className="px-3.5 py-2 text-xs font-bold text-purple-800 hover:text-purple-950 hover:bg-purple-100 rounded-xl transition-all"
+              onClick={onClose}
+              className="px-2.5 py-1.5 text-xs font-bold text-purple-800 hover:text-purple-950 hover:bg-purple-100 rounded-lg transition-all"
             >
-              ข้ามคู่มือ
+              ข้าม
             </button>
 
-            <div className="flex items-center gap-2">
-              {!isFirstStep && (
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  className="px-3.5 py-2 text-xs font-extrabold text-purple-900 bg-white hover:bg-purple-100 border border-purple-200 rounded-xl transition-all active:scale-95 flex items-center gap-1"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>ย้อนกลับ</span>
-                </button>
-              )}
-
+            {!isFirstStep && (
               <button
                 type="button"
-                onClick={handleNext}
-                className="px-5 py-2 text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                onClick={handlePrev}
+                className="px-2.5 py-1.5 text-xs font-extrabold text-purple-900 bg-white hover:bg-purple-100 border border-purple-200 rounded-lg transition-all active:scale-95 flex items-center gap-0.5"
               >
-                <span>{isLastStep ? 'เสร็จสิ้น • เข้าสู่ระบบ' : 'ถัดไป'}</span>
-                {isLastStep ? (
-                  <CheckCircle2 className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
-                )}
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>ย้อน</span>
               </button>
-            </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleNext}
+              className="px-3.5 py-1.5 text-xs font-extrabold text-white bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
+            >
+              <span>{isLastStep ? 'เสร็จสิ้น' : 'ถัดไป'}</span>
+              {isLastStep ? (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
         </div>
       </div>
