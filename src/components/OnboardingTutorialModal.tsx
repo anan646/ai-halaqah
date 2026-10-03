@@ -128,7 +128,7 @@ const FACULTY_TUTORIAL_STEPS: TutorialStep[] = [
     subtitle: 'บันทึกสถานะ มา / ขาด / ลา สะดวก รวดเร็ว',
     badge: '1/3 • สำหรับบุคลากร',
     icon: Users,
-    iconBg: 'bg-amber-100 text-amber-800',
+    iconBg: 'bg-purple-100 text-purple-700',
     description:
       'อาจารย์และบุคลากรเลือกกลุ่มและบันทึกเวลาของนักศึกษาได้อย่างง่ายดาย',
     highlights: [
@@ -153,9 +153,9 @@ const FACULTY_TUTORIAL_STEPS: TutorialStep[] = [
   {
     title: 'การเลือกวันย้อนหลัง',
     subtitle: 'ดูและบันทึกข้อมูลย้อนหลังได้ทุกวันอย่างยืดหยุ่น',
-    badge: '2/3 • ระบบวันที่',
+    badge: '2/3 • การเลือกวันย้อนหลัง',
     icon: CalendarDays,
-    iconBg: 'bg-indigo-100 text-indigo-700',
+    iconBg: 'bg-purple-100 text-purple-700',
     description:
       'อาจารย์สามารถดูประวัติการเช็คชื่อหรือแก้ไขข้อมูลย้อนหลังได้ครบถ้วน',
     highlights: [
@@ -181,7 +181,7 @@ const FACULTY_TUTORIAL_STEPS: TutorialStep[] = [
     title: 'บันทึกและซิงค์ข้อมูล',
     subtitle: 'ส่งข้อมูลขึ้น Google Sheets อัตโนมัติ ปลอดภัย ไม่สูญหาย',
     badge: '3/3 • บันทึกและสำรองข้อมูล',
-    icon: Database,
+    icon: CheckCircle2,
     iconBg: 'bg-emerald-100 text-emerald-800',
     description:
       'เมื่อเช็คชื่อเสร็จ ให้กดปุ่มบันทึกข้อมูล ระบบจะซิงค์ขึ้นระบบทันที',
@@ -256,11 +256,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
         {/* Top Progress Bar */}
         <div className="w-full bg-purple-100 h-1 overflow-hidden shrink-0">
           <div
-            className={`h-full transition-all duration-300 ease-out ${
-              role === 'student'
-                ? 'bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800'
-                : 'bg-gradient-to-r from-amber-500 via-purple-700 to-amber-600'
-            }`}
+            className="h-full transition-all duration-300 ease-out bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800"
             style={{ width: `${((currentStepIndex + 1) / totalSteps) * 100}%` }}
           />
         </div>

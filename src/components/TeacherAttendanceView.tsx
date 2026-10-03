@@ -340,10 +340,10 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
             <button
               type="button"
               onClick={onOpenTutorial}
-              className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-amber-950 bg-[#fff8e6] hover:bg-[#fdeec4] border border-[#f1b000]/40 px-3 py-2 rounded-full shadow-2xs transition-all active:scale-95"
+              className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-3.5 py-2 rounded-full shadow-2xs transition-all active:scale-95"
               title="เปิดดูคู่มือการใช้งานสำหรับบุคลากร"
             >
-              <HelpCircle className="w-3.5 h-3.5 text-amber-700" />
+              <HelpCircle className="w-3.5 h-3.5 text-purple-700" />
               <span>คู่มือบุคลากร</span>
             </button>
           )}
