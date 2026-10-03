@@ -221,3 +221,126 @@ export function deleteAnnouncement(id: string): void {
   saveAnnouncements(updated);
 }
 
+// 7. เพิ่มนักศึกษาเดี่ยว / หลายคน (Bulk Paste/Import)
+export function addStudentsBatch(newStudents: Student[]): {
+  success: boolean;
+  message: string;
+  addedCount: number;
+  skippedCount: number;
+} {
+  if (!Array.isArray(newStudents) || newStudents.length === 0) {
+    return { success: false, message: 'ไม่มีข้อมูลนักศึกษาที่จะเพิ่ม', addedCount: 0, skippedCount: 0 };
+  }
+
+  const current = getActiveStudents();
+  const idSet = new Set(current.map((s) => (s.studentId || '').trim()));
+  const toAdd: Student[] = [];
+  let skipped = 0;
+
+  for (const item of newStudents) {
+    const cleanId = (item.studentId || '').trim();
+    if (!cleanId) {
+      skipped++;
+      continue;
+    }
+    if (idSet.has(cleanId)) {
+      // อัปเดตข้อมูลหรือข้าม
+      skipped++;
+      continue;
+    }
+    idSet.add(cleanId);
+    toAdd.push({
+      studentId: cleanId,
+      fullName: (item.fullName || '').trim() || `นักศึกษา (${cleanId})`,
+      gender: item.gender === 'หญิง' ? 'หญิง' : 'ชาย',
+      yearLevel: (item.yearLevel || '').trim() || 'ปี 2',
+      groupName: (item.groupName || '').trim() || 'กลุ่มศึกษา',
+      teacherName: (item.teacherName || '').trim() || 'ไม่ระบุอาจารย์',
+      groupId: item.groupId || '',
+    });
+  }
+
+  if (toAdd.length > 0) {
+    const updated = [...current, ...toAdd];
+    saveActiveStudents(updated);
+  }
+
+  return {
+    success: toAdd.length > 0,
+    message: `เพิ่มนักศึกษาสำเร็จ ${toAdd.length} คน (ข้ามรหัสที่ซ้ำ/ไม่ถูกต้อง ${skipped} คน)`,
+    addedCount: toAdd.length,
+    skippedCount: skipped,
+  };
+}
+
+// 8. เพิ่มอาจารย์เดี่ยว / หลายคน (Bulk Paste/Import)
+export function addTeachersBatch(newTeachers: Teacher[]): {
+  success: boolean;
+  message: string;
+  addedCount: number;
+  skippedCount: number;
+} {
+  if (!Array.isArray(newTeachers) || newTeachers.length === 0) {
+    return { success: false, message: 'ไม่มีข้อมูลอาจารย์ที่จะเพิ่ม', addedCount: 0, skippedCount: 0 };
+  }
+
+  const current = getActiveTeachers();
+  const nameSet = new Set(current.map((t) => (t.name || '').trim()));
+  const toAdd: Teacher[] = [];
+  let skipped = 0;
+
+  for (const item of newTeachers) {
+    const cleanName = (item.name || '').trim();
+    if (!cleanName) {
+      skipped++;
+      continue;
+    }
+    if (nameSet.has(cleanName)) {
+      skipped++;
+      continue;
+    }
+    nameSet.add(cleanName);
+    toAdd.push({
+      name: cleanName,
+      groupId: item.groupId || `t_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      groupName: (item.groupName || '').trim() || `กลุ่ม ${cleanName}`,
+      gender: item.gender === 'หญิง' ? 'หญิง' : 'ชาย',
+      yearLevel: (item.yearLevel || '').trim() || 'ปี 2',
+    });
+  }
+
+  if (toAdd.length > 0) {
+    const updated = [...current, ...toAdd];
+    saveActiveTeachers(updated);
+  }
+
+  return {
+    success: toAdd.length > 0,
+    message: `เพิ่มอาจารย์สำเร็จ ${toAdd.length} ท่าน (ข้ามชื่อที่ซ้ำ/ว่าง ${skipped} ท่าน)`,
+    addedCount: toAdd.length,
+    skippedCount: skipped,
+  };
+}
+
+// 9. ลบนักศึกษา
+export function deleteStudent(studentId: string): { success: boolean; message: string } {
+  const current = getActiveStudents();
+  const updated = current.filter((s) => s.studentId !== studentId);
+  if (updated.length === current.length) {
+    return { success: false, message: 'ไม่พบรหัสนักศึกษาที่จะลบ' };
+  }
+  saveActiveStudents(updated);
+  return { success: true, message: `ลบรหัสนักศึกษา ${studentId} เรียบร้อยแล้ว` };
+}
+
+// 10. ลบอาจารย์
+export function deleteTeacher(teacherName: string): { success: boolean; message: string } {
+  const current = getActiveTeachers();
+  const updated = current.filter((t) => t.name !== teacherName);
+  if (updated.length === current.length) {
+    return { success: false, message: 'ไม่พบอาจารย์ที่จะลบ' };
+  }
+  saveActiveTeachers(updated);
+  return { success: true, message: `ลบอาจารย์ ${teacherName} เรียบร้อยแล้ว` };
+}
+

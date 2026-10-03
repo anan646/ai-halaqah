@@ -250,11 +250,11 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-purple-950/65 backdrop-blur-md animate-fadeIn select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-purple-950/65 backdrop-blur-md animate-fadeIn select-none overflow-hidden"
     >
-      <div className="relative w-full max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-purple-200/90 overflow-hidden flex flex-col max-h-[96vh]">
+      <div className="relative w-full max-w-[420px] bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-purple-200/90 overflow-hidden flex flex-col max-h-[96svh] sm:max-h-[92svh]">
         {/* Top Progress Bar */}
-        <div className="w-full bg-purple-100 h-1 overflow-hidden">
+        <div className="w-full bg-purple-100 h-1 overflow-hidden shrink-0">
           <div
             className={`h-full transition-all duration-300 ease-out ${
               role === 'student'
@@ -266,10 +266,10 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
         </div>
 
         {/* Modal Header (Compact) */}
-        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between border-b border-purple-100/80 bg-gradient-to-b from-purple-50/60 to-white">
+        <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between border-b border-purple-100/80 bg-gradient-to-b from-purple-50/60 to-white shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className={`w-8 h-8 rounded-xl ${currentStep.iconBg} flex items-center justify-center shrink-0 shadow-2xs border border-purple-200/60`}>
-              <StepIcon className="w-4 h-4" />
+            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${currentStep.iconBg} flex items-center justify-center shrink-0 shadow-2xs border border-purple-200/60`}>
+              <StepIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
             <div className="min-w-0">
               <span className="text-[10px] font-extrabold font-mono text-purple-700 bg-purple-100 px-2 py-0.2 rounded-full inline-block">
@@ -291,35 +291,35 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
           </button>
         </div>
 
-        {/* Modal Body (Compact & Guaranteed No-Scroll on all screens) */}
-        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 space-y-2 overflow-y-auto">
+        {/* Modal Body (Guaranteed No Scrollbar anywhere) */}
+        <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 space-y-1.5 sm:space-y-2 overflow-hidden flex-1 flex flex-col justify-between">
           {/* Subtitle & Description */}
-          <div className="space-y-0.5">
-            <h3 className="text-xs font-black text-purple-900 leading-tight">
+          <div className="space-y-0.5 shrink-0">
+            <h3 className="text-[11px] sm:text-xs font-black text-purple-900 leading-tight">
               {currentStep.subtitle}
             </h3>
-            <p className="text-[11px] sm:text-xs text-purple-950/80 leading-snug font-medium">
+            <p className="text-[10px] sm:text-[11px] text-purple-950/80 leading-snug font-medium">
               {currentStep.description}
             </p>
           </div>
 
-          {/* Highlights Bento (Clean, Compact rows) */}
-          <div className="space-y-1.5 pt-0.5">
+          {/* Highlights Bento (Clean & Fitted) */}
+          <div className="space-y-1 sm:space-y-1.5 flex-1 flex flex-col justify-around my-0.5">
             {currentStep.highlights.map((item, idx) => {
               const ItemIcon = item.icon;
               return (
                 <div
                   key={idx}
-                  className="p-2 sm:p-2.5 rounded-xl bg-purple-50/60 hover:bg-purple-50 border border-purple-100/90 flex items-start gap-2"
+                  className="p-1.5 sm:p-2 rounded-xl bg-purple-50/60 hover:bg-purple-50 border border-purple-100/90 flex items-center gap-2"
                 >
-                  <div className="w-6 h-6 rounded-lg bg-white text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-white text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0 shadow-2xs">
                     <ItemIcon className="w-3 h-3" />
                   </div>
-                  <div className="space-y-0.5 flex-1 min-w-0">
-                    <h4 className="text-[11px] sm:text-xs font-extrabold text-purple-950 leading-tight">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[10px] sm:text-[11px] font-extrabold text-purple-950 leading-tight truncate">
                       {item.title}
                     </h4>
-                    <p className="text-[10px] sm:text-[11px] text-purple-850/80 leading-normal font-medium">
+                    <p className="text-[9px] sm:text-[10px] text-purple-850/80 leading-tight font-medium line-clamp-1 sm:line-clamp-2">
                       {item.desc}
                     </p>
                   </div>
@@ -330,15 +330,15 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
 
           {/* Useful Tip Box */}
           {currentStep.tip && (
-            <div className="p-2 rounded-xl bg-amber-50/90 border border-amber-200/80 text-[10px] sm:text-[11px] text-amber-950 flex items-center gap-1.5 font-medium leading-tight">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>{currentStep.tip}</span>
+            <div className="p-1.5 sm:p-2 rounded-xl bg-amber-50/90 border border-amber-200/80 text-[9px] sm:text-[10px] text-amber-950 flex items-center gap-1.5 font-medium leading-tight shrink-0">
+              <Sparkles className="w-3 h-3 text-amber-600 shrink-0" />
+              <span className="truncate">{currentStep.tip}</span>
             </div>
           )}
         </div>
 
-        {/* Modal Footer Controls (Compact, No Checkbox) */}
-        <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-t border-purple-100 bg-purple-50/40 flex items-center justify-between gap-2">
+        {/* Modal Footer Controls (Compact, No Checkbox, Shrink-0) */}
+        <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-t border-purple-100 bg-purple-50/40 flex items-center justify-between gap-2 shrink-0">
           {/* Stepper Dots */}
           <div className="flex items-center gap-1.5">
             {steps.map((_, idx) => (
@@ -366,7 +366,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
             <button
               type="button"
               onClick={onClose}
-              className="px-2.5 py-1.5 text-xs font-bold text-purple-800 hover:text-purple-950 hover:bg-purple-100 rounded-lg transition-all"
+              className="px-2.5 py-1 text-xs font-bold text-purple-800 hover:text-purple-950 hover:bg-purple-100 rounded-lg transition-all"
             >
               ข้าม
             </button>
@@ -375,9 +375,9 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
               <button
                 type="button"
                 onClick={handlePrev}
-                className="px-2.5 py-1.5 text-xs font-extrabold text-purple-900 bg-white hover:bg-purple-100 border border-purple-200 rounded-lg transition-all active:scale-95 flex items-center gap-0.5"
+                className="px-2.5 py-1 text-xs font-extrabold text-purple-900 bg-white hover:bg-purple-100 border border-purple-200 rounded-lg transition-all active:scale-95 flex items-center gap-0.5"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-3 h-3" />
                 <span>ย้อน</span>
               </button>
             )}
@@ -385,7 +385,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
             <button
               type="button"
               onClick={handleNext}
-              className="px-3.5 py-1.5 text-xs font-extrabold text-white bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
+              className="px-3 py-1 text-xs font-extrabold text-white bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
             >
               <span>{isLastStep ? 'เสร็จสิ้น' : 'ถัดไป'}</span>
               {isLastStep ? (

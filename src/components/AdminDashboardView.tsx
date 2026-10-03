@@ -55,6 +55,10 @@ import {
   getAnnouncements,
   addAnnouncement,
   deleteAnnouncement,
+  addStudentsBatch,
+  addTeachersBatch,
+  deleteStudent,
+  deleteTeacher,
 } from '@/lib/data-store';
 import { exportToExcel, exportToWord, downloadPdfReport, printReport } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
@@ -444,6 +448,215 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (res.success) {
       reloadDataStore();
       setEditingTeacher(null);
+    }
+  };
+
+  // Delete student handler
+  const handleDeleteStudent = (studentId: string, studentName: string) => {
+    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลนักศึกษา "${studentName}" (${studentId})?`)) {
+      const res = deleteStudent(studentId);
+      setEditorMsg({ text: res.message, success: res.success });
+      if (res.success) reloadDataStore();
+    }
+  };
+
+  // Delete teacher handler
+  const handleDeleteTeacher = (teacherName: string) => {
+    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบอาจารย์ "${teacherName}"? (ข้อมูลนักศึกษาในกลุ่มเดิมจะยังคงอยู่)`)) {
+      const res = deleteTeacher(teacherName);
+      setEditorMsg({ text: res.message, success: res.success });
+      if (res.success) reloadDataStore();
+    }
+  };
+
+  // 1. Single Student Add State
+  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
+  const [newStudentData, setNewStudentData] = useState<Partial<Student>>({
+    studentId: '',
+    fullName: '',
+    gender: 'ชาย',
+    yearLevel: 'ปี 2',
+    teacherName: '',
+    groupName: '',
+  });
+
+  const handleCreateStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStudentData.studentId?.trim() || !newStudentData.fullName?.trim()) {
+      alert('กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุลให้ครบถ้วน');
+      return;
+    }
+    const t = teachers.find((item) => item.name === newStudentData.teacherName) || teachers[0];
+    const res = addStudentsBatch([
+      {
+        studentId: newStudentData.studentId.trim(),
+        fullName: newStudentData.fullName.trim(),
+        gender: newStudentData.gender || 'ชาย',
+        yearLevel: newStudentData.yearLevel || t?.yearLevel || 'ปี 2',
+        groupName: newStudentData.groupName?.trim() || t?.groupName || 'กลุ่มศึกษา',
+        teacherName: t ? t.name : 'ไม่ระบุอาจารย์',
+        groupId: t ? t.groupId : '',
+      },
+    ]);
+    setEditorMsg({ text: res.message, success: res.success });
+    if (res.success) {
+      reloadDataStore();
+      setIsAddStudentModalOpen(false);
+      setNewStudentData({ studentId: '', fullName: '', gender: 'ชาย', yearLevel: 'ปี 2', teacherName: '', groupName: '' });
+    }
+  };
+
+  // 2. Single Teacher Add State
+  const [isAddTeacherModalOpen, setIsAddTeacherModalOpen] = useState(false);
+  const [newTeacherData, setNewTeacherData] = useState<Partial<Teacher>>({
+    name: '',
+    groupName: '',
+    gender: 'ชาย',
+    yearLevel: 'ปี 2',
+  });
+
+  const handleCreateTeacher = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeacherData.name?.trim()) {
+      alert('กรุณากรอกชื่อ-สกุล อาจารย์');
+      return;
+    }
+    const res = addTeachersBatch([
+      {
+        name: newTeacherData.name.trim(),
+        groupName: newTeacherData.groupName?.trim() || `กลุ่ม ${newTeacherData.name.trim()}`,
+        gender: newTeacherData.gender || 'ชาย',
+        yearLevel: newTeacherData.yearLevel || 'ปี 2',
+        groupId: `t_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      },
+    ]);
+    setEditorMsg({ text: res.message, success: res.success });
+    if (res.success) {
+      reloadDataStore();
+      setIsAddTeacherModalOpen(false);
+      setNewTeacherData({ name: '', groupName: '', gender: 'ชาย', yearLevel: 'ปี 2' });
+    }
+  };
+
+  // 3. Bulk Paste / Import Modal State
+  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+  const [bulkImportType, setBulkImportType] = useState<'students' | 'teachers'>('students');
+  const [bulkRawText, setBulkRawText] = useState('');
+  const [bulkDefaultTeacher, setBulkDefaultTeacher] = useState('');
+  const [bulkDefaultYear, setBulkDefaultYear] = useState('ปี 2');
+  const [bulkDefaultGender, setBulkDefaultGender] = useState<'ชาย' | 'หญิง'>('ชาย');
+
+  // Bulk Process
+  const handleProcessBulkImport = () => {
+    if (!bulkRawText.trim()) {
+      alert('กรุณาวางหรือพิมพ์ข้อมูลก่อนดำเนินการ');
+      return;
+    }
+
+    const lines = bulkRawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      alert('ไม่พบข้อมูลในข้อความที่วาง');
+      return;
+    }
+
+    if (bulkImportType === 'students') {
+      const parsedStudents: Student[] = [];
+      const defaultT = teachers.find((t) => t.name === bulkDefaultTeacher) || teachers[0];
+
+      lines.forEach((line) => {
+        // Support Tab separated (from Excel/Sheets) or comma separated or pipe or spaces
+        let parts = line.split('\t');
+        if (parts.length === 1 && line.includes(',')) parts = line.split(',');
+        else if (parts.length === 1 && line.includes('|')) parts = line.split('|');
+        
+        parts = parts.map((p) => p.trim());
+
+        if (parts.length >= 2) {
+          // Format: ID, Name, (Optional: Gender, Year, Teacher, Group)
+          const sid = parts[0];
+          const name = parts[1];
+          const gender = parts[2] && (parts[2].includes('หญิง') || parts[2].toLowerCase() === 'f') ? 'หญิง' : (parts[2] && parts[2].includes('ชาย') ? 'ชาย' : bulkDefaultGender);
+          const year = parts[3] || bulkDefaultYear;
+          const teacher = parts[4] || (defaultT ? defaultT.name : 'ไม่ระบุอาจารย์');
+          const group = parts[5] || (defaultT ? defaultT.groupName : 'กลุ่มศึกษา');
+
+          parsedStudents.push({
+            studentId: sid,
+            fullName: name,
+            gender: gender as 'ชาย' | 'หญิง',
+            yearLevel: year,
+            teacherName: teacher,
+            groupName: group,
+            groupId: defaultT ? defaultT.groupId : '',
+          });
+        } else if (parts.length === 1) {
+          // Check if it's just ID or contains space
+          const spaceParts = line.split(/\s+/);
+          if (spaceParts.length >= 2) {
+            const sid = spaceParts[0];
+            const name = spaceParts.slice(1).join(' ');
+            parsedStudents.push({
+              studentId: sid,
+              fullName: name,
+              gender: bulkDefaultGender,
+              yearLevel: bulkDefaultYear,
+              teacherName: defaultT ? defaultT.name : 'ไม่ระบุอาจารย์',
+              groupName: defaultT ? defaultT.groupName : 'กลุ่มศึกษา',
+              groupId: defaultT ? defaultT.groupId : '',
+            });
+          }
+        }
+      });
+
+      if (parsedStudents.length === 0) {
+        alert('ไม่สามารถแยกข้อมูลได้ กรุณาตรวจสอบรูปแบบข้อความ (เช่น รหัสนักศึกษา [วรรคหรือ Tab] ชื่อ-นามสกุล)');
+        return;
+      }
+
+      const res = addStudentsBatch(parsedStudents);
+      setEditorMsg({ text: res.message, success: res.success });
+      if (res.success) {
+        reloadDataStore();
+        setIsBulkImportModalOpen(false);
+        setBulkRawText('');
+      }
+    } else {
+      // Teachers Bulk
+      const parsedTeachers: Teacher[] = [];
+      lines.forEach((line) => {
+        let parts = line.split('\t');
+        if (parts.length === 1 && line.includes(',')) parts = line.split(',');
+        else if (parts.length === 1 && line.includes('|')) parts = line.split('|');
+
+        parts = parts.map((p) => p.trim());
+        const tName = parts[0];
+        const gName = parts[1] || `กลุ่ม ${tName}`;
+        const gender = parts[2] && (parts[2].includes('หญิง') || parts[2].toLowerCase() === 'f') ? 'หญิง' : (parts[2] && parts[2].includes('ชาย') ? 'ชาย' : bulkDefaultGender);
+        const year = parts[3] || bulkDefaultYear;
+
+        if (tName) {
+          parsedTeachers.push({
+            name: tName,
+            groupName: gName,
+            gender: gender as 'ชาย' | 'หญิง',
+            yearLevel: year,
+            groupId: `t_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          });
+        }
+      });
+
+      if (parsedTeachers.length === 0) {
+        alert('ไม่พบรายชื่ออาจารย์ที่ถูกต้อง');
+        return;
+      }
+
+      const res = addTeachersBatch(parsedTeachers);
+      setEditorMsg({ text: res.message, success: res.success });
+      if (res.success) {
+        reloadDataStore();
+        setIsBulkImportModalOpen(false);
+        setBulkRawText('');
+      }
     }
   };
 
@@ -1207,16 +1420,57 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           )}
 
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-purple-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              placeholder={editorSubTab === 'students' ? 'ค้นหารหัส, ชื่อ นศ., อาจารย์...' : 'ค้นหาชื่ออาจารย์, กลุ่ม...'}
-              value={editorSearch}
-              onChange={(e) => setEditorSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 placeholder-purple-300"
-            />
+          {/* Action & Search Row */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-purple-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder={editorSubTab === 'students' ? 'ค้นหารหัส, ชื่อ นศ., อาจารย์...' : 'ค้นหาชื่ออาจารย์, กลุ่ม...'}
+                value={editorSearch}
+                onChange={(e) => setEditorSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 placeholder-purple-300"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Button: Add Single */}
+              {editorSubTab === 'students' ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAddStudentModalOpen(true)}
+                  className="px-3.5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>เพิ่มนักศึกษา</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAddTeacherModalOpen(true)}
+                  className="px-3.5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>เพิ่มอาจารย์</span>
+                </button>
+              )}
+
+              {/* Button: Bulk Paste / Import */}
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkImportType(editorSubTab);
+                  setBulkRawText('');
+                  if (teachers.length > 0 && !bulkDefaultTeacher) setBulkDefaultTeacher(teachers[0].name);
+                  setIsBulkImportModalOpen(true);
+                }}
+                className="px-3.5 py-2.5 bg-purple-100 hover:bg-purple-200 text-purple-950 border border-purple-200 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+                title="คัดลอกและวางข้อมูลจาก Excel / ชีต หรือข้อความ"
+              >
+                <Upload className="w-4 h-4 text-purple-700" />
+                <span>คัดลอก/วาง ข้อมูล ({editorSubTab === 'students' ? 'นศ.' : 'อาจารย์'})</span>
+              </button>
+            </div>
           </div>
 
           {/* Students List */}
@@ -1259,14 +1513,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <td className="py-2 px-3 text-purple-800/80">{st.groupName}</td>
                         <td className="py-2 px-3 text-purple-900 font-semibold">{st.teacherName}</td>
                         <td className="py-2 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setEditingStudent(st)}
-                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                            <span>แก้ไข</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingStudent(st)}
+                              className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>แก้ไข</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteStudent(st.studentId, st.fullName)}
+                              className="p-1 hover:bg-rose-100 text-rose-600 rounded-lg transition-all"
+                              title="ลบนักศึกษา"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1313,14 +1577,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <td className="py-2.5 px-3 text-center font-medium">{t.yearLevel}</td>
                           <td className="py-2.5 px-3 text-center font-bold text-purple-900">{count} คน</td>
                           <td className="py-2.5 px-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setEditingTeacher(t)}
-                              className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                              <span>แก้ไข</span>
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingTeacher(t)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>แก้ไข</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTeacher(t.name)}
+                                className="p-1 hover:bg-rose-100 text-rose-600 rounded-lg transition-all"
+                                title="ลบอาจารย์"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1531,6 +1805,347 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== MODAL: ADD STUDENT (เดี่ยว) ==================== */}
+          {isAddStudentModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
+              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                  <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4 text-purple-700" />
+                    <span>เพิ่มข้อมูลนักศึกษาใหม่</span>
+                  </h3>
+                  <button onClick={() => setIsAddStudentModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateStudent} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-purple-900">รหัสนักศึกษา <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="เช่น 681441001"
+                      value={newStudentData.studentId}
+                      onChange={(e) => setNewStudentData({ ...newStudentData, studentId: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-mono font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-purple-900">ชื่อ - นามสกุล <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="เช่น นายอับดุลลอฮ์ มูซา"
+                      value={newStudentData.fullName}
+                      onChange={(e) => setNewStudentData({ ...newStudentData, fullName: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold text-purple-900">เพศ</label>
+                      <select
+                        value={newStudentData.gender}
+                        onChange={(e) => setNewStudentData({ ...newStudentData, gender: e.target.value as any })}
+                        className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                      >
+                        <option value="ชาย">ชาย</option>
+                        <option value="หญิง">หญิง</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-purple-900">ชั้นปี</label>
+                      <select
+                        value={newStudentData.yearLevel}
+                        onChange={(e) => setNewStudentData({ ...newStudentData, yearLevel: e.target.value })}
+                        className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                      >
+                        <option value="ปี 2">ปี 2</option>
+                        <option value="ปี 3">ปี 3</option>
+                        <option value="ปี 4">ปี 4</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-purple-900">อาจารย์ผู้ดูแล</label>
+                    <select
+                      value={newStudentData.teacherName}
+                      onChange={(e) => {
+                        const t = teachers.find((item) => item.name === e.target.value);
+                        setNewStudentData({
+                          ...newStudentData,
+                          teacherName: e.target.value,
+                          groupName: t ? t.groupName : newStudentData.groupName,
+                        });
+                      }}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                    >
+                      <option value="">-- เลือกอาจารย์ผู้ดูแล --</option>
+                      {teachers.map((t) => (
+                        <option key={t.groupId} value={t.name}>
+                          {t.name} ({t.groupName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-purple-900">ชื่อกลุ่ม</label>
+                    <input
+                      type="text"
+                      placeholder="เช่น ชั้นปีที่ 2 กลุ่มที่ 1"
+                      value={newStudentData.groupName}
+                      onChange={(e) => setNewStudentData({ ...newStudentData, groupName: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddStudentModalOpen(false)}
+                      className="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl shadow-sm"
+                    >
+                      เพิ่มนักศึกษา
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== MODAL: ADD TEACHER (เดี่ยว) ==================== */}
+          {isAddTeacherModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
+              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                  <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4 text-purple-700" />
+                    <span>เพิ่มข้อมูลอาจารย์ใหม่</span>
+                  </h3>
+                  <button onClick={() => setIsAddTeacherModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateTeacher} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-purple-900">ชื่อ - สกุล อาจารย์ <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="เช่น อาจารย์ฮาซัน มูซา"
+                      value={newTeacherData.name}
+                      onChange={(e) => setNewTeacherData({ ...newTeacherData, name: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-purple-900">ชื่อกลุ่มหะละเกาะห์</label>
+                    <input
+                      type="text"
+                      placeholder="เช่น ชั้นปีที่ 2 กลุ่มที่ 10"
+                      value={newTeacherData.groupName}
+                      onChange={(e) => setNewTeacherData({ ...newTeacherData, groupName: e.target.value })}
+                      className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold text-purple-900">เพศกลุ่ม</label>
+                      <select
+                        value={newTeacherData.gender}
+                        onChange={(e) => setNewTeacherData({ ...newTeacherData, gender: e.target.value as any })}
+                        className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                      >
+                        <option value="ชาย">ชาย</option>
+                        <option value="หญิง">หญิง</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-purple-900">ชั้นปีที่กำกับดูแล</label>
+                      <select
+                        value={newTeacherData.yearLevel}
+                        onChange={(e) => setNewTeacherData({ ...newTeacherData, yearLevel: e.target.value })}
+                        className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
+                      >
+                        <option value="ปี 2">ปี 2</option>
+                        <option value="ปี 3">ปี 3</option>
+                        <option value="ปี 4">ปี 4</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddTeacherModalOpen(false)}
+                      className="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl shadow-sm"
+                    >
+                      เพิ่มอาจารย์
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== MODAL: BULK IMPORT / PASTE (คัดลอก-วางจากที่อื่น) ==================== */}
+          {isBulkImportModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
+              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-xl border border-purple-200 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-purple-100 pb-2 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm sm:text-base text-purple-950">
+                        คัดลอกและวางข้อมูล ({bulkImportType === 'students' ? 'นักศึกษา' : 'อาจารย์'})
+                      </h3>
+                      <p className="text-[11px] text-purple-750/70 font-medium">
+                        วางข้อมูลที่คัดลอกมาจาก Excel, Google Sheets หรือตารางข้อความได้ทันที
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsBulkImportModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 overflow-y-auto flex-1 pr-1 text-xs">
+                  {/* Format Helper Banner */}
+                  <div className="p-3 bg-purple-50/80 rounded-2xl border border-purple-200/80 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-purple-950 text-xs">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-700" />
+                      <span>รูปแบบการวางที่รองรับ:</span>
+                    </div>
+                    {bulkImportType === 'students' ? (
+                      <p className="text-[11px] text-purple-900/80 leading-relaxed font-mono">
+                        รหัสนักศึกษา [Tab หรือวรรค] ชื่อ-นามสกุล [Tab หรือวรรค] เพศ [Tab] ชั้นปี<br />
+                        <span className="text-purple-600 font-sans">* หรือวางเฉพาะ <strong>รหัสนักศึกษา</strong> และ <strong>ชื่อ-นามสกุล</strong> จาก Excel ได้ทันที</span>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-purple-900/80 leading-relaxed font-mono">
+                        ชื่อ-สกุล อาจารย์ [Tab หรือวรรค] ชื่อกลุ่ม [Tab] เพศ [Tab] ชั้นปี<br />
+                        <span className="text-purple-600 font-sans">* หรือวางเฉพาะ <strong>ชื่ออาจารย์</strong> แต่ละบรรทัดได้ทันที</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Defaults for missing fields */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-50/70 p-3 rounded-2xl border border-gray-200">
+                    {bulkImportType === 'students' && (
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="font-bold text-purple-950 block mb-0.5 text-[11px]">อาจารย์เริ่มต้น:</label>
+                        <select
+                          value={bulkDefaultTeacher}
+                          onChange={(e) => setBulkDefaultTeacher(e.target.value)}
+                          className="w-full p-2 border border-purple-200 rounded-xl font-semibold bg-white"
+                        >
+                          {teachers.map((t) => (
+                            <option key={t.groupId} value={t.name}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="font-bold text-purple-950 block mb-0.5 text-[11px]">เพศเริ่มต้น:</label>
+                      <select
+                        value={bulkDefaultGender}
+                        onChange={(e) => setBulkDefaultGender(e.target.value as any)}
+                        className="w-full p-2 border border-purple-200 rounded-xl font-semibold bg-white"
+                      >
+                        <option value="ชาย">ชาย</option>
+                        <option value="หญิง">หญิง</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-purple-950 block mb-0.5 text-[11px]">ชั้นปีเริ่มต้น:</label>
+                      <select
+                        value={bulkDefaultYear}
+                        onChange={(e) => setBulkDefaultYear(e.target.value)}
+                        className="w-full p-2 border border-purple-200 rounded-xl font-semibold bg-white"
+                      >
+                        <option value="ปี 2">ปี 2</option>
+                        <option value="ปี 3">ปี 3</option>
+                        <option value="ปี 4">ปี 4</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Textarea for copy/paste */}
+                  <div>
+                    <label className="font-bold text-purple-950 block mb-1">
+                      วางข้อความที่คัดลอกมาที่นี่ (Ctrl + V):
+                    </label>
+                    <textarea
+                      rows={8}
+                      placeholder={
+                        bulkImportType === 'students'
+                          ? "681441001\tนายอับดุลลอฮ์ บินอะห์มัด\tชาย\tปี 2\n681441002\tนายมูฮัมหมัด ซาและ\tชาย\tปี 2\n681441003\tนางสาวฟาติมะฮ์ ดอเลาะ\tหญิง\tปี 2"
+                          : "อาจารย์อับดุลลอฮ์ มาหะมะ\tกลุ่มที่ 1\tชาย\tปี 2\nอาจารย์มารียัม มะแซ\tกลุ่มที่ 2\tหญิง\tปี 2"
+                      }
+                      value={bulkRawText}
+                      onChange={(e) => setBulkRawText(e.target.value)}
+                      className="w-full p-3 font-mono text-xs border border-purple-200 rounded-2xl bg-purple-50/20 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-purple-750/70 mt-1">
+                      <span>จำนวนบรรทัดที่วาง: {bulkRawText.split(/\r?\n/).filter((l) => l.trim()).length} รายการ</span>
+                      <button
+                        type="button"
+                        onClick={() => setBulkRawText('')}
+                        className="text-purple-600 hover:text-purple-900 font-bold"
+                      >
+                        ล้างข้อความ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-purple-100 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkImportModalOpen(false)}
+                    className="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 text-xs"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleProcessBulkImport}
+                    className="px-5 py-2 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>นำเข้าข้อมูลเข้าระบบ</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
