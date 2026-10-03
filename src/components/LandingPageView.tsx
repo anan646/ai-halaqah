@@ -310,88 +310,94 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const logoSrc = customLogo || '/logo.png';
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 sm:space-y-7 animate-fadeIn">
-      {/* 1. TOP PROMINENT OFFICIAL LOGO (ORIGINAL LOGO WITH REALISTIC LIGHT SWEEP EFFECT) */}
-      <div className="relative flex flex-col items-center justify-center text-center space-y-3 pt-2 sm:pt-4 pb-1">
-        {/* Main Logo with Light Sweep across the logo body */}
-        <div className="relative w-full max-w-[360px] sm:max-w-lg md:max-w-xl lg:max-w-2xl flex items-center justify-center py-2 sm:py-3 group select-none">
-          {/* Base Logo Image */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={logoSrc}
-            alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
-            className="w-full h-36 sm:h-48 md:h-56 lg:h-64 object-contain block transition-transform duration-300 group-hover:scale-[1.02] drop-shadow-[0_12px_24px_rgba(88,28,135,0.15)]"
-          />
-
-          {/* Light Sweep Mask Layer (Clipped precisely to the logo artwork) */}
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden"
-            style={{
-              WebkitMaskImage: `url(${logoSrc})`,
-              maskImage: `url(${logoSrc})`,
-              WebkitMaskSize: 'contain',
-              maskSize: 'contain',
-              WebkitMaskRepeat: 'no-repeat',
-              maskRepeat: 'no-repeat',
-              WebkitMaskPosition: 'center',
-              maskPosition: 'center',
-            }}
-            aria-hidden="true"
-          >
-            {/* The sweeping bright light beam */}
-            <div
-              className="absolute inset-y-0 w-[45%] animate-light-sweep"
-              style={{
-                background:
-                  'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.1) 80%, transparent 100%)',
-                filter: 'drop-shadow(0 0 14px rgba(255,255,255,0.95))',
-              }}
+    <div
+      className={`w-full max-w-3xl mx-auto px-3 sm:px-4 ${
+        portalView === 'select' ? 'py-4 sm:py-8 space-y-6 sm:space-y-7' : 'py-2 sm:py-3 space-y-4'
+      } animate-fadeIn`}
+    >
+      {/* 1. TOP PROMINENT OFFICIAL LOGO (ORIGINAL LOGO WITH REALISTIC LIGHT SWEEP EFFECT) - SHOWN ON PORTAL SELECTION */}
+      {portalView === 'select' && (
+        <div className="relative flex flex-col items-center justify-center text-center space-y-3 pt-2 sm:pt-4 pb-1">
+          {/* Main Logo with Light Sweep across the logo body */}
+          <div className="relative w-full max-w-[360px] sm:max-w-lg md:max-w-xl lg:max-w-2xl flex items-center justify-center py-2 sm:py-3 group select-none">
+            {/* Base Logo Image */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSrc}
+              alt="คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี"
+              className="w-full h-36 sm:h-48 md:h-56 lg:h-64 object-contain block transition-transform duration-300 group-hover:scale-[1.02] drop-shadow-[0_12px_24px_rgba(88,28,135,0.15)]"
             />
+
+            {/* Light Sweep Mask Layer (Clipped precisely to the logo artwork) */}
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden"
+              style={{
+                WebkitMaskImage: `url(${logoSrc})`,
+                maskImage: `url(${logoSrc})`,
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskPosition: 'center',
+              }}
+              aria-hidden="true"
+            >
+              {/* The sweeping bright light beam */}
+              <div
+                className="absolute inset-y-0 w-[45%] animate-light-sweep"
+                style={{
+                  background:
+                    'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.1) 80%, transparent 100%)',
+                  filter: 'drop-shadow(0 0 14px rgba(255,255,255,0.95))',
+                }}
+              />
+            </div>
+
+            {/* Sparkle Glint 1 (Highlight on FTU curves) */}
+            <div
+              className="absolute left-[10%] sm:left-[12%] top-[20%] sm:top-[22%] pointer-events-none animate-glint-1"
+              aria-hidden="true"
+            >
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.95)]"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+              </svg>
+            </div>
+
+            {/* Sparkle Glint 2 (Highlight on EDU open book symbol) */}
+            <div
+              className="absolute right-[16%] sm:right-[18%] top-[8%] sm:top-[12%] pointer-events-none animate-glint-2"
+              aria-hidden="true"
+            >
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.95)]"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+              </svg>
+            </div>
           </div>
 
-          {/* Sparkle Glint 1 (Highlight on FTU curves) */}
-          <div
-            className="absolute left-[10%] sm:left-[12%] top-[20%] sm:top-[22%] pointer-events-none animate-glint-1"
-            aria-hidden="true"
-          >
-            <svg
-              className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.95)]"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
-            </svg>
-          </div>
+          {/* Title & Subtitle Pill */}
+          <div className="space-y-2 pt-1 text-center">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-purple-950 tracking-tight text-balance">
+              กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
+            </h1>
 
-          {/* Sparkle Glint 2 (Highlight on EDU open book symbol) */}
-          <div
-            className="absolute right-[16%] sm:right-[18%] top-[8%] sm:top-[12%] pointer-events-none animate-glint-2"
-            aria-hidden="true"
-          >
-            <svg
-              className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.95)]"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
-            </svg>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-purple-200/80 shadow-[0_4px_16px_rgba(107,33,168,0.08)]">
+              <span className="w-2 h-2 rounded-full bg-[#f1b000] shadow-[0_0_8px_rgba(241,176,0,0.9)] animate-pulse" />
+              <span className="text-xs sm:text-sm text-purple-950 font-extrabold tracking-wide">
+                ระบบบันทึกและติดตามการเข้าร่วม
+              </span>
+            </div>
           </div>
         </div>
-
-        {/* Title & Subtitle Pill */}
-        <div className="space-y-2 pt-1 text-center">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-purple-950 tracking-tight text-balance">
-            กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
-          </h1>
-
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-purple-200/80 shadow-[0_4px_16px_rgba(107,33,168,0.08)]">
-            <span className="w-2 h-2 rounded-full bg-[#f1b000] shadow-[0_0_8px_rgba(241,176,0,0.9)] animate-pulse" />
-            <span className="text-xs sm:text-sm text-purple-950 font-extrabold tracking-wide">
-              ระบบบันทึกและติดตามการเข้าร่วม
-            </span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* ============================================================== */}
       {/* 2. INITIAL SELECTION SCREEN: 2 BIG MINIMALIST BUTTONS */}
@@ -599,56 +605,69 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* 3. DEDICATED FACULTY WINDOW (แยกหน้าต่าง ไม่เห็นสำหรับนักศึกษา) */}
       {/* ============================================================== */}
       {portalView === 'faculty' && (
-        <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
+        <div className="space-y-3 sm:space-y-4 max-w-2xl mx-auto animate-fadeIn">
           {/* Back Navigation Bar & Quick Tutorial */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 bg-white/95 backdrop-blur-md p-2 sm:p-2.5 rounded-2xl border border-purple-100 shadow-2xs">
             <button
               type="button"
               onClick={handleBackToSelect}
-              className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-3.5 py-2 rounded-full shadow-xs transition-all active:scale-95"
+              className="inline-flex items-center space-x-1 sm:space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-2.5 sm:px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95 shrink-0"
             >
-              <ArrowLeft className="w-4 h-4 text-purple-700" />
-              <span>ย้อนกลับไปหน้าเลือกประเภท</span>
+              <ArrowLeft className="w-3.5 h-3.5 text-purple-700" />
+              <span>ย้อนกลับ</span>
             </button>
 
-            <div className="flex items-center gap-2">
+            {/* Compact Branding */}
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoSrc} alt="Logo" className="w-6 h-6 sm:w-7 sm:h-7 object-contain shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm font-black text-purple-950 truncate">
+                กลุ่มศึกษาอัลกุรอาน
+              </span>
+              <span className="text-[10px] sm:text-xs font-mono font-bold text-purple-800 bg-purple-100 px-2 sm:px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                สำหรับบุคลากร
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveTutorialRole('faculty')}
-                className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-amber-950 bg-[#fff8e6] hover:bg-[#fdeec4] border border-[#f1b000]/40 px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
+                className="inline-flex items-center space-x-1 text-xs font-extrabold text-amber-950 bg-[#fff8e6] hover:bg-[#fdeec4] border border-[#f1b000]/40 px-2.5 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
                 title="เปิดดูคู่มือการใช้งานสำหรับบุคลากร"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-amber-700" />
-                <span>คู่มือบุคลากร</span>
+                <span>คู่มือ</span>
               </button>
-              <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
-                สำหรับบุคลากร
-              </span>
             </div>
           </div>
 
           {/* Gender Selector */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
             <button
               type="button"
               onClick={() => setSelectedGender('ชาย')}
-              className={`p-4 sm:p-5 rounded-3xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
+              className={`p-3 sm:p-4 rounded-2xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
                 selectedGender === 'ชาย'
-                  ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-lg shadow-purple-900/15'
+                  ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-md shadow-purple-900/15 ring-2 ring-purple-600/50'
                   : 'bg-white text-purple-950 border-purple-200/80 hover:border-purple-300 hover:shadow-card'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-base sm:text-xl font-black tracking-tight">กลุ่มชาย</span>
+                <span className="text-base sm:text-lg font-black tracking-tight">กลุ่มชาย</span>
                 <span
-                  className={`text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full ${
+                  className={`text-[10px] sm:text-[11px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
                     selectedGender === 'ชาย' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-800'
                   }`}
                 >
                   {maleCount} กลุ่ม
                 </span>
               </div>
-              <div className="mt-2 sm:mt-3 text-xs font-medium text-purple-200">
+              <div
+                className={`mt-1 sm:mt-1.5 text-[11px] sm:text-xs font-medium ${
+                  selectedGender === 'ชาย' ? 'text-purple-200' : 'text-purple-600/80'
+                }`}
+              >
                 นักศึกษาและอาจารย์ชาย
               </div>
             </button>
@@ -656,23 +675,27 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             <button
               type="button"
               onClick={() => setSelectedGender('หญิง')}
-              className={`p-4 sm:p-5 rounded-3xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
+              className={`p-3 sm:p-4 rounded-2xl text-left border transition-all duration-300 relative overflow-hidden active:scale-[0.98] ${
                 selectedGender === 'หญิง'
-                  ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-lg shadow-purple-900/15'
+                  ? 'bg-gradient-to-br from-purple-800 via-purple-800 to-indigo-950 text-white border-purple-700 shadow-md shadow-purple-900/15 ring-2 ring-purple-600/50'
                   : 'bg-white text-purple-950 border-purple-200/80 hover:border-purple-300 hover:shadow-card'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-base sm:text-xl font-black tracking-tight">กลุ่มหญิง</span>
+                <span className="text-base sm:text-lg font-black tracking-tight">กลุ่มหญิง</span>
                 <span
-                  className={`text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full ${
+                  className={`text-[10px] sm:text-[11px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
                     selectedGender === 'หญิง' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-800'
                   }`}
                 >
                   {femaleCount} กลุ่ม
                 </span>
               </div>
-              <div className="mt-2 sm:mt-3 text-xs font-medium text-purple-200">
+              <div
+                className={`mt-1 sm:mt-1.5 text-[11px] sm:text-xs font-medium ${
+                  selectedGender === 'หญิง' ? 'text-purple-200' : 'text-purple-600/80'
+                }`}
+              >
                 นักศึกษาและอาจารย์หญิง
               </div>
             </button>
@@ -759,31 +782,40 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* 4. DEDICATED STUDENT WINDOW (แยกหน้าต่าง ไม่เห็นสำหรับบุคลากร) */}
       {/* ============================================================== */}
       {portalView === 'student' && (
-        <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
+        <div className="space-y-3 sm:space-y-4 max-w-2xl mx-auto animate-fadeIn">
           {/* Back Navigation Bar & Quick Tutorial */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 bg-white/95 backdrop-blur-md p-2 sm:p-2.5 rounded-2xl border border-purple-100 shadow-2xs">
             <button
               type="button"
               onClick={handleBackToSelect}
-              className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-3.5 py-2 rounded-full shadow-xs transition-all active:scale-95"
+              className="inline-flex items-center space-x-1 sm:space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-2.5 sm:px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95 shrink-0"
             >
-              <ArrowLeft className="w-4 h-4 text-purple-700" />
-              <span>ย้อนกลับไปหน้าเลือกประเภท</span>
+              <ArrowLeft className="w-3.5 h-3.5 text-purple-700" />
+              <span>ย้อนกลับ</span>
             </button>
 
-            <div className="flex items-center gap-2">
+            {/* Compact Branding */}
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoSrc} alt="Logo" className="w-6 h-6 sm:w-7 sm:h-7 object-contain shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm font-black text-purple-950 truncate">
+                กลุ่มศึกษาอัลกุรอาน
+              </span>
+              <span className="text-[10px] sm:text-xs font-mono font-bold text-purple-800 bg-purple-100 px-2 sm:px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                สำหรับนักศึกษา
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveTutorialRole('student')}
-                className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
+                className="inline-flex items-center space-x-1 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-2.5 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
                 title="เปิดดูคู่มือการใช้งานสำหรับนักศึกษา"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-purple-700" />
-                <span>คู่มือนักศึกษา</span>
+                <span>คู่มือ</span>
               </button>
-              <span className="text-xs font-mono font-bold text-purple-800 bg-purple-100 px-3 py-1 rounded-full">
-                สำหรับนักศึกษา
-              </span>
             </div>
           </div>
 
@@ -1131,27 +1163,29 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       )}
 
       {/* 5. FOOTER QUICK ACTIONS (Tutorial & Admin links) */}
-      <div className="pt-4 border-t border-purple-100/80 flex flex-wrap items-center justify-center gap-3">
-        {onOpenTutorial && (
+      {portalView === 'select' && (
+        <div className="pt-4 border-t border-purple-100/80 flex flex-wrap items-center justify-center gap-3">
+          {onOpenTutorial && (
+            <button
+              type="button"
+              onClick={onOpenTutorial}
+              className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-4 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
+            >
+              <HelpCircle className="w-4 h-4 text-purple-700" />
+              <span>สอนการใช้งานระบบ</span>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={onOpenTutorial}
-            className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-4 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
+            onClick={onGoToAdmin}
+            className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-5 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
           >
-            <HelpCircle className="w-4 h-4 text-purple-700" />
-            <span>สอนการใช้งานระบบ</span>
+            <ShieldCheck className="w-4 h-4 text-purple-700" />
+            <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
           </button>
-        )}
-
-        <button
-          type="button"
-          onClick={onGoToAdmin}
-          className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-5 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
-        >
-          <ShieldCheck className="w-4 h-4 text-purple-700" />
-          <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Role-Specific Onboarding Tutorial Modal */}
       {activeTutorialRole && (
