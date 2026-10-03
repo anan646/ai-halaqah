@@ -1,61 +1,98 @@
 import { Student, Teacher, Announcement } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 
-const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v3';
+const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v4';
 const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v3';
 const STORAGE_KEY_FACULTY_PASS = 'halaqah_faculty_password_v1';
 const STORAGE_KEY_ANNOUNCEMENTS = 'halaqah_announcements_v1';
-const STORAGE_KEY_MAJORS = 'halaqah_active_majors_v1';
+const STORAGE_KEY_MAJORS = 'halaqah_active_majors_v2';
 
 // รหัสสาขาวิชาจากรหัสนักศึกษาคณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี (หลักที่ 4-6 เช่น 681441001 -> 441)
-export const DEFAULT_MAJOR_MAP: Record<string, string> = {
+// สำหรับชั้นปีทั่วไป (ปี 1, 2, 3)
+export const DEFAULT_MAJOR_MAP_STANDARD: Record<string, string> = {
   '441': 'อิสลามศึกษา',
   '442': 'ภาษาอาหรับ',
-  '443': 'ภาษาอังกฤษ',
-  '444': 'ภาษามลายู',
-  '445': 'วิทยาศาสตร์ทั่วไป',
-  '446': 'การศึกษาปฐมวัย',
-  '447': 'การสอนวิทยาศาสตร์',
+  '443': 'วิทยาศาสตร์ทั่วไป',
+  '444': 'เคมี',
+  '445': 'ภาษาอังกฤษ',
+  '446': 'ภาษามลายูและเทคโนโลยีการศึกษา',
+  '447': 'การศึกษาปฐมวัย',
 };
+
+// สำหรับชั้นปีที่ 4 (หลักสูตรการสอน)
+export const DEFAULT_MAJOR_MAP_YEAR4: Record<string, string> = {
+  '441': 'การสอนอิสลามศึกษา',
+  '442': 'การสอนภาษาอาหรับ',
+  '443': 'การสอนวิทยาศาสตร์ทั่วไป',
+  '444': 'การสอนเคมี',
+  '445': 'การสอนภาษาอังกฤษ',
+  '446': 'การสอนภาษามลายูและเทคโนโลยีการศึกษา',
+  '447': 'การศึกษาปฐมวัย',
+};
+
+export const DEFAULT_MAJOR_MAP: Record<string, string> = DEFAULT_MAJOR_MAP_STANDARD;
 
 export const DEFAULT_MAJORS: string[] = [
   'อิสลามศึกษา',
+  'การสอนอิสลามศึกษา',
   'ภาษาอาหรับ',
-  'ภาษาอังกฤษ',
-  'ภาษามลายู',
+  'การสอนภาษาอาหรับ',
   'วิทยาศาสตร์ทั่วไป',
+  'การสอนวิทยาศาสตร์ทั่วไป',
+  'เคมี',
+  'การสอนเคมี',
+  'ภาษาอังกฤษ',
+  'การสอนภาษาอังกฤษ',
+  'ภาษามลายูและเทคโนโลยีการศึกษา',
+  'การสอนภาษามลายูและเทคโนโลยีการศึกษา',
   'การศึกษาปฐมวัย',
-  'การสอนวิทยาศาสตร์',
 ];
 
 /**
- * ดึงสาขาวิชาจากรหัสนักศึกษา 9 หลักโดยอัตโนมัติ
- * หลักที่ 4-6 คือรหัสสาขา เช่น 681441001 -> 441 = อิสลามศึกษา
+ * ดึงสาขาวิชาจากรหัสนักศึกษา 9 หลักและชั้นปีโดยอัตโนมัติ
+ * - 441: อิสลามศึกษา (ปี 4: การสอนอิสลามศึกษา)
+ * - 442: ภาษาอาหรับ (ปี 4: การสอนภาษาอาหรับ)
+ * - 443: วิทยาศาสตร์ทั่วไป (ปี 4: การสอนวิทยาศาสตร์ทั่วไป)
+ * - 444: เคมี (ปี 4: การสอนเคมี)
+ * - 445: ภาษาอังกฤษ (ปี 4: การสอนภาษาอังกฤษ)
+ * - 446: ภาษามลายูและเทคโนโลยีการศึกษา (ปี 4: การสอนภาษามลายูและเทคโนโลยีการศึกษา)
+ * - 447: การศึกษาปฐมวัย
  */
-export function inferMajorFromStudentId(studentId: string): string {
+export function inferMajorFromStudentId(studentId: string, yearLevel?: string): string {
   if (!studentId) return 'ไม่ระบุสาขา';
   const clean = studentId.replace(/\D/g, '');
   if (clean.length >= 6) {
     const code = clean.slice(3, 6);
-    if (DEFAULT_MAJOR_MAP[code]) {
-      return DEFAULT_MAJOR_MAP[code];
+    const isYear4 = (yearLevel && (yearLevel.includes('4') || yearLevel.includes('ปี 4'))) || clean.startsWith('66');
+    if (isYear4 && DEFAULT_MAJOR_MAP_YEAR4[code]) {
+      return DEFAULT_MAJOR_MAP_YEAR4[code];
+    }
+    if (DEFAULT_MAJOR_MAP_STANDARD[code]) {
+      return DEFAULT_MAJOR_MAP_STANDARD[code];
     }
   }
   return 'ไม่ระบุสาขา';
 }
 
 /**
- * ดึงสาขาวิชาของนักศึกษา โดย優先ค่าที่บันทึกไว้ในฟิลด์ major ก่อน
- * หากไม่มี ให้วิเคราะห์จากรหัสนักศึกษาโดยอัตโนมัติ
+ * ดึงสาขาวิชาของนักศึกษา โดยตรวจสอบความสอดคล้องกับรหัสและชั้นปี
  */
 export function getStudentMajor(student?: Partial<Student> | null): string {
   if (!student) return 'ไม่ระบุสาขา';
+  if (student.studentId) {
+    const inferred = inferMajorFromStudentId(student.studentId, student.yearLevel);
+    if (student.major && student.major.trim()) {
+      const explicit = student.major.trim();
+      // หากไม่ใช่ค่าเก่าที่เคยเดาผิด ให้ใช้ค่าที่บันทึกไว้
+      const isLegacyGuess = explicit === 'ภาษามลายู' || explicit === 'การสอนวิทยาศาสตร์';
+      if (!isLegacyGuess) {
+        return explicit;
+      }
+    }
+    if (inferred !== 'ไม่ระบุสาขา') return inferred;
+  }
   if (student.major && student.major.trim()) {
     return student.major.trim();
-  }
-  if (student.studentId) {
-    const inferred = inferMajorFromStudentId(student.studentId);
-    if (inferred !== 'ไม่ระบุสาขา') return inferred;
   }
   return 'ทั่วไป/ไม่ระบุสาขา';
 }
@@ -123,14 +160,28 @@ export function deleteCustomMajor(majorName: string): { success: boolean; messag
 
 const hydrateStudentWithMajor = (s: Student): Student => ({
   ...s,
-  major: s.major || inferMajorFromStudentId(s.studentId),
+  major: getStudentMajor(s),
 });
 
 export function getActiveStudents(): Student[] {
   if (typeof window === 'undefined') return INITIAL_STUDENTS.map(hydrateStudentWithMajor);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_STUDENTS);
+    let raw = localStorage.getItem(STORAGE_KEY_STUDENTS);
     if (!raw) {
+      // Migrate from previous key if available to preserve any newly added custom students
+      const prevRaw = localStorage.getItem('halaqah_active_students_v3');
+      if (prevRaw) {
+        try {
+          const prevList = JSON.parse(prevRaw);
+          if (Array.isArray(prevList)) {
+            const remapped = prevList.map(hydrateStudentWithMajor);
+            localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(remapped));
+            return remapped;
+          }
+        } catch {
+          // fallback
+        }
+      }
       const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
       return initHydrated;
@@ -287,8 +338,10 @@ export function updateTeacherInfo(
 // 4. รีเซ็ตกลับเป็นข้อมูลเริ่มต้น
 export function resetToInitialData(): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+  const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+  localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
   localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(INITIAL_TEACHERS));
+  localStorage.setItem(STORAGE_KEY_MAJORS, JSON.stringify(DEFAULT_MAJORS));
 }
 
 // 5. จัดการรหัสผ่านบุคลากร (ค่าเริ่มต้นคือ edu.sdd)
@@ -379,7 +432,7 @@ export function addStudentsBatch(newStudents: Student[]): {
       groupName: (item.groupName || '').trim() || 'กลุ่มศึกษา',
       teacherName: (item.teacherName || '').trim() || 'ไม่ระบุอาจารย์',
       groupId: item.groupId || '',
-      major: (item.major || '').trim() || inferMajorFromStudentId(cleanId),
+      major: (item.major || '').trim() || inferMajorFromStudentId(cleanId, item.yearLevel),
     });
   }
 

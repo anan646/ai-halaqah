@@ -511,7 +511,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         groupName: newStudentData.groupName?.trim() || t?.groupName || 'กลุ่มศึกษา',
         teacherName: t ? t.name : 'ไม่ระบุอาจารย์',
         groupId: t ? t.groupId : '',
-        major: (newStudentData.major || '').trim() || inferMajorFromStudentId(cleanId),
+        major: (newStudentData.major || '').trim() || inferMajorFromStudentId(cleanId, newStudentData.yearLevel || t?.yearLevel || 'ปี 2'),
       },
     ]);
     setEditorMsg({ text: res.message, success: res.success });
@@ -628,6 +628,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             teacherName: teacher,
             groupName: group,
             groupId: defaultT ? defaultT.groupId : '',
+            major: parts[6] || inferMajorFromStudentId(sid, year),
           });
         } else if (parts.length === 1) {
           // Check if it's just ID or contains space
@@ -643,6 +644,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               teacherName: defaultT ? defaultT.name : 'ไม่ระบุอาจารย์',
               groupName: defaultT ? defaultT.groupName : 'กลุ่มศึกษา',
               groupId: defaultT ? defaultT.groupId : '',
+              major: inferMajorFromStudentId(sid, bulkDefaultYear),
             });
           }
         }
@@ -1709,7 +1711,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <div className="text-[11px] text-purple-900/80 bg-white/80 p-2.5 rounded-xl border border-purple-100 flex items-start gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-purple-700 shrink-0 mt-0.5" />
                   <span>
-                    ระบบตรวจจับสาขาวิชาจากรหัสนักศึกษาเดิม 9 หลักให้อัตโนมัติ (เช่น 441 = อิสลามศึกษา, 442 = ภาษาอาหรับ, 443 = ภาษาอังกฤษ, 444 = ภาษามลายู, 445 = วิทยาศาสตร์ทั่วไป, 446 = การศึกษาปฐมวัย, 447 = การสอนวิทยาศาสตร์) และสาขาวิชาใหม่ที่เพิ่มนี้จะสามารถเลือกให้นักศึกษาได้ทันที
+                    ระบบตรวจจับสาขาวิชาจากรหัสนักศึกษาเดิม 9 หลักและชั้นปีให้อัตโนมัติ (เช่น 441 = อิสลามศึกษา / ปี 4: การสอนอิสลามศึกษา, 442 = ภาษาอาหรับ / ปี 4: การสอนภาษาอาหรับ, 443 = วิทยาศาสตร์ทั่วไป / ปี 4: การสอนวิทยาศาสตร์ทั่วไป, 444 = เคมี / ปี 4: การสอนเคมี, 445 = ภาษาอังกฤษ / ปี 4: การสอนภาษาอังกฤษ, 446 = ภาษามลายูและเทคโนโลยีการศึกษา / ปี 4: การสอนภาษามลายูและเทคโนโลยีการศึกษา, 447 = การศึกษาปฐมวัย) และสาขาวิชาใหม่ที่เพิ่มนี้จะสามารถเลือกให้นักศึกษาได้ทันที
                   </span>
                 </div>
               </div>
