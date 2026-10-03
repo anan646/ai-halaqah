@@ -44,6 +44,7 @@ interface LandingPageViewProps {
   customLogo: string;
   onLogoUpdated: (newLogo: string) => void;
   onOpenTutorial?: () => void;
+  onPortalViewChange?: (view: 'select' | 'student' | 'faculty') => void;
 }
 
 export const LandingPageView: React.FC<LandingPageViewProps> = ({
@@ -53,6 +54,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   onGoToAdmin,
   customLogo,
   onOpenTutorial,
+  onPortalViewChange,
 }) => {
   // Role-based tutorial state
   const [activeTutorialRole, setActiveTutorialRole] = useState<TutorialRole | null>(null);
@@ -62,6 +64,11 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   // 'student' = Dedicated Student Window
   // 'faculty' = Dedicated Faculty/Teacher Window
   const [portalView, setPortalView] = useState<'select' | 'student' | 'faculty'>('select');
+
+  // Notify parent component of current portal view
+  useEffect(() => {
+    onPortalViewChange?.(portalView);
+  }, [portalView, onPortalViewChange]);
 
   // Reset to 'select' screen when user clicks Home button
   useEffect(() => {
@@ -1162,20 +1169,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         </div>
       )}
 
-      {/* 5. FOOTER QUICK ACTIONS (Tutorial & Admin links) */}
+      {/* 5. FOOTER QUICK ACTIONS (Admin link only) */}
       {portalView === 'select' && (
         <div className="pt-4 border-t border-purple-100/80 flex flex-wrap items-center justify-center gap-3">
-          {onOpenTutorial && (
-            <button
-              type="button"
-              onClick={onOpenTutorial}
-              className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 bg-white hover:bg-purple-50 border border-purple-200 px-4 py-2.5 rounded-full shadow-xs transition-all duration-200 active:scale-95"
-            >
-              <HelpCircle className="w-4 h-4 text-purple-700" />
-              <span>สอนการใช้งานระบบ</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={onGoToAdmin}
