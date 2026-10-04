@@ -41,22 +41,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Brand Logo & Title */}
             <button
               onClick={() => setCurrentTab('landing')}
-              className="flex items-center space-x-2.5 sm:space-x-3 text-left shrink-0 group focus:outline-none"
+              className="flex items-center gap-3 text-left shrink-0 group focus:outline-none"
             >
-              <div className="h-9 sm:h-10 max-w-[150px] sm:max-w-[200px] flex items-center justify-center overflow-hidden">
+              <div className="h-10 w-auto min-w-[40px] max-w-[180px] flex items-center justify-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logoSrc}
                   alt="Faculty of Education Logo"
-                  className="h-full w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                  className="h-10 w-auto max-h-10 object-contain transition-transform duration-300 group-hover:scale-105 select-none"
                 />
               </div>
 
-              <div className="flex flex-col text-left">
-                <span className="font-black text-purple-950 text-xs sm:text-sm tracking-tight group-hover:text-purple-700 transition-colors leading-tight">
+              <div className="flex flex-col text-left pl-1 border-l border-purple-200/80">
+                <span className="font-black text-purple-950 text-xs sm:text-sm tracking-tight group-hover:text-purple-700 transition-colors leading-tight whitespace-nowrap">
                   หะละเกาะห์
                 </span>
-                <span className="text-[10px] text-purple-800/80 font-medium leading-tight">
+                <span className="text-[10px] text-purple-800/80 font-medium leading-tight whitespace-nowrap">
                   ระบบบันทึกและติดตามการเข้าร่วม
                 </span>
               </div>

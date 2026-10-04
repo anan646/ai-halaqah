@@ -6,6 +6,7 @@ import {
   Users,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
   GraduationCap,
   Calendar,
   Clock,
@@ -124,15 +125,16 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
-  // Announcements state & Immediate Pop-up Alert
+  // Announcements state & Immediate Pop-up Alert Carousel
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [activeAnnouncementAlert, setActiveAnnouncementAlert] = useState<Announcement | null>(null);
+  const [studentAlertList, setStudentAlertList] = useState<Announcement[]>([]);
+  const [currentAlertIndex, setCurrentAlertIndex] = useState(0);
 
   useEffect(() => {
     setAnnouncements(getAnnouncements());
   }, [portalView, selectedStudent]);
 
-  // Trigger pop-up announcement immediately upon student ID input/search
+  // Trigger pop-up announcement carousel immediately upon student ID search
   useEffect(() => {
     if (selectedStudent) {
       const sid = (selectedStudent.studentId || '').trim();
@@ -141,11 +143,14 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         (a) => a.targetType === 'all' || a.targetStudentIds.includes(sid)
       );
       if (relevant.length > 0) {
-        // Pop up the announcement alert immediately in center of screen
-        setActiveAnnouncementAlert(relevant[0]);
+        setStudentAlertList(relevant);
+        setCurrentAlertIndex(0);
+      } else {
+        setStudentAlertList([]);
       }
     } else {
-      setActiveAnnouncementAlert(null);
+      setStudentAlertList([]);
+      setCurrentAlertIndex(0);
     }
   }, [selectedStudent]);
 
@@ -1437,92 +1442,164 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       )}
 
 
-      {/* Announcement Alert Pop-up Modal (เด้งขึ้นกลางหน้าจอทันทีเมื่อนักศึกษาระบุรหัส) */}
-      {activeAnnouncementAlert && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setActiveAnnouncementAlert(null);
-            }}
-          >
-            <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative animate-scaleUp">
-              <div className="flex items-start justify-between gap-3 border-b border-purple-100 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                    activeAnnouncementAlert.priority === 'urgent'
-                      ? 'bg-rose-100 text-rose-700 animate-pulse'
-                      : activeAnnouncementAlert.priority === 'warning'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-purple-100 text-purple-700'
-                  }`}>
-                    {activeAnnouncementAlert.priority === 'urgent' ? (
-                      <Megaphone className="w-5 h-5 text-rose-600" />
-                    ) : (
-                      <Bell className="w-5 h-5 text-purple-600" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                        activeAnnouncementAlert.priority === 'urgent'
-                          ? 'bg-rose-500 text-white'
-                          : activeAnnouncementAlert.priority === 'warning'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-purple-100 text-purple-900'
-                      }`}>
-                        {activeAnnouncementAlert.priority === 'urgent'
-                          ? '🚨 ด่วนที่สุด'
-                          : activeAnnouncementAlert.priority === 'warning'
-                          ? '⚠️ แจ้งเตือนสำคัญ'
-                          : '📢 ประกาศทั่วไป'}
-                      </span>
-                      {activeAnnouncementAlert.targetType === 'specific' && (
-                        <span className="text-[10px] bg-indigo-100 text-indigo-900 font-bold px-2 py-0.5 rounded-full">
-                          🎯 เฉพาะบุคคล
-                        </span>
+      {/* Announcement Alert Pop-up Modal (เด้งขึ้นกลางหน้าจอทันทีเมื่อนักศึกษาระบุรหัส พร้อมเลื่อนซ้าย-ขวาได้อย่างอิสระ) */}
+      {studentAlertList.length > 0 && studentAlertList[currentAlertIndex] && (() => {
+        const currentAlert = studentAlertList[currentAlertIndex];
+        const totalAlerts = studentAlertList.length;
+
+        const handlePrevAlert = () => {
+          setCurrentAlertIndex((prev) => (prev > 0 ? prev - 1 : totalAlerts - 1));
+        };
+
+        const handleNextAlert = () => {
+          setCurrentAlertIndex((prev) => (prev < totalAlerts - 1 ? prev + 1 : 0));
+        };
+
+        return (
+          <ModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setStudentAlertList([]);
+              }}
+            >
+              <div
+                className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative animate-scaleUp select-none"
+                onTouchStart={(e) => {
+                  (e.currentTarget as any).touchStartX = e.touches[0].clientX;
+                }}
+                onTouchEnd={(e) => {
+                  const startX = (e.currentTarget as any).touchStartX;
+                  if (typeof startX === 'number') {
+                    const diff = e.changedTouches[0].clientX - startX;
+                    if (diff > 50) handlePrevAlert(); // Swipe right -> prev
+                    if (diff < -50) handleNextAlert(); // Swipe left -> next
+                  }
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3 border-b border-purple-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                      currentAlert.priority === 'urgent'
+                        ? 'bg-rose-100 text-rose-700 animate-pulse'
+                        : currentAlert.priority === 'warning'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-purple-100 text-purple-700'
+                    }`}>
+                      {currentAlert.priority === 'urgent' ? (
+                        <Megaphone className="w-5 h-5 text-rose-600" />
+                      ) : (
+                        <Bell className="w-5 h-5 text-purple-600" />
                       )}
                     </div>
-                    <h3 className="text-base sm:text-lg font-black text-purple-950 mt-1">
-                      {activeAnnouncementAlert.title}
-                    </h3>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          currentAlert.priority === 'urgent'
+                            ? 'bg-rose-500 text-white'
+                            : currentAlert.priority === 'warning'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-purple-100 text-purple-900'
+                        }`}>
+                          {currentAlert.priority === 'urgent'
+                            ? '🚨 ด่วนที่สุด'
+                            : currentAlert.priority === 'warning'
+                            ? '⚠️ แจ้งเตือนสำคัญ'
+                            : '📢 ประกาศทั่วไป'}
+                        </span>
+                        {currentAlert.targetType === 'specific' && (
+                          <span className="text-[10px] bg-indigo-100 text-indigo-900 font-bold px-2 py-0.5 rounded-full">
+                            🎯 เฉพาะท่าน
+                          </span>
+                        )}
+                        {totalAlerts > 1 && (
+                          <span className="text-[10px] bg-purple-100 text-purple-900 font-bold px-2 py-0.5 rounded-full">
+                            เรื่องที่ {currentAlertIndex + 1}/{totalAlerts}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-purple-950 mt-1">
+                        {currentAlert.title}
+                      </h3>
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setStudentAlertList([])}
+                    className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveAnnouncementAlert(null)}
-                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+                {/* Announcement Content */}
+                <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 text-xs sm:text-sm text-purple-950 leading-relaxed font-medium whitespace-pre-wrap max-h-60 overflow-y-auto">
+                  {currentAlert.content}
+                </div>
 
-              {/* Announcement Content */}
-              <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 text-xs sm:text-sm text-purple-950 leading-relaxed font-medium whitespace-pre-wrap max-h-60 overflow-y-auto">
-                {activeAnnouncementAlert.content}
-              </div>
+                {/* Sender info */}
+                <div className="text-[11px] text-purple-700/80 flex items-center justify-between font-semibold pt-1">
+                  <span>ประกาศโดย: {currentAlert.authorName || 'ผู้ดูแลระบบ'}</span>
+                  <span>{currentAlert.createdAt}</span>
+                </div>
 
-              {/* Sender info */}
-              <div className="text-[11px] text-purple-700/80 flex items-center justify-between font-semibold pt-1">
-                <span>ประกาศโดย: {activeAnnouncementAlert.authorName || 'ผู้ดูแลระบบ'}</span>
-                <span>{activeAnnouncementAlert.createdAt}</span>
-              </div>
+                {/* Navigation controls if multiple announcements */}
+                {totalAlerts > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-purple-100">
+                    <button
+                      type="button"
+                      onClick={handlePrevAlert}
+                      className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-900 text-xs font-bold flex items-center gap-1 transition active:scale-95"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>ก่อนหน้า</span>
+                    </button>
 
-              <div className="pt-2 border-t border-purple-100 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setActiveAnnouncementAlert(null)}
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>รับทราบและปิดหน้าต่าง</span>
-                </button>
+                    {/* Dots indicator */}
+                    <div className="flex items-center gap-1.5">
+                      {studentAlertList.map((_, dotIdx) => (
+                        <button
+                          key={dotIdx}
+                          type="button"
+                          onClick={() => setCurrentAlertIndex(dotIdx)}
+                          className={`w-2.5 h-2.5 rounded-full transition-all ${
+                            dotIdx === currentAlertIndex
+                              ? 'bg-purple-800 scale-125'
+                              : 'bg-purple-200 hover:bg-purple-300'
+                          }`}
+                          title={`ไปยังเรื่องที่ ${dotIdx + 1}`}
+                        />
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleNextAlert}
+                      className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-900 text-xs font-bold flex items-center gap-1 transition active:scale-95"
+                    >
+                      <span>ถัดไป</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-purple-100 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setStudentAlertList([])}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>รับทราบและปิดหน้าต่าง</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </ModalPortal>
-      )}
+          </ModalPortal>
+        );
+      })()}
 
       {/* Official E-Certificate Modal */}
       {isCertModalOpen && selectedStudent && studentStats && (

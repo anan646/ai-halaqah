@@ -76,8 +76,37 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
           @page { size: A4 landscape; margin: 0; }
-          body { margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
-          .cert-wrap { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+          html, body {
+            margin: 0;
+            padding: 0;
+            width: 297mm;
+            height: 210mm;
+            overflow: hidden;
+            font-family: 'Sarabun', sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            background: #fff;
+          }
+          .cert-wrap {
+            width: 297mm;
+            height: 210mm;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+          }
+          .cert-wrap > div {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none !important;
+            aspect-ratio: auto !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            box-sizing: border-box !important;
+            padding: 12mm 15mm !important;
+          }
         </style>
       </head>
       <body>
@@ -86,7 +115,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         </div>
         <script>
           window.onload = function() {
-            window.print();
+            setTimeout(function() {
+              window.print();
+            }, 300);
             window.onafterprint = function() { window.close(); };
           };
         </script>
@@ -101,9 +132,17 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      {/* Print styles */}
+      {/* Print styles for full A4 Landscape */}
       <style jsx global>{`
         @media print {
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+          }
           body * {
             visibility: hidden !important;
           }
@@ -115,13 +154,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             position: fixed !important;
             left: 0 !important;
             top: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            box-sizing: border-box !important;
             margin: 0 !important;
-            padding: 15mm !important;
+            padding: 12mm !important;
             box-shadow: none !important;
-            border-width: 8px !important;
-            background: white !important;
+            border-radius: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }

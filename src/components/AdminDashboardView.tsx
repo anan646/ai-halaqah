@@ -5519,7 +5519,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </button>
               </div>
 
-              {/* 3. PDF Action */}
+              {/* 3. PDF Action (เฉพาะดาวน์โหลด PDF) */}
               <div className="p-5 rounded-3xl border border-purple-200 bg-purple-50/40 hover:bg-purple-50/70 transition-all flex flex-col justify-between space-y-3 group hover:shadow-card">
                 <div>
                   <div className="w-10 h-10 rounded-2xl bg-purple-700 text-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
@@ -5528,8 +5528,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <h3 className="font-black text-purple-950 text-base">เอกสาร PDF ทางการ (.pdf)</h3>
                   <p className="text-xs text-purple-800/80 mt-1">
                     {exportMode === 'master'
-                      ? 'รายงานสรุปภาพรวมโครงการ มีตราคณะสัญลักษณ์และสถิติ มา-ขาด-ลา ร้อยละผ่านเกณฑ์'
-                      : 'รายงานสรุปผลรายกลุ่มพร้อมรายละเอียดนักศึกษาในกลุ่ม พิมพ์เป็นไฟล์ PDF ได้ทันที'}
+                      ? 'บันทึกเป็นไฟล์ PDF รายงานสรุปภาพรวมโครงการ พร้อมตราสัญลักษณ์คณะและสถิติครบถ้วน'
+                      : 'บันทึกเป็นไฟล์ PDF รายงานสรุปผลรายกลุ่มพร้อมรายละเอียดนักศึกษาในกลุ่ม'}
                   </p>
                 </div>
                 <button
@@ -5542,14 +5542,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       printTeacherReport(tName);
                     }
                   }}
-                  className="w-full py-2.5 px-4 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                  className="w-full py-2.5 px-4 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  <span>เปิด PDF / พิมพ์</span>
+                  <span>บันทึกเป็น PDF</span>
                 </button>
               </div>
 
-              {/* 4. Print Action */}
+              {/* 4. Print Action (เฉพาะสั่งพิมพ์เอกสาร) */}
               <div className="p-5 rounded-3xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 transition-all flex flex-col justify-between space-y-3 group hover:shadow-card">
                 <div>
                   <div className="w-10 h-10 rounded-2xl bg-gray-800 text-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
@@ -5558,8 +5558,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <h3 className="font-black text-purple-950 text-base">สั่งพิมพ์ออกทางเครื่องพิมพ์</h3>
                   <p className="text-xs text-purple-800/80 mt-1">
                     {exportMode === 'master'
-                      ? 'พิมพ์เล่มรายงานฉบับสมบูรณ์รวม 40 กลุ่ม (Booklet) ทุกอาจารย์พร้อมกันอัตโนมัติ'
-                      : 'พิมพ์ใบบันทึกเช็คชื่อของกลุ่มที่เลือกโดยตรง พร้อมซ่อนเครื่องมือและเมนูต่างๆ'}
+                      ? 'สั่งพิมพ์เล่มรายงานฉบับสมบูรณ์รวม 40 กลุ่ม (Booklet) ทุกอาจารย์พร้อมกันอัตโนมัติ'
+                      : 'สั่งพิมพ์ใบบันทึกเช็คชื่อของกลุ่มที่เลือกโดยตรง พร้อมซ่อนเครื่องมือและเมนูต่างๆ'}
                   </p>
                 </div>
                 <button
@@ -5572,10 +5572,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       printTeacherReport(tName);
                     }
                   }}
-                  className="w-full py-2.5 px-4 bg-gray-800 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                  className="w-full py-2.5 px-4 bg-gray-800 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>{exportMode === 'master' ? 'พิมพ์เล่ม 40 กลุ่ม' : 'สั่งพิมพ์กลุ่มนี้'}</span>
+                  <span>{exportMode === 'master' ? 'สั่งพิมพ์เล่ม 40 กลุ่ม' : 'สั่งพิมพ์กลุ่มนี้'}</span>
                 </button>
               </div>
             </div>

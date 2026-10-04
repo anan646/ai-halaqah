@@ -130,8 +130,37 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
           @page { size: A4 landscape; margin: 0; }
-          body { margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
-          .cert-wrap { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+          html, body {
+            margin: 0;
+            padding: 0;
+            width: 297mm;
+            height: 210mm;
+            overflow: hidden;
+            font-family: 'Sarabun', sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            background: #fff;
+          }
+          .cert-wrap {
+            width: 297mm;
+            height: 210mm;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+          }
+          .cert-wrap > div {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none !important;
+            aspect-ratio: auto !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            box-sizing: border-box !important;
+            padding: 12mm 15mm !important;
+          }
         </style>
       </head>
       <body>
@@ -140,7 +169,9 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
         </div>
         <script>
           window.onload = function() {
-            window.print();
+            setTimeout(function() {
+              window.print();
+            }, 300);
             window.onafterprint = function() { window.close(); };
           };
         </script>
