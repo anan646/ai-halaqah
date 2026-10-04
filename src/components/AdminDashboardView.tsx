@@ -112,6 +112,7 @@ import { setSavedLogo } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { AdminManualModal } from './AdminManualModal';
 import { ExcelImportModal } from './ExcelImportModal';
+import { CertificateStudioModal } from './CertificateStudioModal';
 
 interface AdminDashboardViewProps {
   records: AttendanceRecord[];
@@ -707,6 +708,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   // Manual / Guide & Quick Modal States
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isCertStudioOpen, setIsCertStudioOpen] = useState(false);
   const [isAddAnnouncementModalOpen, setIsAddAnnouncementModalOpen] = useState(false);
   const [isAddSubAdminModalOpen, setIsAddSubAdminModalOpen] = useState(false);
   const [isAddMajorModalOpen, setIsAddMajorModalOpen] = useState(false);
@@ -1983,487 +1985,507 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 animate-fadeIn">
-      {/* ==================== UNIFIED EXECUTIVE HEADER ==================== */}
-      <header className="bg-white/95 backdrop-blur-md rounded-3xl border border-purple-200/90 p-4 sm:p-6 shadow-sm space-y-4 print:hidden transition-all duration-300">
-        {/* Top Tier: Title, Badges, Semester & Fast Actions */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Left: Back button + System identity */}
-          <div className="flex items-start sm:items-center gap-3">
-            {onBackToLanding && (
+    <div className="w-full min-h-screen bg-slate-50/50">
+      {/* ==================== WORKSPACE CONTAINER WITH FIXED LEFT SIDEBAR ==================== */}
+      <div className="w-full flex">
+        {/* LEFT SIDEBAR NAVIGATION - FIXED TO FAR LEFT */}
+        <aside
+          className={`fixed left-0 top-0 bottom-0 w-64 lg:w-72 h-screen z-40 bg-white/95 backdrop-blur-md border-r border-purple-200/80 p-3.5 shadow-lg flex flex-col justify-between overflow-y-auto transition-transform duration-300 print:hidden ${
+            isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          }`}
+        >
+          <div className="space-y-4">
+            {/* Sidebar Brand Header */}
+            <div className="pb-3 border-b border-purple-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-800 to-indigo-900 text-white flex items-center justify-center font-black shadow-md shadow-purple-900/20 text-sm">
+                  HQ
+                </div>
+                <div>
+                  <div className="text-xs font-black text-purple-950 tracking-tight">ระบบแอดมินหะละเกาะห์</div>
+                  <div className="text-[10px] text-purple-700 font-semibold">{semesterSettings.semesterName} {semesterSettings.academicYear}</div>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={onBackToLanding}
-                className="inline-flex items-center space-x-2 text-xs sm:text-sm font-extrabold text-purple-900 hover:text-purple-950 bg-white border border-purple-200 px-3.5 py-2 rounded-full shadow-card hover:shadow-card-hover transition-all duration-200 ease-spring active:scale-95 group shrink-0"
-                title="ย้อนกลับหน้าแรก"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="lg:hidden p-1.5 rounded-xl text-purple-600 hover:bg-purple-100"
               >
-                <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center group-hover:-translate-x-0.5 transition-transform duration-200">
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                </div>
-                <span className="hidden sm:inline">ย้อนกลับหน้าแรก</span>
+                <X className="w-4 h-4" />
               </button>
-            )}
+            </div>
 
+            {/* Group 1: แดชบอร์ด & รายงาน */}
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-purple-100 text-purple-900 text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border border-purple-200/60">
-                  {adminUser?.role === 'subadmin' ? 'แอดมินรอง' : 'ผู้ดูแลระบบหลัก'}
-                </span>
-                <span className="text-xs text-purple-800 font-semibold">{adminUser?.name || 'แอดมิน'}</span>
+              <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>📊</span>
+                <span>แดชบอร์ด & รายงาน</span>
               </div>
-              <h1 className="text-lg sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight">
-                ศูนย์จัดการระบบและแดชบอร์ดแอดมิน
-              </h1>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="text-xs text-purple-800/80">
-                  ระบบติดตามและประเมินผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
-                </span>
+              <div className="mt-1 space-y-1">
+                <button
+                  onClick={() => {
+                    setActiveTab('overview');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'overview' || activeTab === 'analytics'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">📊</span>
+                    <span>ภาพรวมทั้งหมด (Overview)</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('teachers');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'teachers' || activeTab === 'matrix'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">👨‍🏫</span>
+                    <span>ข้อมูลรายอาจารย์ (Teacher)</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('pending');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'pending'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">⏳</span>
+                    <span>กลุ่มที่ยังไม่บันทึก</span>
+                  </div>
+                  {overviewKpi.pendingCount > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      activeTab === 'pending' ? 'bg-amber-400 text-purple-950' : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      {overviewKpi.pendingCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('levels');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'levels'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">🏷️</span>
+                    <span>ระดับกลุ่ม (01 / 02 / 03)</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('periodic');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'periodic'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">📅</span>
+                    <span>สรุปตามวัน/เดือน/ปี</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Group 2: จัดการข้อมูล & นักศึกษา */}
+            <div className="pt-2 border-t border-purple-100/80">
+              <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>👥</span>
+                <span>จัดการข้อมูล & นักศึกษา</span>
+              </div>
+              <div className="mt-1 space-y-1">
+                <button
+                  onClick={() => {
+                    setActiveTab('editor');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'editor'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">✏️</span>
+                    <span>จัดการข้อมูล (นศ./อาจารย์)</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('transfer');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'transfer'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">🔄</span>
+                    <span>โยกย้ายกลุ่ม (2 ฝั่ง ซ้าย-ขวา)</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('announcements');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'announcements'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">📢</span>
+                    <span>ส่งประกาศนักศึกษา</span>
+                  </div>
+                  {announcementsList.length > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      activeTab === 'announcements' ? 'bg-amber-400 text-purple-950' : 'bg-purple-200 text-purple-900'
+                    }`}>
+                      {announcementsList.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Group 3: ระบบ & การส่งออก */}
+            <div className="pt-2 border-t border-purple-100/80">
+              <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>⚙️</span>
+                <span>ระบบ & เกียรติบัตร</span>
+              </div>
+              <div className="mt-1 space-y-1">
+                {/* Certificate Studio Direct Button */}
                 <button
                   type="button"
-                  onClick={() => setActiveTab('system_management')}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200 text-xs font-bold transition-all shadow-xs"
-                  title="คลิกเพื่อไปที่การตั้งค่าภาคเรียน วันเดือนปี และเป้าหมาย"
+                  onClick={() => setIsCertStudioOpen(true)}
+                  className="w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm bg-gradient-to-r from-amber-500/15 to-purple-500/15 border border-amber-300 text-purple-950 hover:from-amber-500/25 hover:to-purple-500/25 font-bold"
                 >
-                  <Calendar className="w-3.5 h-3.5 text-purple-700" />
-                  <span>{semesterSettings.semesterName} ปีการศึกษา {semesterSettings.academicYear}</span>
-                  <Edit3 className="w-3 h-3 text-purple-600 ml-0.5" />
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">🎖️</span>
+                    <span>สตูดิโอเกียรติบัตร (10 แบบ)</span>
+                  </div>
+                  <span className="text-[10px] bg-amber-400 text-purple-950 font-black px-1.5 py-0.5 rounded-full">ใหม่</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('export');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'export'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">📤</span>
+                    <span>ศูนย์ส่งออกไฟล์ & วุฒิบัตร</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('system_management');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'system_management'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">⚙️</span>
+                    <span>ตั้งค่าระบบ & สำรองข้อมูล</span>
+                  </div>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right: KPI Summary Pill, Manual Guide & Logout */}
-          <div className="flex items-center flex-wrap gap-2 sm:self-center">
-            {/* Status KPI pill */}
-            <div className="bg-purple-50/80 border border-purple-200/80 rounded-2xl px-3.5 py-2 text-right">
-              <div className="text-[10px] text-purple-600 font-bold uppercase">สถานะบันทึกผล</div>
-              <div className="text-xs font-black text-purple-950">
-                บันทึกแล้ว {overviewKpi.recordedCount} / {overviewKpi.totalTeachers} ท่าน ({overviewKpi.recordedPercent}%)
-              </div>
-            </div>
-
-            {/* Guide Button */}
+          {/* Sidebar Footer */}
+          <div className="pt-3 border-t border-purple-100/80 space-y-2">
             <button
               type="button"
               onClick={() => setIsManualModalOpen(true)}
-              className="flex items-center space-x-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200 text-xs font-bold px-3.5 py-2 rounded-full active:scale-95 transition-all shadow-2xs"
-              title="เปิดคู่มือการใช้งานระบบแอดมิน"
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold transition border border-purple-200/70"
             >
               <BookOpen className="w-3.5 h-3.5 text-purple-700" />
-              <span>คู่มือการใช้งาน</span>
+              <span>คู่มือการใช้งานระบบ</span>
             </button>
-
-            {/* Logout */}
-            <button
-              onClick={onLogout}
-              className="flex items-center space-x-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold px-3.5 py-2 rounded-full active:scale-95 transition-all"
-              title="ออกจากระบบแอดมิน"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>ออก</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Lower Toolbar: Real-time Live Sync, Auto-refresh, Quick Sync & Sources */}
-        <div className="pt-3 border-t border-purple-100/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-          {/* Status Indicator */}
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`inline-block w-2.5 h-2.5 rounded-full ${
-                isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-500 animate-pulse'
-              }`}
-            />
-            <span className="font-extrabold text-purple-950">
-              {isSyncing ? 'กำลังซิงค์ข้อมูล...' : 'เชื่อมต่อสดระบบฐานข้อมูล'}
-            </span>
-            <span className="text-purple-300">•</span>
-            <span className="text-purple-700/80 font-medium">อัปเดตล่าสุด: {lastUpdatedTime}</span>
-          </div>
-
-          {/* Action Controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Auto Refresh Selector */}
-            <div className="flex items-center gap-1.5 text-xs text-purple-900 bg-purple-50/80 px-3 py-1.5 rounded-xl border border-purple-200/70">
-              <span>⏱️ รีเฟรชอัตโนมัติ:</span>
-              <select
-                value={autoRefreshInterval}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setAutoRefreshInterval(val);
-                  if (val > 0) {
-                    setSyncToast(`⏱️ ตั้งเวลารีเฟรชอัตโนมัติทุก ${val >= 60 ? `${val / 60} นาที` : `${val} วินาที`}`);
-                  } else {
-                    setSyncToast('⏸️ ปิดการรีเฟรชอัตโนมัติ');
-                  }
-                  setTimeout(() => setSyncToast(null), 3000);
-                }}
-                className="bg-transparent font-bold text-purple-900 focus:outline-none cursor-pointer"
-              >
-                <option value={0}>ปิด (Manual)</option>
-                <option value={30}>ทุก 30 วินาที</option>
-                <option value={60}>ทุก 1 นาที</option>
-                <option value={300}>ทุก 5 นาที</option>
-              </select>
-            </div>
-
-            {/* Manual Sync Button */}
-            <button
-              onClick={() => handleManualSync(false)}
-              disabled={isSyncing}
-              className="inline-flex items-center gap-1.5 bg-purple-800 hover:bg-purple-900 active:scale-95 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'กำลังซิงค์...' : 'ซิงค์ข้อมูลสดเดี๋ยวนี้'}</span>
-            </button>
-
-            {/* Quick Export Master Dropdown */}
-            <div className="relative" ref={exportDropdownRef}>
-              <button
-                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-900 hover:bg-purple-100 transition flex items-center gap-1.5 border border-purple-200"
-              >
-                <Download className="w-3.5 h-3.5 text-purple-700" />
-                <span>ดาวน์โหลด / พิมพ์</span>
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-              {isExportDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
-                  <div className="text-[10px] font-bold text-purple-500 px-3 py-1 uppercase">ข้อมูลภาพรวมทั้งโครงการ</div>
-                  <button
-                    onClick={() => {
-                      setIsExportDropdownOpen(false);
-                      exportOverviewExcel();
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>ส่งออก Excel ภาพรวม (.xls)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsExportDropdownOpen(false);
-                      exportOverviewWord();
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-blue-600" />
-                    <span>ส่งออก Word ภาพรวม (.doc)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsExportDropdownOpen(false);
-                      printOverviewReport();
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-purple-700" />
-                    <span>พิมพ์ / ดาวน์โหลด PDF ภาพรวม</span>
-                  </button>
-                  <div className="border-t border-purple-100 my-1" />
-                  <div className="text-[10px] font-bold text-purple-500 px-3 py-1 uppercase">ข้อมูลรวมทุกกลุ่มอาจารย์</div>
-                  <button
-                    onClick={() => {
-                      setIsExportDropdownOpen(false);
-                      printAllTeachersBooklet();
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                    <span>พิมพ์รายงานสรุปทุกกลุ่ม (40 กลุ่ม)</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Google Sheets Links Dropdown */}
-            <div className="relative" ref={sheetsDropdownRef}>
-              <button
-                onClick={() => setIsSheetsDropdownOpen(!isSheetsDropdownOpen)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-purple-900 hover:text-purple-950 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1 border border-slate-200"
-              >
-                <span>🔗 แหล่งข้อมูลต้นฉบับ</span>
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-              {isSheetsDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
-                  <div className="text-[10px] font-bold text-purple-500 px-3 py-1 uppercase">Google Sheets แต่ละส่วน</div>
-                  {GOOGLE_SHEETS_SOURCES.map((s) => (
-                    <a
-                      key={s.id}
-                      href={s.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block px-3 py-2 text-xs rounded-xl hover:bg-purple-50 text-purple-950 font-medium transition"
-                    >
-                      📊 {s.name}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* ==================== WORKSPACE CONTAINER WITH LEFT SIDEBAR NAVIGATION ==================== */}
-      <div className="flex flex-col lg:flex-row gap-5 items-start">
-        {/* Mobile Toggle Button for Sidebar */}
-        <div className="w-full lg:hidden print:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-purple-200 rounded-2xl font-bold text-sm text-purple-950 shadow-sm"
-          >
-            <div className="flex items-center gap-2">
-              <Menu className="w-4 h-4 text-purple-700" />
-              <span>เมนูระบบ:</span>
-              <span className="text-purple-700">
-                {activeTab === 'overview' || activeTab === 'analytics'
-                  ? '📊 ภาพรวมทั้งหมด'
-                  : activeTab === 'teachers' || activeTab === 'matrix'
-                  ? '👨‍🏫 ข้อมูลรายอาจารย์'
-                  : activeTab === 'pending'
-                  ? `⏳ กลุ่มที่ยังไม่บันทึก (${overviewKpi.pendingCount})`
-                  : activeTab === 'levels'
-                  ? '🏷️ ระดับกลุ่ม (01/02/03)'
-                  : activeTab === 'editor'
-                  ? '✏️ จัดการข้อมูล (อาจารย์/นศ./สาขา)'
-                  : activeTab === 'transfer'
-                  ? '🔄 โยกย้ายกลุ่ม'
-                  : activeTab === 'periodic'
-                  ? '📅 สรุปตามวัน/เดือน/ปี'
-                  : activeTab === 'announcements'
-                  ? '📢 ส่งประกาศ'
-                  : activeTab === 'export'
-                  ? '📤 ศูนย์ส่งออกไฟล์ & วุฒิบัตร'
-                  : '⚙️ ตั้งค่าระบบ'}
-              </span>
-            </div>
-            <ChevronDown className={`w-4 h-4 text-purple-600 transition-transform ${isMobileSidebarOpen ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
-        {/* LEFT SIDEBAR NAVIGATION */}
-        <aside
-          className={`w-full lg:w-72 shrink-0 bg-white/95 backdrop-blur-md rounded-3xl border border-purple-200/80 p-3.5 shadow-sm space-y-4 lg:sticky lg:top-4 print:hidden transition-all ${
-            isMobileSidebarOpen ? 'block' : 'hidden lg:block'
-          }`}
-        >
-          {/* Group 1: แดชบอร์ด & รายงาน */}
-          <div>
-            <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
-              <span>📊</span>
-              <span>แดชบอร์ด & รายงาน</span>
-            </div>
-            <div className="mt-1 space-y-1">
-              <button
-                onClick={() => {
-                  setActiveTab('overview');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'overview' || activeTab === 'analytics'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">📊</span>
-                  <span>ภาพรวมทั้งหมด (Overview)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('teachers');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'teachers' || activeTab === 'matrix'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">👨‍🏫</span>
-                  <span>ข้อมูลรายอาจารย์ (Teacher)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('pending');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'pending'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">⏳</span>
-                  <span>กลุ่มที่ยังไม่บันทึก</span>
-                </div>
-                {overviewKpi.pendingCount > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                    activeTab === 'pending' ? 'bg-amber-400 text-purple-950' : 'bg-rose-100 text-rose-700'
-                  }`}>
-                    {overviewKpi.pendingCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('levels');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'levels'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">🏷️</span>
-                  <span>ระดับกลุ่ม (01 / 02 / 03)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('periodic');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'periodic'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">📅</span>
-                  <span>สรุปตามวัน/เดือน/ปี</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Group 2: จัดการข้อมูล & นักศึกษา */}
-          <div className="pt-2 border-t border-purple-100/80">
-            <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
-              <span>👥</span>
-              <span>จัดการข้อมูล & นักศึกษา</span>
-            </div>
-            <div className="mt-1 space-y-1">
-              <button
-                onClick={() => {
-                  setActiveTab('editor');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'editor'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">✏️</span>
-                  <span>จัดการข้อมูล (นศ./อาจารย์)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('transfer');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'transfer'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">🔄</span>
-                  <span>โยกย้ายกลุ่ม (2 ฝั่ง ซ้าย-ขวา)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('announcements');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'announcements'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">📢</span>
-                  <span>ส่งประกาศนักศึกษา</span>
-                </div>
-                {announcementsList.length > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                    activeTab === 'announcements' ? 'bg-amber-400 text-purple-950' : 'bg-purple-200 text-purple-900'
-                  }`}>
-                    {announcementsList.length}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Group 3: ระบบ & การส่งออก */}
-          <div className="pt-2 border-t border-purple-100/80">
-            <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
-              <span>⚙️</span>
-              <span>ระบบ & การส่งออก</span>
-            </div>
-            <div className="mt-1 space-y-1">
-              <button
-                onClick={() => {
-                  setActiveTab('export');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'export'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">📤</span>
-                  <span>ศูนย์ส่งออกไฟล์ & วุฒิบัตร</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('system_management');
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                  activeTab === 'system_management'
-                    ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                    : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">⚙️</span>
-                  <span>ตั้งค่าระบบ & สำรองข้อมูล</span>
-                </div>
-              </button>
-            </div>
           </div>
         </aside>
 
-        {/* MAIN TAB CONTENT CONTAINER */}
-        <main className="flex-1 w-full min-w-0">
+        {/* Mobile Backdrop when sidebar is open */}
+        {isMobileSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs z-30 lg:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+
+        {/* MAIN CONTENT WRAPPER (Shifted to right by 72 on large screen) */}
+        <div className="flex-1 w-full lg:pl-72 min-w-0 flex flex-col">
+          <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 animate-fadeIn">
+            {/* ==================== REFINED EXECUTIVE HEADER ==================== */}
+            <header className="bg-white/95 backdrop-blur-md rounded-3xl border border-purple-200/90 p-4 sm:p-5 shadow-sm space-y-3.5 print:hidden transition-all duration-300">
+              {/* Upper row: Brand, Semester and Main Actions */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {/* Mobile sidebar toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="lg:hidden p-2 rounded-2xl bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200"
+                    title="เปิดเมนูนำทาง"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+
+                  {onBackToLanding && (
+                    <button
+                      type="button"
+                      onClick={onBackToLanding}
+                      className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-purple-900 hover:text-purple-950 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-full transition-all active:scale-95 group shrink-0"
+                      title="ย้อนกลับหน้าแรก"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                      <span className="hidden sm:inline">หน้าแรก</span>
+                    </button>
+                  )}
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="bg-purple-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {adminUser?.role === 'subadmin' ? 'แอดมินรอง' : 'ผู้ดูแลระบบ'}
+                      </span>
+                      <span className="text-xs text-purple-950 font-bold">{adminUser?.name || 'แอดมิน'}</span>
+                      <span className="text-purple-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('system_management')}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-bold border border-purple-200 transition"
+                      >
+                        <Calendar className="w-3 h-3 text-purple-600" />
+                        <span>{semesterSettings.semesterName} {semesterSettings.academicYear}</span>
+                      </button>
+                    </div>
+                    <h1 className="text-base sm:text-xl font-black text-purple-950 mt-0.5 tracking-tight">
+                      ศูนย์จัดการระบบและแดชบอร์ดแอดมิน
+                    </h1>
+                  </div>
+                </div>
+
+                {/* Right Action Buttons */}
+                <div className="flex items-center flex-wrap gap-2">
+                  {/* Certificate Studio Quick Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCertStudioOpen(true)}
+                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-black px-3.5 py-1.5 rounded-full active:scale-95 transition-all shadow-sm"
+                    title="เปิดสตูดิโอออกแบบและจัดวางเกียรติบัตร 10 แบบ"
+                  >
+                    <span>🎖️</span>
+                    <span>จัดการเกียรติบัตร</span>
+                  </button>
+
+                  {/* Manual Guide */}
+                  <button
+                    type="button"
+                    onClick={() => setIsManualModalOpen(true)}
+                    className="flex items-center gap-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-all"
+                    title="เปิดคู่มือการใช้งานระบบแอดมิน"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-purple-700" />
+                    <span className="hidden sm:inline">คู่มือ</span>
+                  </button>
+
+                  {/* Status Indicator Pill */}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 flex items-center gap-1.5 text-[11px] font-bold text-emerald-900">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>บันทึก {overviewKpi.recordedCount}/{overviewKpi.totalTeachers} ({overviewKpi.recordedPercent}%)</span>
+                  </div>
+
+                  {/* Logout */}
+                  <button
+                    onClick={onLogout}
+                    className="flex items-center gap-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-all"
+                    title="ออกจากระบบแอดมิน"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>ออก</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Lower Toolbar: Real-time Live Sync, Auto-refresh & Export */}
+              <div className="pt-2.5 border-t border-purple-100/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'}`} />
+                  <span className="font-bold text-purple-950">
+                    {isSyncing ? 'กำลังซิงค์...' : 'ฐานข้อมูลออนไลน์'}
+                  </span>
+                  <span className="text-purple-300">•</span>
+                  <span className="text-purple-700/80 text-[11px]">อัปเดต: {lastUpdatedTime}</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Auto Refresh */}
+                  <div className="flex items-center gap-1 text-[11px] text-purple-900 bg-purple-50 px-2.5 py-1 rounded-xl border border-purple-200">
+                    <span>⏱️</span>
+                    <select
+                      value={autoRefreshInterval}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setAutoRefreshInterval(val);
+                        setSyncToast(val > 0 ? `⏱️ รีเฟรชทุก ${val >= 60 ? `${val / 60} นาที` : `${val} วิ`}` : '⏸️ ปิดรีเฟรชอัตโนมัติ');
+                        setTimeout(() => setSyncToast(null), 3000);
+                      }}
+                      className="bg-transparent font-bold text-purple-900 focus:outline-none cursor-pointer"
+                    >
+                      <option value={0}>ปิดออโต้</option>
+                      <option value={30}>30 วิ</option>
+                      <option value={60}>1 นาที</option>
+                      <option value={300}>5 นาที</option>
+                    </select>
+                  </div>
+
+                  {/* Manual Sync */}
+                  <button
+                    onClick={() => handleManualSync(false)}
+                    disabled={isSyncing}
+                    className="inline-flex items-center gap-1 bg-purple-800 hover:bg-purple-900 text-white px-3 py-1 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                  >
+                    <RotateCcw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>ซิงค์สด</span>
+                  </button>
+
+                  {/* Quick Export Master Dropdown */}
+                  <div className="relative" ref={exportDropdownRef}>
+                    <button
+                      onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                      className="px-2.5 py-1 rounded-xl text-xs font-bold bg-purple-50 text-purple-900 hover:bg-purple-100 transition flex items-center gap-1 border border-purple-200"
+                    >
+                      <Download className="w-3 h-3 text-purple-700" />
+                      <span>ส่งออก/พิมพ์</span>
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {isExportDropdownOpen && (
+                      <div className="absolute right-0 mt-1 w-60 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                        <button
+                          onClick={() => {
+                            setIsExportDropdownOpen(false);
+                            exportOverviewExcel();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Excel ภาพรวม (.xls)</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsExportDropdownOpen(false);
+                            exportOverviewWord();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Word ภาพรวม (.doc)</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsExportDropdownOpen(false);
+                            printOverviewReport();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-purple-700" />
+                          <span>พิมพ์ / PDF ภาพรวม</span>
+                        </button>
+                        <div className="border-t border-purple-100 my-1" />
+                        <button
+                          onClick={() => {
+                            setIsExportDropdownOpen(false);
+                            printAllTeachersBooklet();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                          <span>พิมพ์รวม 40 กลุ่ม (Booklet)</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Google Sheets Links */}
+                  <div className="relative" ref={sheetsDropdownRef}>
+                    <button
+                      onClick={() => setIsSheetsDropdownOpen(!isSheetsDropdownOpen)}
+                      className="px-2.5 py-1 rounded-xl text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1 border border-slate-200"
+                    >
+                      <span>ชีตต้นฉบับ</span>
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {isSheetsDropdownOpen && (
+                      <div className="absolute right-0 mt-1 w-60 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                        {GOOGLE_SHEETS_SOURCES.map((s) => (
+                          <a
+                            key={s.id}
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 font-medium transition"
+                          >
+                            📊 {s.name}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            {/* MAIN TAB CONTENT CONTAINER */}
+            <main className="w-full min-w-0">
+              {/* ==================== TAB 1: ภาพรวมทั้งหมด (OVERVIEW & MATRIX COMPARISON) ==================== */}
           {/* ==================== TAB 1: ภาพรวมทั้งหมด (OVERVIEW & MATRIX COMPARISON) ==================== */}
           {(activeTab === 'overview' || activeTab === 'analytics') && (
         <div className="space-y-6 animate-fadeIn">
@@ -5390,6 +5412,32 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             )}
           </div>
 
+          {/* Certificate Studio Direct Banner */}
+          <div className="bg-gradient-to-r from-amber-500/15 via-purple-600/10 to-amber-500/15 p-5 sm:p-6 rounded-3xl border-2 border-amber-300/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎖️</span>
+                <h3 className="font-black text-purple-950 text-base sm:text-lg">
+                  สตูดิโอออกแบบ & จัดการเกียรติบัตร (Certificate Studio)
+                </h3>
+                <span className="text-[10px] bg-amber-400 text-purple-950 font-black px-2 py-0.5 rounded-full shadow-2xs">
+                  10 เทมเพลตมาตรฐาน
+                </span>
+              </div>
+              <p className="text-xs text-purple-800/80 max-w-2xl leading-relaxed">
+                เลือกรูปแบบเกียรติบัตรทางการ อัปโหลดพื้นหลังของหน่วยงานตนเอง จัดวางเลเอาต์ (ชื่อ, รหัส, สาขา, สถิติ, ตราเกียรตินิยม A+) ปรับแต่งชื่อผู้ลงนาม และสั่งพิมพ์หรือดาวน์โหลด PDF แยกกันได้ทันที
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCertStudioOpen(true)}
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2"
+            >
+              <span>✨</span>
+              <span>เปิดสตูดิโอเกียรติบัตร</span>
+            </button>
+          </div>
+
           {/* Export Action Cards (Excel, Word, PDF, Print) */}
           <div className="space-y-3">
             <label className="text-xs font-black text-purple-950 block">
@@ -6205,8 +6253,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
       )}
-        </main>
+            </main>
+          </div>
+        </div>
       </div>
+
+      {/* CERTIFICATE STUDIO MODAL (10 แบบ + อัปโหลดพื้นหลัง + จัดวางเลเอาต์ + โลโก้) */}
+      <CertificateStudioModal
+        isOpen={isCertStudioOpen}
+        onClose={() => setIsCertStudioOpen(false)}
+        systemLogo={customLogo}
+      />
 
       {/* STUDENT DETAIL MODAL */}
       {selectedStudentForModal && (

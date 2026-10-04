@@ -243,23 +243,6 @@ export default function HomePage() {
         onSaved={loadData}
       />
 
-      {/* Floating Tutorial / Help Button (แสดงเฉพาะในหน้านักศึกษาและบุคลากร ไม่แสดงในหน้าหลัก) */}
-      {isTutorialVisible && (
-        <div className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-30 print:hidden animate-fadeIn">
-          <button
-            type="button"
-            onClick={() => handleOpenGeneralTutorial()}
-            className="group flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-white/95 hover:bg-white text-purple-950 font-extrabold text-xs rounded-full border border-purple-200/90 shadow-[0_8px_25px_rgba(107,33,168,0.18)] hover:shadow-[0_12px_30px_rgba(107,33,168,0.28)] backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95"
-            title="สอนการใช้งานระบบ"
-          >
-            <div className="w-6 h-6 rounded-full bg-purple-100 group-hover:bg-purple-800 text-purple-700 group-hover:text-white flex items-center justify-center transition-colors">
-              <HelpCircle className="w-3.5 h-3.5" />
-            </div>
-            <span className="font-bold">สอนการใช้งาน</span>
-          </button>
-        </div>
-      )}
-
       {/* Onboarding Tutorial Step-by-Step Modal */}
       <OnboardingTutorialModal
         isOpen={isTutorialOpen}

@@ -35,6 +35,7 @@ import {
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
 import { CertificateModal } from '@/components/CertificateModal';
+import { ModalPortal } from '@/components/ModalPortal';
 
 
 const STUDENT_TUTORIAL_KEY = 'halaqah_tutorial_student_dismissed_v1';
@@ -123,12 +124,30 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
-  // Announcements state
+  // Announcements state & Immediate Pop-up Alert
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [activeAnnouncementAlert, setActiveAnnouncementAlert] = useState<Announcement | null>(null);
 
   useEffect(() => {
     setAnnouncements(getAnnouncements());
   }, [portalView, selectedStudent]);
+
+  // Trigger pop-up announcement immediately upon student ID input/search
+  useEffect(() => {
+    if (selectedStudent) {
+      const sid = (selectedStudent.studentId || '').trim();
+      const allAnns = getAnnouncements();
+      const relevant = allAnns.filter(
+        (a) => a.targetType === 'all' || a.targetStudentIds.includes(sid)
+      );
+      if (relevant.length > 0) {
+        // Pop up the announcement alert immediately in center of screen
+        setActiveAnnouncementAlert(relevant[0]);
+      }
+    } else {
+      setActiveAnnouncementAlert(null);
+    }
+  }, [selectedStudent]);
 
 
   const allTeachers = useMemo(() => getActiveTeachers(), []);
@@ -1187,6 +1206,45 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </div>
               </div>
 
+              {/* E-Certificate Claim Banner (สำหรับนักศึกษาที่ผ่านเกณฑ์ 80%) - วางเด่นด้านบนสุด ไม่จมอยู่ล่างสุด */}
+              {studentStats.isPassed && (
+                <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-3xl p-5 sm:p-6 text-white shadow-xl shadow-amber-950/20 border-2 border-yellow-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-white/20 text-white shrink-0 shadow-inner">
+                        <Award className="w-7 h-7 text-yellow-100 animate-bounce" />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base sm:text-lg font-black tracking-wide">
+                            ยินดีด้วย! ท่านผ่านเกณฑ์การเข้าร่วมกิจกรรม ({studentStats.rate.toFixed(1)}%)
+                          </h3>
+                          {studentStats.rate >= 90 && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-yellow-300 text-amber-950 text-[10px] font-black uppercase shadow-xs">
+                              🌟 เกียรตินิยม A+ (ดีเยี่ยม)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-amber-100 font-medium">
+                          {studentStats.rate >= 90
+                            ? 'ผลการประเมินระดับดีเยี่ยม (เกียรตินิยม A+) สามารถกดรับและพิมพ์วุฒิบัตรอิเล็กทรอนิกส์ได้ทันที'
+                            : 'ท่านสามารถกดรับวุฒิบัตรอิเล็กทรอนิกส์ (E-Certificate) อย่างเป็นทางการเพื่อเก็บไว้ในแฟ้มสะสมงาน'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsCertModalOpen(true)}
+                    className="px-5 py-3 rounded-2xl bg-white text-amber-950 hover:bg-amber-50 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer shrink-0"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>{studentStats.rate >= 90 ? '🏅 ดูและพิมพ์เกียรติบัตร A+' : 'ดูและพิมพ์เกียรติบัตร (E-Certificate)'}</span>
+                  </button>
+                </div>
+              )}
+
               {/* Attendance KPI Cards (Tactile 4-Card Bento) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                 {/* Rate Card */}
@@ -1272,34 +1330,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                   <span>100%</span>
                 </div>
               </div>
-
-              {/* E-Certificate Claim Banner (สำหรับนักศึกษาที่ผ่านเกณฑ์ 80%) */}
-              {studentStats.isPassed && (
-                <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-3xl p-5 text-white shadow-xl shadow-amber-900/15 border-2 border-yellow-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-2xl bg-white/20 text-white shrink-0">
-                        <Award className="w-6 h-6 text-yellow-100 animate-bounce" />
-                      </div>
-                      <h3 className="text-base sm:text-lg font-black tracking-wide">
-                        ยินดีด้วย! ท่านผ่านเกณฑ์การเข้าร่วมกิจกรรม ({studentStats.rate.toFixed(1)}%)
-                      </h3>
-                    </div>
-                    <p className="text-xs text-amber-100 font-medium sm:pl-10">
-                      ท่านสามารถกดรับวุฒิบัตรอิเล็กทรอนิกส์ (E-Certificate) อย่างเป็นทางการเพื่อเก็บไว้ในแฟ้มสะสมงานได้ทันที
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsCertModalOpen(true)}
-                    className="px-5 py-3 rounded-2xl bg-white text-amber-900 hover:bg-amber-50 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer shrink-0"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>ดูและพิมพ์เกียรติบัตร (E-Certificate)</span>
-                  </button>
-                </div>
-              )}
 
               {/* Attendance History Timeline (ทุกวันที่เช็คชื่อ) */}
               <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-3">
@@ -1406,6 +1436,93 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         />
       )}
 
+
+      {/* Announcement Alert Pop-up Modal (เด้งขึ้นกลางหน้าจอทันทีเมื่อนักศึกษาระบุรหัส) */}
+      {activeAnnouncementAlert && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setActiveAnnouncementAlert(null);
+            }}
+          >
+            <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative animate-scaleUp">
+              <div className="flex items-start justify-between gap-3 border-b border-purple-100 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                    activeAnnouncementAlert.priority === 'urgent'
+                      ? 'bg-rose-100 text-rose-700 animate-pulse'
+                      : activeAnnouncementAlert.priority === 'warning'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-purple-100 text-purple-700'
+                  }`}>
+                    {activeAnnouncementAlert.priority === 'urgent' ? (
+                      <Megaphone className="w-5 h-5 text-rose-600" />
+                    ) : (
+                      <Bell className="w-5 h-5 text-purple-600" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                        activeAnnouncementAlert.priority === 'urgent'
+                          ? 'bg-rose-500 text-white'
+                          : activeAnnouncementAlert.priority === 'warning'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-purple-100 text-purple-900'
+                      }`}>
+                        {activeAnnouncementAlert.priority === 'urgent'
+                          ? '🚨 ด่วนที่สุด'
+                          : activeAnnouncementAlert.priority === 'warning'
+                          ? '⚠️ แจ้งเตือนสำคัญ'
+                          : '📢 ประกาศทั่วไป'}
+                      </span>
+                      {activeAnnouncementAlert.targetType === 'specific' && (
+                        <span className="text-[10px] bg-indigo-100 text-indigo-900 font-bold px-2 py-0.5 rounded-full">
+                          🎯 เฉพาะบุคคล
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base sm:text-lg font-black text-purple-950 mt-1">
+                      {activeAnnouncementAlert.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveAnnouncementAlert(null)}
+                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Announcement Content */}
+              <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 text-xs sm:text-sm text-purple-950 leading-relaxed font-medium whitespace-pre-wrap max-h-60 overflow-y-auto">
+                {activeAnnouncementAlert.content}
+              </div>
+
+              {/* Sender info */}
+              <div className="text-[11px] text-purple-700/80 flex items-center justify-between font-semibold pt-1">
+                <span>ประกาศโดย: {activeAnnouncementAlert.authorName || 'ผู้ดูแลระบบ'}</span>
+                <span>{activeAnnouncementAlert.createdAt}</span>
+              </div>
+
+              <div className="pt-2 border-t border-purple-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setActiveAnnouncementAlert(null)}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>รับทราบและปิดหน้าต่าง</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       {/* Official E-Certificate Modal */}
       {isCertModalOpen && selectedStudent && studentStats && (
