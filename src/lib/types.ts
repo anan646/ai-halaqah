@@ -137,6 +137,9 @@ export interface SemesterSettings {
   targetSessions: number; // e.g. 12
   semesterName: string; // e.g. 'ภาคเรียนที่ 1'
   academicYear: string; // e.g. '2567'
+  startDate?: string; // วันเริ่มต้นภาคเรียน (YYYY-MM-DD)
+  endDate?: string; // วันสิ้นสุดภาคเรียน (YYYY-MM-DD)
+  activityDay?: string; // วันจัดกิจกรรม เช่น 'ทุกวันพุธ'
 }
 
 

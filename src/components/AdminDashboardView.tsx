@@ -2097,9 +2097,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <h1 className="text-lg sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight">
                 ศูนย์จัดการระบบและแดชบอร์ดแอดมิน
               </h1>
-              <p className="text-xs text-purple-800/70 mt-0.5">
-                ระบบติดตามและประเมินผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์) ประจำปีการศึกษา 2569
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="text-xs text-purple-800/80">
+                  ระบบติดตามและประเมินผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('system_management')}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200 text-xs font-bold transition-all shadow-xs"
+                  title="คลิกเพื่อไปที่การตั้งค่าภาคเรียน วันเดือนปี และเป้าหมาย"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-purple-700" />
+                  <span>{semesterSettings.semesterName} ปีการศึกษา {semesterSettings.academicYear}</span>
+                  <Edit3 className="w-3 h-3 text-purple-600 ml-0.5" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -5491,18 +5503,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </button>
             </div>
 
-            {/* 6. SEMESTER TARGET SETTINGS */}
+            {/* 6. SEMESTER & DATE SETTINGS */}
             <div className="p-5 rounded-3xl border border-amber-200/80 bg-amber-50/40 space-y-4 md:col-span-1">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
-                  <Award className="w-4 h-4" />
+                  <Calendar className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-extrabold text-purple-950 text-sm">
-                    เป้าหมายกิจกรรมประจำภาคเรียน
+                    ตั้งค่าภาคการศึกษา & กำหนดช่วงวันเดือนปี
                   </h3>
                   <p className="text-[11px] text-purple-700/70">
-                    กำหนดเกณฑ์จำนวนครั้งและการแสดงผลในแดชบอร์ด
+                    กำหนดภาคเรียน ปีการศึกษา วันเริ่มต้น-สิ้นสุด และวันจัดกิจกรรม
                   </p>
                 </div>
               </div>
@@ -5510,19 +5522,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] font-bold text-purple-900 mb-1">ภาคเรียน</label>
-                    <input
-                      type="text"
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">ภาคการศึกษา</label>
+                    <select
                       value={semesterSettings.semesterName}
                       onChange={(e) =>
                         setSemesterSettings({ ...semesterSettings, semesterName: e.target.value })
                       }
-                      placeholder="ภาคเรียนที่ 1"
-                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold"
-                    />
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold bg-white"
+                    >
+                      <option value="ภาคเรียนที่ 1">ภาคเรียนที่ 1</option>
+                      <option value="ภาคเรียนที่ 2">ภาคเรียนที่ 2</option>
+                      <option value="ภาคฤดูร้อน">ภาคฤดูร้อน</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-purple-900 mb-1">ปีการศึกษา</label>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">ปีการศึกษา (พ.ศ.)</label>
                     <input
                       type="text"
                       value={semesterSettings.academicYear}
@@ -5530,35 +5544,84 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         setSemesterSettings({ ...semesterSettings, academicYear: e.target.value })
                       }
                       placeholder="2567"
-                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold"
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold bg-white"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-purple-900 mb-1">
-                    เป้าหมายจำนวนสัปดาห์ / ครั้ง (Target Sessions)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={semesterSettings.targetSessions}
-                    onChange={(e) =>
-                      setSemesterSettings({
-                        ...semesterSettings,
-                        targetSessions: parseInt(e.target.value) || 12,
-                      })
-                    }
-                    className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono font-bold"
-                  />
-                  <p className="text-[10px] text-purple-600 mt-1">
-                    ระบบจะใช้วัดเปอร์เซ็นต์ความคืบหน้าของกิจกรรม เช่น 12 ครั้งต่อภาคเรียน
-                  </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                      วันเริ่มต้นภาคเรียน
+                    </label>
+                    <input
+                      type="date"
+                      value={semesterSettings.startDate || ''}
+                      onChange={(e) =>
+                        setSemesterSettings({ ...semesterSettings, startDate: e.target.value })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                      วันสิ้นสุดภาคเรียน
+                    </label>
+                    <input
+                      type="date"
+                      value={semesterSettings.endDate || ''}
+                      onChange={(e) =>
+                        setSemesterSettings({ ...semesterSettings, endDate: e.target.value })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                      วันจัดกิจกรรมในสัปดาห์
+                    </label>
+                    <select
+                      value={semesterSettings.activityDay || 'ทุกวันพุธ'}
+                      onChange={(e) =>
+                        setSemesterSettings({ ...semesterSettings, activityDay: e.target.value })
+                      }
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold bg-white"
+                    >
+                      <option value="ทุกวันพุธ">ทุกวันพุธ</option>
+                      <option value="ทุกวันพฤหัสบดี">ทุกวันพฤหัสบดี</option>
+                      <option value="ทุกวันศุกร์">ทุกวันศุกร์</option>
+                      <option value="ทุกวันเสาร์">ทุกวันเสาร์</option>
+                      <option value="ทุกวันอาทิตย์">ทุกวันอาทิตย์</option>
+                      <option value="ทุกวันจันทร์">ทุกวันจันทร์</option>
+                      <option value="ทุกวันอังคาร">ทุกวันอังคาร</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                      เป้าหมายจำนวนครั้ง
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={semesterSettings.targetSessions}
+                      onChange={(e) =>
+                        setSemesterSettings({
+                          ...semesterSettings,
+                          targetSessions: parseInt(e.target.value) || 12,
+                        })
+                      }
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono font-bold bg-white"
+                    />
+                  </div>
                 </div>
 
                 {semesterSavedMsg && (
-                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 animate-fadeIn">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>{semesterSavedMsg}</span>
                   </div>
@@ -5570,7 +5633,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
                 >
                   <Save className="w-4 h-4" />
-                  <span>บันทึกการตั้งค่าเป้าหมาย</span>
+                  <span>บันทึกการตั้งค่าภาคการศึกษา & วันเดือนปี</span>
                 </button>
               </div>
             </div>

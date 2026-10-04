@@ -818,6 +818,9 @@ export const DEFAULT_SEMESTER_SETTINGS: SemesterSettings = {
   targetSessions: 12,
   semesterName: 'ภาคเรียนที่ 1',
   academicYear: '2567',
+  startDate: '2024-06-01',
+  endDate: '2024-10-31',
+  activityDay: 'ทุกวันพุธ',
 };
 
 export function getSemesterSettings(): SemesterSettings {
