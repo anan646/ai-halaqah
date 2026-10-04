@@ -46,7 +46,8 @@ import {
   GraduationCap,
   BookOpen,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  PlusCircle
 } from 'lucide-react';
 import {
   AttendanceRecord,
@@ -106,6 +107,8 @@ import {
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
 import { setSavedLogo } from '@/lib/api-client';
+import { ModalPortal } from './ModalPortal';
+import { AdminManualModal } from './AdminManualModal';
 
 interface AdminDashboardViewProps {
   records: AttendanceRecord[];
@@ -362,6 +365,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setAnnTitle('');
     setAnnContent('');
     setAnnTargetIdsStr('');
+    setIsAddAnnouncementModalOpen(false);
     setAnnToast({ text: 'โพสต์ประกาศส่งไปยังระบบนักศึกษาเรียบร้อยแล้ว!', success: true });
     setTimeout(() => setAnnToast(null), 4000);
   };
@@ -676,6 +680,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  // Manual / Guide & Quick Modal States
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isAddAnnouncementModalOpen, setIsAddAnnouncementModalOpen] = useState(false);
+  const [isAddSubAdminModalOpen, setIsAddSubAdminModalOpen] = useState(false);
+  const [isAddMajorModalOpen, setIsAddMajorModalOpen] = useState(false);
+
   // 1. Single Student Add State
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [newStudentData, setNewStudentData] = useState<Partial<Student>>({
@@ -725,6 +735,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (res.success) {
       reloadDataStore();
       setNewMajorInput('');
+      setIsAddMajorModalOpen(false);
     }
     setTimeout(() => setMajorMsg(null), 4000);
   };
@@ -906,6 +917,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setNewSubPasscode('');
       setSubAdminsList(getSubAdmins());
       setSubAdminMsg({ text: res.message, success: true });
+      setIsAddSubAdminModalOpen(false);
     } else {
       setSubAdminMsg({ text: res.message, success: false });
     }
@@ -2123,6 +2135,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 บันทึกแล้ว {overviewKpi.recordedCount} / {overviewKpi.totalTeachers} ท่าน ({overviewKpi.recordedPercent}%)
               </div>
             </div>
+
+            {/* Guide Button */}
+            <button
+              type="button"
+              onClick={() => setIsManualModalOpen(true)}
+              className="flex items-center space-x-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200 text-xs font-bold px-3.5 py-2 rounded-full active:scale-95 transition-all shadow-2xs"
+              title="เปิดคู่มือการใช้งานระบบแอดมิน"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-purple-700" />
+              <span>คู่มือการใช้งาน</span>
+            </button>
 
             <button
               onClick={onLogout}
@@ -4080,16 +4103,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="space-y-4">
               {/* Form: Add New Major */}
               <div className="bg-purple-50/70 border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-purple-200/70 text-purple-900 flex items-center justify-center shrink-0">
-                    <GraduationCap className="w-4 h-4" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-purple-200/70 text-purple-900 flex items-center justify-center shrink-0">
+                      <GraduationCap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-purple-950">เพิ่มสาขาวิชาใหม่สำหรับนักศึกษา</h3>
+                      <p className="text-[11px] text-purple-800/70">
+                        เพิ่มสาขาวิชาใหม่เพื่อรองรับนักศึกษาและหลักสูตรที่เปิดสอนเพิ่มเติมในอนาคต
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-black text-sm text-purple-950">เพิ่มสาขาวิชาใหม่สำหรับนักศึกษา</h3>
-                    <p className="text-[11px] text-purple-800/70">
-                      เพิ่มสาขาวิชาใหม่เพื่อรองรับนักศึกษาและหลักสูตรที่เปิดสอนเพิ่มเติมในอนาคต
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddMajorModalOpen(true)}
+                    className="px-3.5 py-2 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>เปิดหน้าต่างเพิ่มสาขาวิชา</span>
+                  </button>
                 </div>
 
                 <form onSubmit={handleAddNewMajor} className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -4188,9 +4221,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
           {/* EDIT STUDENT MODAL */}
           {editingStudent && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+            <ModalPortal>
+              <div
+                className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setEditingStudent(null);
+                }}
+              >
+                <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-2xl space-y-4 my-auto animate-fadeIn max-h-[92vh] overflow-y-auto">
+                  <div className="flex items-center justify-between border-b border-purple-100 pb-2">
                   <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
                     <Edit3 className="w-4 h-4 text-purple-700" />
                     <span>แก้ไขข้อมูลนักศึกษา</span>
@@ -4316,12 +4355,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </form>
               </div>
             </div>
-          )}
+          </ModalPortal>
+        )}
 
-          {/* EDIT TEACHER MODAL */}
-          {editingTeacher && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-xl space-y-4">
+        {/* EDIT TEACHER MODAL */}
+        {editingTeacher && (
+          <ModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setEditingTeacher(null);
+              }}
+            >
+              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-2xl space-y-4 my-auto animate-fadeIn max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-purple-100 pb-2">
                   <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
                     <Edit3 className="w-4 h-4 text-purple-700" />
@@ -4404,21 +4450,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </form>
               </div>
             </div>
-          )}
+          </ModalPortal>
+        )}
 
           {/* ==================== MODAL: ADD STUDENT (เดี่ยว) ==================== */}
           {isAddStudentModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-purple-100 pb-2">
-                  <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
-                    <UserPlus className="w-4 h-4 text-purple-700" />
-                    <span>เพิ่มข้อมูลนักศึกษาใหม่</span>
-                  </h3>
-                  <button onClick={() => setIsAddStudentModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+            <ModalPortal>
+              <div
+                className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setIsAddStudentModalOpen(false);
+                }}
+              >
+                <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-2xl space-y-4 my-auto animate-fadeIn max-h-[92vh] overflow-y-auto">
+                  <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                    <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
+                      <UserPlus className="w-4 h-4 text-purple-700" />
+                      <span>เพิ่มข้อมูลนักศึกษาใหม่</span>
+                    </h3>
+                    <button onClick={() => setIsAddStudentModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
 
                 <form onSubmit={handleCreateStudent} className="space-y-3 text-xs">
                   <div>
@@ -4545,12 +4598,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </form>
               </div>
             </div>
-          )}
+          </ModalPortal>
+        )}
 
-          {/* ==================== MODAL: ADD TEACHER (เดี่ยว) ==================== */}
-          {isAddTeacherModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-xl space-y-4">
+        {/* ==================== MODAL: ADD TEACHER (เดี่ยว) ==================== */}
+        {isAddTeacherModalOpen && (
+          <ModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setIsAddTeacherModalOpen(false);
+              }}
+            >
+              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-2xl space-y-4 my-auto animate-fadeIn max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-purple-100 pb-2">
                   <h3 className="font-extrabold text-sm sm:text-base text-purple-950 flex items-center gap-1.5">
                     <UserPlus className="w-4 h-4 text-purple-700" />
@@ -4630,12 +4690,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </form>
               </div>
             </div>
-          )}
+          </ModalPortal>
+        )}
 
-          {/* ==================== MODAL: BULK IMPORT / PASTE (คัดลอก-วางจากที่อื่น) ==================== */}
-          {isBulkImportModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-xl border border-purple-200 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+        {/* ==================== MODAL: BULK IMPORT / PASTE (คัดลอก-วางจากที่อื่น) ==================== */}
+        {isBulkImportModalOpen && (
+          <ModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setIsBulkImportModalOpen(false);
+              }}
+            >
+              <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-xl border border-purple-200 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto animate-fadeIn overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-purple-100 pb-2 shrink-0">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center">
@@ -4766,7 +4833,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               </div>
             </div>
-          )}
+          </ModalPortal>
+        )}
         </div>
       )}
 
@@ -5044,14 +5112,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       {/* ==================== TAB: ANNOUNCEMENTS (ระบบส่งประกาศถึงนักศึกษา) ==================== */}
       {activeTab === 'announcements' && (
         <div className="bg-white rounded-3xl border border-purple-100 p-5 sm:p-7 shadow-card space-y-6 animate-fadeIn">
-          <div className="border-b border-purple-100 pb-3">
-            <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-purple-700" />
-              <span>ระบบส่งประกาศและข้อความแจ้งเตือน (ส่งถึงนักศึกษา)</span>
-            </h2>
-            <p className="text-xs text-purple-800/70 mt-1">
-              แอดมินสามารถส่งประกาศไปยังนักศึกษาทุกคน หรือส่งเจาะจงเฉพาะนักศึกษาบางคน เมื่อนักศึกษาค้นหารหัสนักศึกษาจะเห็นประกาศเด่นๆ ที่หน้าแดชบอร์ดของตนเอง
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-3">
+            <div>
+              <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-purple-700" />
+                <span>ระบบส่งประกาศและข้อความแจ้งเตือน (ส่งถึงนักศึกษา)</span>
+              </h2>
+              <p className="text-xs text-purple-800/70 mt-1">
+                แอดมินสามารถส่งประกาศไปยังนักศึกษาทุกคน หรือส่งเจาะจงเฉพาะนักศึกษาบางคน เมื่อนักศึกษาค้นหารหัสนักศึกษาจะเห็นประกาศเด่นๆ ที่หน้าแดชบอร์ดของตนเอง
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddAnnouncementModalOpen(true)}
+              className="px-4 py-2.5 bg-gradient-to-r from-purple-800 to-purple-950 hover:from-purple-900 hover:to-black text-white rounded-2xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>สร้างประกาศใหม่ (หน้าต่างป๊อปอัพ)</span>
+            </button>
           </div>
 
           {/* Form Create Announcement */}
@@ -5328,7 +5406,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             {/* 3. SUB-ADMINS MANAGEMENT */}
             <div className="p-5 rounded-3xl border border-purple-200/80 bg-purple-50/40 space-y-4 md:col-span-2">
-              <div className="flex items-center justify-between border-b border-purple-200/60 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
                     <KeyRound className="w-4 h-4" />
@@ -5342,6 +5420,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </p>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubAdminModalOpen(true)}
+                  className="px-3.5 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 active:scale-95"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>เพิ่มแอดมินรอง (หน้าต่างป๊อปอัพ)</span>
+                </button>
               </div>
 
               {/* Form add sub-admin */}
@@ -5696,58 +5782,359 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* STUDENT DETAIL MODAL */}
       {selectedStudentForModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-          <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-lg border border-purple-200 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-purple-100 pb-2">
-              <div>
-                <h3 className="font-extrabold text-base text-purple-950">{selectedStudentForModal.fullName}</h3>
-                <p className="text-xs text-purple-700 font-mono">
-                  รหัส: {selectedStudentForModal.studentId} • {selectedStudentForModal.groupName}
-                </p>
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedStudentForModal(null);
+            }}
+          >
+            <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative">
+              <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                <div>
+                  <h3 className="font-extrabold text-base text-purple-950">{selectedStudentForModal.fullName}</h3>
+                  <p className="text-xs text-purple-700 font-mono">
+                    รหัส: {selectedStudentForModal.studentId} • {selectedStudentForModal.groupName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentForModal(null)}
+                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button onClick={() => setSelectedStudentForModal(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* History logs for this student */}
-            <div className="max-h-72 overflow-y-auto divide-y divide-purple-50">
-              {records
-                .filter((r) => r.studentId === selectedStudentForModal.studentId)
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .map((r, i) => (
-                  <div key={i} className="py-2.5 flex items-center justify-between text-xs">
-                    <span className="font-mono text-purple-900">{formatThaiDate(r.date)}</span>
-                    <span className="font-mono text-purple-600 text-[11px]">{r.recordedTime || '-'} น.</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                        r.status === 'มา'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : r.status === 'ขาด'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                  </div>
-                ))}
-              {records.filter((r) => r.studentId === selectedStudentForModal.studentId).length === 0 && (
-                <div className="py-8 text-center text-xs text-gray-400">ยังไม่มีประวัติการเช็คชื่อ</div>
-              )}
-            </div>
+              {/* History logs for this student */}
+              <div className="max-h-72 overflow-y-auto divide-y divide-purple-50">
+                {records
+                  .filter((r) => r.studentId === selectedStudentForModal.studentId)
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .map((r, i) => (
+                    <div key={i} className="py-2.5 flex items-center justify-between text-xs">
+                      <span className="font-mono text-purple-900">{formatThaiDate(r.date)}</span>
+                      <span className="font-mono text-purple-600 text-[11px]">{r.recordedTime || '-'} น.</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          r.status === 'มา'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : r.status === 'ขาด'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </div>
+                  ))}
+                {records.filter((r) => r.studentId === selectedStudentForModal.studentId).length === 0 && (
+                  <div className="py-8 text-center text-xs text-gray-400">ยังไม่มีประวัติการเช็คชื่อ</div>
+                )}
+              </div>
 
-            <div className="pt-2 border-t border-purple-100 text-right">
-              <button
-                type="button"
-                onClick={() => setSelectedStudentForModal(null)}
-                className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl"
-              >
-                ปิดหน้าต่าง
-              </button>
+              <div className="pt-2 border-t border-purple-100 text-right">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentForModal(null)}
+                  className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
+      )}
+
+      {/* ADMIN MANUAL MODAL (คู่มือการใช้งาน UX/UI มินิมอล อ่านเข้าใจง่าย) */}
+      <AdminManualModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+      />
+
+      {/* ADD ANNOUNCEMENT MODAL */}
+      {isAddAnnouncementModalOpen && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsAddAnnouncementModalOpen(false);
+            }}
+          >
+            <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative">
+              <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center">
+                    <Megaphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-purple-950">สร้างประกาศใหม่</h3>
+                    <p className="text-[11px] text-purple-700">ส่งข้อความแจ้งเตือนถึงนักศึกษา</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddAnnouncementModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {annToast && (
+                <div className={`p-3 rounded-2xl text-xs font-bold ${annToast.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {annToast.text}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateAnnouncement} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="font-bold text-purple-900 block mb-1">หัวข้อประกาศ *</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น กำหนดการสอบประเมินอัลกุรอาน, แจ้งเตือนเวลาเข้ากิจกรรม"
+                    value={annTitle}
+                    onChange={(e) => setAnnTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 font-bold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-purple-900 block mb-1">ข้อความรายละเอียดประกาศ *</label>
+                  <textarea
+                    rows={4}
+                    placeholder="พิมพ์ข้อความที่ต้องการแจ้งให้นักศึกษาทราบ..."
+                    value={annContent}
+                    onChange={(e) => setAnnContent(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-purple-900 block mb-1">ระดับความสำคัญ</label>
+                    <select
+                      value={annPriority}
+                      onChange={(e) => setAnnPriority(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold text-purple-950"
+                    >
+                      <option value="normal">📌 ประกาศทั่วไป (Normal)</option>
+                      <option value="warning">⚠️ แจ้งเตือนสำคัญ (Warning)</option>
+                      <option value="urgent">🚨 ด่วนที่สุด (Urgent)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-purple-900 block mb-1">กลุ่มเป้าหมายผู้รับ</label>
+                    <select
+                      value={annTargetType}
+                      onChange={(e) => setAnnTargetType(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold text-purple-950"
+                    >
+                      <option value="all">📢 นักศึกษาทุกคนในระบบ</option>
+                      <option value="specific">🎯 ระบุเฉพาะรหัสนักศึกษา</option>
+                    </select>
+                  </div>
+                </div>
+
+                {annTargetType === 'specific' && (
+                  <div className="animate-fadeIn">
+                    <label className="font-bold text-purple-900 block mb-1">
+                      ระบุรหัสนักศึกษา (คั่นด้วยเครื่องหมายจุลภาค , หรือเว้นวรรค)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="เช่น 681441001, 681441002, 671441010"
+                      value={annTargetIdsStr}
+                      onChange={(e) => setAnnTargetIdsStr(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 font-mono font-bold"
+                    />
+                    <p className="text-[10px] text-purple-700/70 mt-1">
+                      * นักศึกษาที่มีรหัสตรงกับรายการนี้เท่านั้นที่จะมองเห็นประกาศนี้เมื่อค้นหารหัสตนเอง
+                    </p>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-purple-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddAnnouncementModalOpen(false)}
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                  >
+                    <Megaphone className="w-4 h-4" />
+                    <span>โพสต์ประกาศทันที</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ADD SUB-ADMIN MODAL */}
+      {isAddSubAdminModalOpen && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsAddSubAdminModalOpen(false);
+            }}
+          >
+            <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-2xl space-y-4 my-auto relative">
+              <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-purple-950">เพิ่มแอดมินรองคนใหม่</h3>
+                    <p className="text-[11px] text-purple-700">กำหนดชื่อและรหัสผ่านสำหรับล็อกอิน</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubAdminModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {subAdminMsg && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold ${subAdminMsg.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {subAdminMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleAddSubAdmin} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-purple-900 block mb-1">ชื่อแอดมินรอง *</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น อ.ฟาฏิมะห์, ครูสุไลมาน"
+                    value={newSubName}
+                    onChange={(e) => setNewSubName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 font-bold text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-purple-900 block mb-1">รหัสผ่านสำหรับล็อกอิน (Passcode) *</label>
+                  <input
+                    type="password"
+                    placeholder="ระบุรหัสผ่าน (อย่างน้อย 4 หลัก)"
+                    value={newSubPasscode}
+                    onChange={(e) => setNewSubPasscode(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 font-mono font-bold text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    required
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-purple-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddSubAdminModalOpen(false)}
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>บันทึกแอดมินรอง</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ADD MAJOR MODAL */}
+      {isAddMajorModalOpen && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsAddMajorModalOpen(false);
+            }}
+          >
+            <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md border border-purple-200 shadow-2xl space-y-4 my-auto relative">
+              <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-purple-950">เพิ่มสาขาวิชาใหม่</h3>
+                    <p className="text-[11px] text-purple-700">สำหรับนักศึกษาและหลักสูตรใหม่</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddMajorModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {majorMsg && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold ${majorMsg.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {majorMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleAddNewMajor} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-purple-900 block mb-1">ชื่อสาขาวิชาใหม่ *</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น นวัตกรรมดิจิทัล, วิศวกรรมปัญญาประดิษฐ์..."
+                    value={newMajorInput}
+                    onChange={(e) => setNewMajorInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs border border-purple-200 rounded-xl bg-purple-50/30 font-bold text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    required
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl bg-purple-50 border border-purple-100 text-[11px] text-purple-800 space-y-1">
+                  <p className="font-bold">คำแนะนำ:</p>
+                  <p>สาขาวิชาที่เพิ่มใหม่จะปรากฏในตัวเลือกของระบบทันที และสามารถจัดสรรนักศึกษาเข้ากลุ่มได้</p>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-purple-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddMajorModalOpen(false)}
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>เพิ่มสาขาวิชา</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Floating Sync Toast Notification */}

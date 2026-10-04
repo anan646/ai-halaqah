@@ -17,6 +17,7 @@ import {
   Clock,
   Award
 } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 export type TutorialRole = 'student' | 'faculty';
 
@@ -247,12 +248,16 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
   const StepIcon = currentStep.icon;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-purple-950/65 backdrop-blur-md animate-fadeIn select-none overflow-hidden"
-    >
-      <div className="relative w-full max-w-[420px] bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-purple-200/90 overflow-hidden flex flex-col max-h-[96svh] sm:max-h-[92svh]">
+    <ModalPortal>
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-purple-950/65 backdrop-blur-md animate-fadeIn select-none overflow-hidden"
+      >
+        <div className="relative w-full max-w-[420px] bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-purple-200/90 overflow-hidden flex flex-col max-h-[96svh] sm:max-h-[92svh]">
         {/* Top Progress Bar */}
         <div className="w-full bg-purple-100 h-1 overflow-hidden shrink-0">
           <div
@@ -394,5 +399,6 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
         </div>
       </div>
     </div>
-  );
+  </ModalPortal>
+);
 };
