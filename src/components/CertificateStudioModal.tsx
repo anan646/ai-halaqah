@@ -18,6 +18,7 @@ import {
   FileText,
   RotateCcw,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { ModalPortal } from './ModalPortal';
 import {
@@ -27,6 +28,7 @@ import {
   saveCertificateConfig,
   DEFAULT_CERTIFICATE_CONFIG,
 } from '@/lib/certificate-config';
+import { exportCertificateToPdf, printCertificate } from '@/lib/certificate-export';
 
 interface CertificateStudioModalProps {
   isOpen: boolean;
@@ -42,6 +44,8 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
   const [config, setConfig] = useState<CertificateConfig>(DEFAULT_CERTIFICATE_CONFIG);
   const [activeTab, setActiveTab] = useState<'template' | 'content' | 'layout'>('template');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isExportingPdfSample, setIsExportingPdfSample] = useState(false);
+  const [isPrintingSample, setIsPrintingSample] = useState(false);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -109,76 +113,32 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handlePrintSample = () => {
-    window.print();
+  const handlePrintSample = async () => {
+    setIsPrintingSample(true);
+    try {
+      await printCertificate('studio-cert-preview', 'เกียรติบัตร_ตัวอย่าง_Halaqah');
+    } catch (err) {
+      console.error('Print sample failed:', err);
+      window.print();
+    } finally {
+      setIsPrintingSample(false);
+    }
   };
 
-  const handleSavePdfSample = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('กรุณาอนุญาตป๊อปอัปเพื่อบันทึกไฟล์ PDF');
-      return;
+  const handleSavePdfSample = async () => {
+    setIsExportingPdfSample(true);
+    try {
+      await exportCertificateToPdf('studio-cert-preview', 'เกียรติบัตร_ตัวอย่าง_Halaqah.pdf', {
+        scale: 3,
+      });
+      setToastMsg('📄 ดาวน์โหลดไฟล์เกียรติบัตรตัวอย่าง PDF (A4 แนวนอน) สำเร็จแล้ว!');
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch (err) {
+      console.error('Export sample PDF failed:', err);
+      alert('เกิดข้อผิดพลาดในการสร้างไฟล์ PDF ตัวอย่าง');
+    } finally {
+      setIsExportingPdfSample(false);
     }
-    const certEl = document.getElementById('studio-cert-preview');
-    if (!certEl) return;
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>เกียรติบัตร_ตัวอย่าง.pdf</title>
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-        <style>
-          @page { size: A4 landscape; margin: 0; }
-          html, body {
-            margin: 0;
-            padding: 0;
-            width: 297mm;
-            height: 210mm;
-            overflow: hidden;
-            font-family: 'Sarabun', sans-serif;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            background: #fff;
-          }
-          .cert-wrap {
-            width: 297mm;
-            height: 210mm;
-            box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            margin: 0;
-          }
-          .cert-wrap > div {
-            width: 100% !important;
-            height: 100% !important;
-            max-width: none !important;
-            aspect-ratio: auto !important;
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            box-sizing: border-box !important;
-            padding: 12mm 15mm !important;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="cert-wrap">
-          ${certEl.outerHTML}
-        </div>
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-            window.onafterprint = function() { window.close(); };
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
   };
 
   // Sample student mock
@@ -722,19 +682,29 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                   <button
                     type="button"
                     onClick={handlePrintSample}
-                    className="px-3 py-1.5 rounded-xl bg-purple-800 hover:bg-purple-900 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    disabled={isPrintingSample || isExportingPdfSample}
+                    className="px-3 py-1.5 rounded-xl bg-purple-800 hover:bg-purple-900 active:scale-95 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                   >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>พิมพ์</span>
+                    {isPrintingSample ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Printer className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isPrintingSample ? 'กำลังเตรียมพิมพ์...' : 'พิมพ์'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleSavePdfSample}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    disabled={isExportingPdfSample || isPrintingSample}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>บันทึก PDF</span>
+                    {isExportingPdfSample ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isExportingPdfSample ? 'กำลังสร้าง PDF...' : 'บันทึก PDF'}</span>
                   </button>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Award, Printer, X, Sparkles, Download, CheckCircle2 } from 'lucide-react';
+import { Award, Printer, X, Sparkles, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { Student, GroupLevel } from '@/lib/types';
 import { getStudentMajor, getStudentLevel, getSemesterSettings } from '@/lib/data-store';
 import {
@@ -9,6 +9,7 @@ import {
   CERTIFICATE_TEMPLATES,
   getCertificateConfig,
 } from '@/lib/certificate-config';
+import { exportCertificateToPdf, printCertificate } from '@/lib/certificate-export';
 
 interface CertificateModalProps {
   student: Student;
@@ -32,6 +33,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const major = getStudentMajor(student);
   const level = getStudentLevel(student);
   const [config, setConfig] = useState<CertificateConfig>(getCertificateConfig());
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   useEffect(() => {
     setConfig(getCertificateConfig());
@@ -53,78 +57,37 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     }
   };
 
-  // 1. Dedicated Print Handler
-  const handlePrint = () => {
-    window.print();
+  // 1. Dedicated Print Handler (Rendered via high-res canvas image so backgrounds/colors are not stripped)
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      await printCertificate('printable-certificate', `พิมพ์เกียรติบัตร_${student.studentId}_${student.fullName}`);
+    } catch (err) {
+      console.error('Print failed:', err);
+      window.print();
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
-  // 2. Dedicated Save PDF Handler (Separated as requested)
-  const handleSavePdf = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('กรุณาอนุญาตป๊อปอัปเพื่อเปิดหน้าต่างบันทึก PDF');
-      return;
-    }
-    const certEl = document.getElementById('printable-certificate');
-    if (!certEl) return;
+  // 2. Dedicated Save PDF Handler (100% exact replica A4 Landscape PDF via html2canvas & jsPDF)
+  const handleSavePdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      const safeId = student.studentId || 'std';
+      const cleanName = (student.fullName || 'นักศึกษา').replace(/[/\\?%*:|"<>]/g, '_');
+      const filename = `เกียรติบัตร_${safeId}_${cleanName}.pdf`;
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>เกียรติบัตร_${student.studentId}_${student.fullName}.pdf</title>
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-        <style>
-          @page { size: A4 landscape; margin: 0; }
-          html, body {
-            margin: 0;
-            padding: 0;
-            width: 297mm;
-            height: 210mm;
-            overflow: hidden;
-            font-family: 'Sarabun', sans-serif;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            background: #fff;
-          }
-          .cert-wrap {
-            width: 297mm;
-            height: 210mm;
-            box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            margin: 0;
-          }
-          .cert-wrap > div {
-            width: 100% !important;
-            height: 100% !important;
-            max-width: none !important;
-            aspect-ratio: auto !important;
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            box-sizing: border-box !important;
-            padding: 12mm 15mm !important;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="cert-wrap">
-          ${certEl.outerHTML}
-        </div>
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-            window.onafterprint = function() { window.close(); };
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
+      await exportCertificateToPdf('printable-certificate', filename, { scale: 3 });
+      
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      console.error('Save PDF failed:', err);
+      alert('เกิดข้อผิดพลาดในการสร้างไฟล์ PDF กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const activeLogo = config.customLogoUrl || customLogo;
@@ -200,22 +163,44 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-3.5 py-1.5 bg-white text-amber-950 hover:bg-amber-50 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+              disabled={isPrinting || isExportingPdf}
+              className="px-3.5 py-1.5 bg-white text-amber-950 hover:bg-amber-50 disabled:opacity-60 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
               title="สั่งพิมพ์ออกทางเครื่องพิมพ์"
             >
-              <Printer className="w-3.5 h-3.5 text-amber-700" />
-              <span>พิมพ์เกียรติบัตร</span>
+              {isPrinting ? (
+                <Loader2 className="w-3.5 h-3.5 text-amber-700 animate-spin" />
+              ) : (
+                <Printer className="w-3.5 h-3.5 text-amber-700" />
+              )}
+              <span>{isPrinting ? 'กำลังเตรียมพิมพ์...' : 'พิมพ์เกียรติบัตร'}</span>
             </button>
 
             {/* Button 2: SAVE AS PDF */}
             <button
               type="button"
               onClick={handleSavePdf}
-              className="px-3.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
-              title="บันทึกไฟล์เป็น PDF ขนาด A4 แนวนอน"
+              disabled={isExportingPdf || isPrinting}
+              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-60 ${
+                downloadSuccess
+                  ? 'bg-emerald-800 text-emerald-100'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
+              title="บันทึกไฟล์เป็น PDF คุณภาพสูง ขนาด A4 แนวนอน (100% ตรงกับบนเว็บ)"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>บันทึกเป็น PDF</span>
+              {isExportingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : downloadSuccess ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {isExportingPdf
+                  ? 'กำลังสร้าง PDF...'
+                  : downloadSuccess
+                  ? 'ดาวน์โหลดแล้ว!'
+                  : 'บันทึกเป็น PDF'}
+              </span>
             </button>
 
             <button
