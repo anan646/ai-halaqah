@@ -70,7 +70,14 @@ import {
   inferMajorFromStudentId,
   DEFAULT_MAJORS,
 } from '@/lib/data-store';
-import { exportToExcel, exportToWord, downloadPdfReport, printReport } from '@/lib/export-utils';
+import {
+  exportToExcel,
+  exportToWord,
+  downloadPdfReport,
+  printReport,
+  exportComprehensiveMasterExcel,
+  exportGroupDetailedExcel,
+} from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
 import { setSavedLogo } from '@/lib/api-client';
 
@@ -178,6 +185,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   // Logo file input ref
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // ==================== EXPORT CENTER ADVANCED STATE ====================
+  const [exportMode, setExportMode] = useState<'master' | 'group'>('master');
+  const [exportSelectedTeacher, setExportSelectedTeacher] = useState<string>('');
 
   // ==================== ANNOUNCEMENTS STATE ====================
   const [announcementsList, setAnnouncementsList] = useState<Announcement[]>([]);
@@ -4182,102 +4193,272 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* ==================== TAB 6: EXPORT CENTER (ศูนย์ส่งออกไฟล์) ==================== */}
+      {/* ==================== TAB 6: EXPORT CENTER (ศูนย์ส่งออกไฟล์อัจฉริยะ) ==================== */}
       {activeTab === 'export' && (
         <div className="bg-white rounded-3xl border border-purple-100 p-5 sm:p-7 shadow-card space-y-6 animate-fadeIn">
-          <div>
-            <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
-              <Download className="w-5 h-5 text-purple-700" />
-              <span>ศูนย์ส่งออกรายงาน (Export Center)</span>
-            </h2>
-            <p className="text-xs text-purple-800/70 mt-1">
-              เลือกรูปแบบไฟล์ที่ต้องการส่งออก ระบบจัดรูปแบบให้อัตโนมัติพร้อมนำไปใช้งานได้ทันที
-            </p>
+          <div className="border-b border-purple-100 pb-4">
+            <div className="flex items-center gap-2">
+              <span className="p-2 rounded-2xl bg-purple-100 text-purple-900 text-lg">📤</span>
+              <div>
+                <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
+                  <span>ศูนย์ส่งออกรายงานอัจฉริยะ (Comprehensive Export Center)</span>
+                </h2>
+                <p className="text-xs text-purple-800/70 mt-0.5">
+                  รองรับการเลือกส่งออกทั้งแบบ <strong>ภาพรวมทั้งโครงการ (มีรายละเอียดนักศึกษาทุกคน การเข้าร่วม อัตรา % และผลผ่าน/ไม่ผ่าน)</strong> หรือเลือก <strong>ส่งออกแบบรายกลุ่ม</strong>
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* 1. Excel */}
-            <div className="p-5 rounded-3xl border border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50/70 transition-all flex flex-col justify-between space-y-3">
-              <div>
-                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-3 shadow-sm">
-                  <FileSpreadsheet className="w-5 h-5" />
-                </div>
-                <h3 className="font-black text-purple-950 text-base">รายงาน Excel (.xlsx)</h3>
-                <p className="text-xs text-purple-800/80 mt-1">
-                  ไฟล์สเปรดชีต Excel สมบูรณ์แบบ มีแผ่นงานแยกภาพรวม, สรุปรายอาจารย์ และรายชื่อนักศึกษา เหมาะสำหรับวิเคราะห์ต่อ
-                </p>
-              </div>
+          {/* Mode Switcher: ภาพรวมทั้งโครงการ vs รายกลุ่ม */}
+          <div className="bg-purple-50/70 p-3 sm:p-4 rounded-3xl border border-purple-200/80 space-y-4">
+            <label className="text-xs font-black text-purple-950 block">
+              1. เลือกขอบเขตข้อมูลที่ต้องการส่งออก (Export Scope):
+            </label>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option 1: Master Overview */}
               <button
                 type="button"
-                onClick={() => exportToExcel(records, teacherSummaries, studentSummaries, 'รายงานการเช็คชื่อหะละเกาะห์')}
-                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                onClick={() => setExportMode('master')}
+                className={`p-4 rounded-2xl text-left border transition-all flex items-start gap-3 ${
+                  exportMode === 'master'
+                    ? 'bg-purple-900 text-white border-purple-950 shadow-md ring-2 ring-purple-600'
+                    : 'bg-white hover:bg-purple-100/50 border-purple-200 text-purple-950'
+                }`}
               >
-                <Download className="w-4 h-4" />
-                <span>ดาวน์โหลด Excel</span>
+                <div className={`p-2 rounded-xl text-lg ${exportMode === 'master' ? 'bg-purple-800 text-amber-300' : 'bg-purple-100 text-purple-800'}`}>
+                  📊
+                </div>
+                <div>
+                  <div className="font-black text-sm flex items-center gap-1.5">
+                    <span>ภาพรวมทั้งโครงการ (Master Overview)</span>
+                    {exportMode === 'master' && <span className="text-[10px] bg-amber-400 text-purple-950 px-1.5 py-0.2 rounded font-black">เลือกอยู่</span>}
+                  </div>
+                  <p className={`text-xs mt-1 ${exportMode === 'master' ? 'text-purple-200' : 'text-purple-800/70'}`}>
+                    มีสถิติภาพรวมทุกกลุ่ม, รายชื่อนักศึกษาทุกคน (40 กลุ่ม), สถิติ มา-ขาด-ลา, อัตราการเข้าร่วม %, และสรุปผล <strong>ผ่าน/ไม่ผ่านเกณฑ์</strong> ครบถ้วน
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: By Group / Teacher */}
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMode('group');
+                  if (!exportSelectedTeacher && teachers.length > 0) {
+                    setExportSelectedTeacher(teachers[0].name);
+                  }
+                }}
+                className={`p-4 rounded-2xl text-left border transition-all flex items-start gap-3 ${
+                  exportMode === 'group'
+                    ? 'bg-purple-900 text-white border-purple-950 shadow-md ring-2 ring-purple-600'
+                    : 'bg-white hover:bg-purple-100/50 border-purple-200 text-purple-950'
+                }`}
+              >
+                <div className={`p-2 rounded-xl text-lg ${exportMode === 'group' ? 'bg-purple-800 text-amber-300' : 'bg-purple-100 text-purple-800'}`}>
+                  👥
+                </div>
+                <div>
+                  <div className="font-black text-sm flex items-center gap-1.5">
+                    <span>เฉพาะกลุ่มที่เลือก (Single Group)</span>
+                    {exportMode === 'group' && <span className="text-[10px] bg-amber-400 text-purple-950 px-1.5 py-0.2 rounded font-black">เลือกอยู่</span>}
+                  </div>
+                  <p className={`text-xs mt-1 ${exportMode === 'group' ? 'text-purple-200' : 'text-purple-800/70'}`}>
+                    เจาะจงเฉพาะกลุ่มของอาจารย์ท่านใดท่านหนึ่ง แสดงตาราง Matrix ตามวันที่บันทึกจริง พร้อมสรุปรายบุคคลของกลุ่มนั้น
+                  </p>
+                </div>
               </button>
             </div>
 
-            {/* 2. Word */}
-            <div className="p-5 rounded-3xl border border-blue-200 bg-blue-50/40 hover:bg-blue-50/70 transition-all flex flex-col justify-between space-y-3">
-              <div>
-                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center mb-3 shadow-sm">
-                  <FileText className="w-5 h-5" />
+            {/* If Group mode selected: Show Teacher Dropdown & Quick Selector */}
+            {exportMode === 'group' && (
+              <div className="pt-2 border-t border-purple-200/80 animate-fadeIn space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <label className="text-xs font-bold text-purple-950">
+                    เลือกอาจารย์ผู้ดูแลกลุ่ม:
+                  </label>
+                  <select
+                    value={exportSelectedTeacher || (teachers[0]?.name ?? '')}
+                    onChange={(e) => setExportSelectedTeacher(e.target.value)}
+                    className="w-full sm:w-80 px-3.5 py-2 text-xs font-bold border border-purple-300 rounded-xl bg-white text-purple-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  >
+                    {teachers.map((t) => (
+                      <option key={t.groupId} value={t.name}>
+                        {t.name} ({t.groupName} - {t.gender} {t.yearLevel})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <h3 className="font-black text-purple-950 text-base">รายงาน Word (.doc)</h3>
-                <p className="text-xs text-purple-800/80 mt-1">
-                  เอกสารรายงานสรุปผลกิจกรรมการศึกษาอัลกุรอาน จัดรูปแบบตารางทางการพร้อมสำหรับพิมพ์เสนอผู้บริหาร
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => exportToWord(records, teacherSummaries, 'รายงานการเช็คชื่อหะละเกาะห์')}
-                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
-              >
-                <Download className="w-4 h-4" />
-                <span>ดาวน์โหลด Word</span>
-              </button>
-            </div>
 
-            {/* 3. PDF */}
-            <div className="p-5 rounded-3xl border border-purple-200 bg-purple-50/40 hover:bg-purple-50/70 transition-all flex flex-col justify-between space-y-3">
-              <div>
-                <div className="w-10 h-10 rounded-2xl bg-purple-700 text-white flex items-center justify-center mb-3 shadow-sm">
-                  <Download className="w-5 h-5" />
-                </div>
-                <h3 className="font-black text-purple-950 text-base">เอกสารสรุป PDF (.pdf)</h3>
-                <p className="text-xs text-purple-800/80 mt-1">
-                  รายงาน PDF ทางการ มีตราคณะและรายละเอียดตารางสรุปผลครบถ้วน เปิดอ่านได้บนทุกอุปกรณ์
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => downloadPdfReport(records, teacherSummaries, 'รายงานการเช็คชื่อหะละเกาะห์')}
-                className="w-full py-2.5 px-4 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
-              >
-                <Download className="w-4 h-4" />
-                <span>ดาวน์โหลด PDF</span>
-              </button>
-            </div>
+                {/* Selected teacher mini badge info */}
+                {(() => {
+                  const targetTeacher = teachers.find((t) => t.name === (exportSelectedTeacher || teachers[0]?.name));
+                  if (!targetTeacher) return null;
+                  const tStudents = students.filter((s) => s.teacherName === targetTeacher.name);
+                  const tRecords = records.filter((r) => r.teacherName === targetTeacher.name);
+                  const tDates = Array.from(new Set(tRecords.map((r) => r.date))).sort();
 
-            {/* 4. Print */}
-            <div className="p-5 rounded-3xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 transition-all flex flex-col justify-between space-y-3">
-              <div>
-                <div className="w-10 h-10 rounded-2xl bg-gray-800 text-white flex items-center justify-center mb-3 shadow-sm">
-                  <Printer className="w-5 h-5" />
-                </div>
-                <h3 className="font-black text-purple-950 text-base">พิมพ์รายงาน (Print)</h3>
-                <p className="text-xs text-purple-800/80 mt-1">
-                  เปิดหน้าต่างสั่งพิมพ์ทางเครื่องพิมพ์โดยตรง พร้อมซ่อนเมนูและเครื่องมือต่างๆ ให้หน้ากระดาษสะอาดเรียบร้อย
-                </p>
+                  return (
+                    <div className="p-3 rounded-2xl bg-white border border-purple-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-purple-950">{targetTeacher.name}</span>
+                        <span className="text-purple-700 font-semibold">({targetTeacher.groupName} • {targetTeacher.gender})</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-purple-800/80 font-bold">
+                        <span>นักศึกษา {tStudents.length} คน</span>
+                        <span>•</span>
+                        <span>บันทึกแล้ว {tDates.length} ครั้ง</span>
+                        <span>•</span>
+                        <span>เช็คชื่อรวม {tRecords.length} รายการ</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-              <button
-                type="button"
-                onClick={() => printReport()}
-                className="w-full py-2.5 px-4 bg-gray-800 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
-              >
-                <Printer className="w-4 h-4" />
-                <span>สั่งพิมพ์ทันที</span>
-              </button>
+            )}
+          </div>
+
+          {/* Export Action Cards (Excel, Word, PDF, Print) */}
+          <div className="space-y-3">
+            <label className="text-xs font-black text-purple-950 block">
+              2. เลือกรูปแบบเอกสารที่ต้องการดาวน์โหลด (File Formats):
+            </label>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Excel Action */}
+              <div className="p-5 rounded-3xl border border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50/70 transition-all flex flex-col justify-between space-y-3 group hover:shadow-card">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-black text-purple-950 text-base">รายงาน Excel (.xlsx)</h3>
+                  <p className="text-xs text-purple-800/80 mt-1">
+                    {exportMode === 'master'
+                      ? 'มี 5 แผ่นงาน (KPI สรุป, ตาราง 40 กลุ่ม, ผลประเมิน นศ. ทุกคน, นศ. ไม่ผ่านเกณฑ์, Matrix รายวัน)'
+                      : 'ตาราง Matrix รายบุคคลของกลุ่มนี้ บันทึกการเข้าเรียนรายวัน พร้อมคำนวณร้อยละและผลประเมิน'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (exportMode === 'master') {
+                      exportComprehensiveMasterExcel(
+                        records,
+                        teacherSummaries,
+                        studentSummaries,
+                        distinctRecordedDates,
+                        'รายงานภาพรวมทั้งโครงการ'
+                      );
+                    } else {
+                      const tName = exportSelectedTeacher || teachers[0]?.name;
+                      const targetTeacher = teachers.find((t) => t.name === tName);
+                      const tStudents = students.filter((s) => s.teacherName === tName);
+                      const tRecords = records.filter((r) => r.teacherName === tName);
+                      exportGroupDetailedExcel(
+                        tName,
+                        targetTeacher?.groupName || 'กลุ่ม',
+                        tStudents,
+                        tRecords
+                      );
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>ดาวน์โหลด Excel</span>
+                </button>
+              </div>
+
+              {/* 2. Word Action */}
+              <div className="p-5 rounded-3xl border border-blue-200 bg-blue-50/40 hover:bg-blue-50/70 transition-all flex flex-col justify-between space-y-3 group hover:shadow-card">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-black text-purple-950 text-base">รายงาน Word (.doc / .docx)</h3>
+                  <p className="text-xs text-purple-800/80 mt-1">
+                    {exportMode === 'master'
+                      ? 'เอกสารรายงานทางการสรุปผลทั้งโครงการ จัดตารางสรุป 40 กลุ่ม พร้อมเสนอผู้บริหาร'
+                      : 'เอกสารใบบันทึกเช็คชื่อของกลุ่มที่เลือก จัดตารางรายชื่อพร้อมช่องลายเซ็นอาจารย์ผู้ดูแล'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (exportMode === 'master') {
+                      exportToWord(records, teacherSummaries, 'รายงานการเช็คชื่อหะละเกาะห์_ภาพรวม');
+                    } else {
+                      const tName = exportSelectedTeacher || teachers[0]?.name;
+                      exportTeacherWord(tName);
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>ดาวน์โหลด Word</span>
+                </button>
+              </div>
+
+              {/* 3. PDF Action */}
+              <div className="p-5 rounded-3xl border border-purple-200 bg-purple-50/40 hover:bg-purple-50/70 transition-all flex flex-col justify-between space-y-3 group hover:shadow-card">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-purple-700 text-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-black text-purple-950 text-base">เอกสาร PDF ทางการ (.pdf)</h3>
+                  <p className="text-xs text-purple-800/80 mt-1">
+                    {exportMode === 'master'
+                      ? 'รายงานสรุปภาพรวมโครงการ มีตราคณะสัญลักษณ์และสถิติ มา-ขาด-ลา ร้อยละผ่านเกณฑ์'
+                      : 'รายงานสรุปผลรายกลุ่มพร้อมรายละเอียดนักศึกษาในกลุ่ม พิมพ์เป็นไฟล์ PDF ได้ทันที'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (exportMode === 'master') {
+                      downloadPdfReport(records, teacherSummaries, 'รายงานภาพรวมทั้งโครงการ');
+                    } else {
+                      const tName = exportSelectedTeacher || teachers[0]?.name;
+                      printTeacherReport(tName);
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>เปิด PDF / พิมพ์</span>
+                </button>
+              </div>
+
+              {/* 4. Print Action */}
+              <div className="p-5 rounded-3xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 transition-all flex flex-col justify-between space-y-3 group hover:shadow-card">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-gray-800 text-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
+                    <Printer className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-black text-purple-950 text-base">สั่งพิมพ์ออกทางเครื่องพิมพ์</h3>
+                  <p className="text-xs text-purple-800/80 mt-1">
+                    {exportMode === 'master'
+                      ? 'พิมพ์เล่มรายงานฉบับสมบูรณ์รวม 40 กลุ่ม (Booklet) ทุกอาจารย์พร้อมกันอัตโนมัติ'
+                      : 'พิมพ์ใบบันทึกเช็คชื่อของกลุ่มที่เลือกโดยตรง พร้อมซ่อนเครื่องมือและเมนูต่างๆ'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (exportMode === 'master') {
+                      printAllTeachersBooklet();
+                    } else {
+                      const tName = exportSelectedTeacher || teachers[0]?.name;
+                      printTeacherReport(tName);
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 bg-gray-800 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>{exportMode === 'master' ? 'พิมพ์เล่ม 40 กลุ่ม' : 'สั่งพิมพ์กลุ่มนี้'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

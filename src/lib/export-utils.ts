@@ -12,7 +12,50 @@ export function exportToExcel(
 ) {
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: ข้อมูลการเช็คชื่อทั้งหมด (Detailed Records)
+  // Sheet 1: สรุปภาพรวมและสถิติรายกลุ่ม (Overview & Teachers)
+  const teacherRows = teacherSummaries.map((t, i) => ({
+    'ลำดับ': i + 1,
+    'อาจารย์ผู้รับผิดชอบ': t.teacherName,
+    'กลุ่ม': t.groupName,
+    'ชั้นปี': t.yearLevel,
+    'เพศ': t.gender,
+    'จำนวนนักศึกษา (คน)': t.studentCount,
+    'จำนวนครั้งที่เช็ค (วัน)': t.checkedDatesCount,
+    'มา (คน-ครั้ง)': t.totalPresent,
+    'ขาด (คน-ครั้ง)': t.totalAbsent,
+    'ลา (คน-ครั้ง)': t.totalLeave,
+    'อัตราการเข้าร่วม (%)': `${t.overallRate.toFixed(1)}%`,
+    'สถานะกลุ่ม': t.checkedDatesCount > 0 ? 'บันทึกแล้ว' : 'ยังไม่บันทึก',
+    'เวลาบันทึกล่าสุด': t.lastCheckedTime || '-',
+  }));
+  const wsTeachers = XLSX.utils.json_to_sheet(teacherRows);
+  XLSX.utils.book_append_sheet(wb, wsTeachers, 'สรุปภาพรวมรายกลุ่ม');
+
+  // Sheet 2: สรุปรายนักศึกษาทุกคน พร้อมผลประเมินผ่าน/ไม่ผ่าน (Students Assessment)
+  const studentRows = studentSummaries.map((s, i) => {
+    const isPassed = s.attendanceRate >= 80;
+    return {
+      'ลำดับ': i + 1,
+      'รหัสนักศึกษา': s.studentId,
+      'ชื่อ-นามสกุล': s.fullName,
+      'สาขาวิชา': s.major || '-',
+      'กลุ่ม': s.groupName,
+      'อาจารย์ผู้รับผิดชอบ': s.teacherName,
+      'ชั้นปี': s.yearLevel,
+      'เพศ': s.gender,
+      'จำนวนครั้งที่จัด': s.totalDays,
+      'มา (ครั้ง)': s.presentDays,
+      'ขาด (ครั้ง)': s.absentDays,
+      'ลา (ครั้ง)': s.leaveDays,
+      'อัตราการเข้าร่วม (%)': `${s.attendanceRate.toFixed(1)}%`,
+      'ผลการประเมิน (เกณฑ์ 80%)': isPassed ? 'ผ่านเกณฑ์' : 'ไม่ผ่านเกณฑ์',
+      'เวลาบันทึกล่าสุด': s.lastRecordedTime || '-',
+    };
+  });
+  const wsStudents = XLSX.utils.json_to_sheet(studentRows);
+  XLSX.utils.book_append_sheet(wb, wsStudents, 'ผลการประเมินนักศึกษา');
+
+  // Sheet 3: ข้อมูลการเช็คชื่อทั้งหมด (Detailed Records)
   const detailRows = records.map((r, i) => ({
     'ลำดับ': i + 1,
     'วันที่': r.date,
@@ -27,48 +70,197 @@ export function exportToExcel(
     'เพศ': r.gender,
   }));
   const wsDetails = XLSX.utils.json_to_sheet(detailRows);
-  XLSX.utils.book_append_sheet(wb, wsDetails, 'บันทึกการเช็คชื่อ');
+  XLSX.utils.book_append_sheet(wb, wsDetails, 'ประวัติการเช็คชื่อทั้งหมด');
 
-  // Sheet 2: สรุปรายอาจารย์ (Summary by Teacher)
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `รายงานการเช็คชื่อหะละเกาะห์_${filterTitle}_${dateStr}.xlsx`);
+}
+
+// ======================== COMPREHENSIVE MASTER EXCEL ========================
+export function exportComprehensiveMasterExcel(
+  records: AttendanceRecord[],
+  teacherSummaries: TeacherSummary[],
+  studentSummaries: StudentSummary[],
+  allDates: string[],
+  title: string = 'รายงานภาพรวมทั้งโครงการฉบับสมบูรณ์'
+) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: สรุปภาพรวมและ KPI (Executive Summary)
+  const totalStudents = studentSummaries.length;
+  const passedStudents = studentSummaries.filter((s) => s.attendanceRate >= 80).length;
+  const failedStudents = totalStudents - passedStudents;
+  const totalPresent = records.filter((r) => r.status === 'มา').length;
+  const totalAbsent = records.filter((r) => r.status === 'ขาด').length;
+  const totalLeave = records.filter((r) => r.status === 'ลา').length;
+  const totalChecks = totalPresent + totalAbsent + totalLeave;
+  const overallRate = totalChecks > 0 ? ((totalPresent / totalChecks) * 100).toFixed(1) : '0';
+
+  const summaryInfo = [
+    { 'หัวข้อสรุป': 'ชื่อโครงการ', 'รายละเอียด': 'กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์) คณะศึกษาศาสตร์' },
+    { 'หัวข้อสรุป': 'วันที่ออกรายงาน', 'รายละเอียด': `${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')} น.` },
+    { 'หัวข้อสรุป': 'จำนวนกลุ่มอาจารย์ทั้งหมด', 'รายละเอียด': `${teacherSummaries.length} กลุ่ม` },
+    { 'หัวข้อสรุป': 'กลุ่มที่บันทึกแล้ว', 'รายละเอียด': `${teacherSummaries.filter((t) => t.checkedDatesCount > 0).length} กลุ่ม` },
+    { 'หัวข้อสรุป': 'กลุ่มที่ยังไม่บันทึก', 'รายละเอียด': `${teacherSummaries.filter((t) => t.checkedDatesCount === 0).length} กลุ่ม` },
+    { 'หัวข้อสรุป': 'จำนวนนักศึกษาทั้งหมด', 'รายละเอียด': `${totalStudents} คน` },
+    { 'หัวข้อสรุป': 'นักศึกษาที่ผ่านเกณฑ์ (≥80%)', 'รายละเอียด': `${passedStudents} คน (${totalStudents > 0 ? ((passedStudents / totalStudents) * 100).toFixed(1) : 0}%)` },
+    { 'หัวข้อสรุป': 'นักศึกษาที่ไม่ผ่านเกณฑ์ (<80%)', 'รายละเอียด': `${failedStudents} คน (${totalStudents > 0 ? ((failedStudents / totalStudents) * 100).toFixed(1) : 0}%)` },
+    { 'หัวข้อสรุป': 'จำนวนครั้งการเช็คชื่อรวม', 'รายละเอียด': `${records.length.toLocaleString()} คน-ครั้ง` },
+    { 'หัวข้อสรุป': 'มาเข้าร่วมทั้งหมด', 'รายละเอียด': `${totalPresent.toLocaleString()} ครั้ง` },
+    { 'หัวข้อสรุป': 'ขาดทั้งหมด', 'รายละเอียด': `${totalAbsent.toLocaleString()} ครั้ง` },
+    { 'หัวข้อสรุป': 'ลาทั้งหมด', 'รายละเอียด': `${totalLeave.toLocaleString()} ครั้ง` },
+    { 'หัวข้อสรุป': 'อัตราการเข้าร่วมเฉลี่ยทั้งโครงการ', 'รายละเอียด': `${overallRate}%` },
+  ];
+  const wsSummary = XLSX.utils.json_to_sheet(summaryInfo);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'ภาพรวมโครงการ (KPI)');
+
+  // Sheet 2: ตารางสรุปรายอาจารย์ 40 กลุ่ม (Teachers Comparison)
   const teacherRows = teacherSummaries.map((t, i) => ({
     'ลำดับ': i + 1,
     'อาจารย์ผู้รับผิดชอบ': t.teacherName,
     'กลุ่ม': t.groupName,
     'ชั้นปี': t.yearLevel,
     'เพศ': t.gender,
-    'จำนวนนักศึกษา (คน)': t.studentCount,
+    'จำนวน นศ. (คน)': t.studentCount,
     'จำนวนครั้งที่เช็ค (วัน)': t.checkedDatesCount,
     'มา (คน-ครั้ง)': t.totalPresent,
     'ขาด (คน-ครั้ง)': t.totalAbsent,
     'ลา (คน-ครั้ง)': t.totalLeave,
-    'อัตราการเข้าร่วม (%)': `${t.overallRate.toFixed(1)}%`,
-    'เวลาบันทึกล่าสุด': t.lastCheckedTime || '-',
+    'อัตราเข้าเรียน (%)': `${t.overallRate.toFixed(1)}%`,
+    'ผ่านเกณฑ์ (≥80%)': studentSummaries.filter((s) => s.teacherName === t.teacherName && s.attendanceRate >= 80).length,
+    'ไม่ผ่านเกณฑ์': studentSummaries.filter((s) => s.teacherName === t.teacherName && s.attendanceRate < 80).length,
+    'สถานะการส่งผล': t.checkedDatesCount > 0 ? 'บันทึกแล้ว' : 'ยังไม่บันทึก',
   }));
   const wsTeachers = XLSX.utils.json_to_sheet(teacherRows);
-  XLSX.utils.book_append_sheet(wb, wsTeachers, 'สรุปรายอาจารย์');
+  XLSX.utils.book_append_sheet(wb, wsTeachers, 'สรุปรายกลุ่มอาจารย์');
 
-  // Sheet 3: สรุปรายนักศึกษา (Summary by Student)
-  const studentRows = studentSummaries.map((s, i) => ({
-    'ลำดับ': i + 1,
-    'รหัสนักศึกษา': s.studentId,
-    'ชื่อ-นามสกุล': s.fullName,
-    'สาขาวิชา': s.major || '-',
-    'กลุ่ม': s.groupName,
-    'อาจารย์ผู้รับผิดชอบ': s.teacherName,
-    'ชั้นปี': s.yearLevel,
-    'เพศ': s.gender,
-    'จำนวนครั้งที่เช็ค': s.totalDays,
-    'มา': s.presentDays,
-    'ขาด': s.absentDays,
-    'ลา': s.leaveDays,
-    'อัตราการเข้า (%)': `${s.attendanceRate.toFixed(1)}%`,
-    'เวลาบันทึกล่าสุด': s.lastRecordedTime || '-',
-  }));
+  // Sheet 3: รายชื่อและผลการประเมินนักศึกษาทุกคน (Master Student Assessment)
+  const studentRows = studentSummaries.map((s, i) => {
+    const isPassed = s.attendanceRate >= 80;
+    return {
+      'ลำดับ': i + 1,
+      'รหัสนักศึกษา': s.studentId,
+      'ชื่อ-นามสกุล': s.fullName,
+      'สาขาวิชา': s.major || '-',
+      'กลุ่ม': s.groupName,
+      'อาจารย์ผู้รับผิดชอบ': s.teacherName,
+      'ชั้นปี': s.yearLevel,
+      'เพศ': s.gender,
+      'จำนวนครั้งที่จัด': s.totalDays,
+      'มา (ครั้ง)': s.presentDays,
+      'ขาด (ครั้ง)': s.absentDays,
+      'ลา (ครั้ง)': s.leaveDays,
+      'อัตราการเข้า (%)': `${s.attendanceRate.toFixed(1)}%`,
+      'ผลการประเมิน': isPassed ? 'ผ่านเกณฑ์' : 'ไม่ผ่านเกณฑ์',
+    };
+  });
   const wsStudents = XLSX.utils.json_to_sheet(studentRows);
-  XLSX.utils.book_append_sheet(wb, wsStudents, 'สรุปรายนักศึกษา');
+  XLSX.utils.book_append_sheet(wb, wsStudents, 'ประเมินนักศึกษาทุกคน');
+
+  // Sheet 4: เฉพาะนักศึกษาที่ไม่ผ่านเกณฑ์ (At Risk Students)
+  const failedStudentRows = studentSummaries
+    .filter((s) => s.attendanceRate < 80)
+    .map((s, i) => ({
+      'ลำดับ': i + 1,
+      'รหัสนักศึกษา': s.studentId,
+      'ชื่อ-นามสกุล': s.fullName,
+      'สาขาวิชา': s.major || '-',
+      'กลุ่ม': s.groupName,
+      'อาจารย์ผู้รับผิดชอบ': s.teacherName,
+      'ชั้นปี': s.yearLevel,
+      'จำนวนครั้งที่จัด': s.totalDays,
+      'มา (ครั้ง)': s.presentDays,
+      'ขาด (ครั้ง)': s.absentDays,
+      'ลา (ครั้ง)': s.leaveDays,
+      'อัตราการเข้า (%)': `${s.attendanceRate.toFixed(1)}%`,
+      'ผลการประเมิน': 'ไม่ผ่านเกณฑ์',
+    }));
+  const wsFailed = XLSX.utils.json_to_sheet(failedStudentRows);
+  XLSX.utils.book_append_sheet(wb, wsFailed, 'นักศึกษาไม่ผ่านเกณฑ์');
+
+  // Sheet 5: ตาราง Matrix เช็คชื่อรายวันของนักศึกษาทุกคน
+  const sortedDates = [...allDates].sort();
+  const matrixRows = studentSummaries.map((s, i) => {
+    const rowObj: Record<string, any> = {
+      'ลำดับ': i + 1,
+      'รหัสนักศึกษา': s.studentId,
+      'ชื่อ-นามสกุล': s.fullName,
+      'สาขาวิชา': s.major || '-',
+      'กลุ่ม': s.groupName,
+      'อาจารย์ผู้รับผิดชอบ': s.teacherName,
+    };
+
+    const sRecords = records.filter((r) => r.studentId === s.studentId);
+    sortedDates.forEach((d) => {
+      const match = sRecords.find((r) => r.date === d);
+      rowObj[d] = match ? match.status : '-';
+    });
+
+    rowObj['มา'] = s.presentDays;
+    rowObj['ขาด'] = s.absentDays;
+    rowObj['ลา'] = s.leaveDays;
+    rowObj['ร้อยละ'] = `${s.attendanceRate.toFixed(1)}%`;
+    rowObj['ผลประเมิน'] = s.attendanceRate >= 80 ? 'ผ่านเกณฑ์' : 'ไม่ผ่านเกณฑ์';
+    return rowObj;
+  });
+  const wsMatrix = XLSX.utils.json_to_sheet(matrixRows);
+  XLSX.utils.book_append_sheet(wb, wsMatrix, 'Matrix เช็คชื่อรายวัน');
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `รายงานการเช็คชื่อหะละเกาะห์_${filterTitle}_${dateStr}.xlsx`);
+  XLSX.writeFile(wb, `รายงานหะละเกาะห์_ภาพรวมทั้งโครงการ_${dateStr}.xlsx`);
+}
+
+// ======================== DETAILED GROUP EXCEL ========================
+export function exportGroupDetailedExcel(
+  teacherName: string,
+  teacherGroup: string,
+  groupStudents: { studentId: string; fullName: string; major?: string; gender: string; yearLevel: string }[],
+  groupRecords: AttendanceRecord[]
+) {
+  const wb = XLSX.utils.book_new();
+  const uniqueDates = Array.from(new Set(groupRecords.map((r) => r.date))).sort();
+
+  // Sheet 1: Matrix บันทึกการเข้าเรียนรายบุคคล
+  const matrixRows = groupStudents.map((st, i) => {
+    const stRecords = groupRecords.filter((r) => r.studentId === st.studentId);
+    let present = 0;
+    let absent = 0;
+    let leave = 0;
+
+    const rowObj: Record<string, any> = {
+      'ลำดับ': i + 1,
+      'รหัสนักศึกษา': st.studentId,
+      'ชื่อ-นามสกุล': st.fullName,
+      'สาขาวิชา': st.major || '-',
+      'ชั้นปี': st.yearLevel,
+      'เพศ': st.gender,
+    };
+
+    uniqueDates.forEach((d) => {
+      const match = stRecords.find((r) => r.date === d);
+      const status = match ? match.status : '-';
+      if (status === 'มา') present++;
+      else if (status === 'ขาด') absent++;
+      else if (status === 'ลา') leave++;
+      rowObj[d] = status;
+    });
+
+    const totalDays = uniqueDates.length;
+    const rate = totalDays > 0 ? (present / totalDays) * 100 : 0;
+    rowObj['มา (ครั้ง)'] = present;
+    rowObj['ขาด (ครั้ง)'] = absent;
+    rowObj['ลา (ครั้ง)'] = leave;
+    rowObj['อัตราการเข้า (%)'] = `${rate.toFixed(1)}%`;
+    rowObj['ผลการประเมิน'] = rate >= 80 ? 'ผ่านเกณฑ์' : 'ไม่ผ่านเกณฑ์';
+
+    return rowObj;
+  });
+
+  const wsGroup = XLSX.utils.json_to_sheet(matrixRows);
+  XLSX.utils.book_append_sheet(wb, wsGroup, `กลุ่ม ${teacherName}`);
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `รายงานเช็คชื่อหะละเกาะห์_${teacherName}_${teacherGroup}_${dateStr}.xlsx`);
 }
 
 // ======================== WORD EXPORT (.DOCX) ========================
