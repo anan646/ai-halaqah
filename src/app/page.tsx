@@ -161,23 +161,31 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fcfbfe] text-purple-950 font-sans overflow-x-hidden">
-      {/* Navigation */}
-      <Navbar
-        currentTab={currentTab}
-        setCurrentTab={(tab) => (tab === 'landing' ? handleGoToLandingHome() : navigateToTab(tab))}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onRefreshData={loadData}
-        onBackupAll={handleBackupAll}
-        isSyncing={isSyncing}
-        isBackingUp={isBackingUp}
-        totalStudents={getActiveStudents().length}
-        customLogo={customLogo}
-        isAdminLoggedIn={!!adminUser}
-        onOpenTutorial={isTutorialVisible ? () => handleOpenGeneralTutorial() : undefined}
-      />
+      {/* Navigation (Hidden in Admin Dashboard view to prevent overlapping with Admin Sidebar & Header) */}
+      {!(currentTab === 'admin' && adminUser) && (
+        <Navbar
+          currentTab={currentTab}
+          setCurrentTab={(tab) => (tab === 'landing' ? handleGoToLandingHome() : navigateToTab(tab))}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onRefreshData={loadData}
+          onBackupAll={handleBackupAll}
+          isSyncing={isSyncing}
+          isBackingUp={isBackingUp}
+          totalStudents={getActiveStudents().length}
+          customLogo={customLogo}
+          isAdminLoggedIn={!!adminUser}
+          onOpenTutorial={isTutorialVisible ? () => handleOpenGeneralTutorial() : undefined}
+        />
+      )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 pt-2 sm:pt-4 pb-32 md:pb-12">
+      {/* Main Content Area: full-bleed for Admin Dashboard, centered container for Portal & Teacher views */}
+      <main
+        className={`flex-1 w-full ${
+          currentTab === 'admin' && adminUser
+            ? 'p-0 m-0 max-w-none'
+            : 'max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 pt-2 sm:pt-4 pb-32 md:pb-12'
+        }`}
+      >
         {currentTab === 'landing' && (
           <LandingPageView
             records={records}

@@ -723,52 +723,67 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                     backgroundPosition: 'center',
                     border: config.useCustomBackground
                       ? 'none'
-                      : `8px double ${currentTemplate.borderColor}`,
+                      : `4px solid ${currentTemplate.borderColor}`,
                   }}
                 >
-                  {/* Internal Ornament Borders (if not custom bg) */}
+                  {/* Harmonious Dual Frame & Corner Filigrees (if not custom bg) */}
                   {!config.useCustomBackground && (
                     <>
+                      {/* Inner delicate border */}
                       <div
-                        className="absolute inset-2 border rounded-lg pointer-events-none"
+                        className="absolute inset-3 sm:inset-3.5 border pointer-events-none rounded-sm"
                         style={{ borderColor: currentTemplate.innerBorderColor }}
                       />
-                      <div
-                        className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 rounded-tl pointer-events-none"
-                        style={{ borderColor: currentTemplate.borderColor }}
-                      />
-                      <div
-                        className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 rounded-tr pointer-events-none"
-                        style={{ borderColor: currentTemplate.borderColor }}
-                      />
-                      <div
-                        className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 rounded-bl pointer-events-none"
-                        style={{ borderColor: currentTemplate.borderColor }}
-                      />
-                      <div
-                        className="absolute bottom-2 right-2 w-8 h-8 border-b-4 border-r-4 rounded-br pointer-events-none"
-                        style={{ borderColor: currentTemplate.borderColor }}
-                      />
+
+                      {/* 4 Corner Classical Filigree Accents */}
+                      <div className="absolute top-2 left-2 pointer-events-none">
+                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
+                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
+                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
+                        </svg>
+                      </div>
+                      <div className="absolute top-2 right-2 pointer-events-none rotate-90">
+                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
+                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
+                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
+                        </svg>
+                      </div>
+                      <div className="absolute bottom-2 right-2 pointer-events-none rotate-180">
+                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
+                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
+                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
+                        </svg>
+                      </div>
+                      <div className="absolute bottom-2 left-2 pointer-events-none -rotate-90">
+                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
+                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
+                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
+                        </svg>
+                      </div>
                     </>
                   )}
 
                   {/* Header: Logo & Institution */}
                   <div
-                    className={`relative z-10 flex flex-col items-center text-center space-y-1 ${
+                    className={`relative z-10 flex flex-col items-center text-center space-y-0.5 pt-0.5 ${
                       config.logoPosition === 'top-left'
-                        ? 'items-start text-left pl-2'
+                        ? 'items-start text-left pl-3'
                         : config.logoPosition === 'top-right'
-                        ? 'items-end text-right pr-2'
+                        ? 'items-end text-right pr-3'
                         : 'items-center text-center'
                     }`}
                   >
                     {config.showLogo && (
-                      <div className="mb-1">
+                      <div className="mb-1 flex items-center justify-center">
                         {activeLogo ? (
                           <img
                             src={activeLogo}
                             alt="Logo"
-                            className="h-10 sm:h-12 w-auto object-contain drop-shadow-sm"
+                            className="h-11 sm:h-13 md:h-14 w-auto max-w-[200px] object-contain drop-shadow-xs"
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center shadow">
@@ -778,17 +793,25 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                       </div>
                     )}
                     <h3
-                      className="text-xs sm:text-sm font-extrabold tracking-wide uppercase"
+                      className="text-xs sm:text-sm font-extrabold tracking-widest uppercase"
                       style={{ color: currentTemplate.titleColor }}
                     >
                       {config.institutionName}
                     </h3>
-                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold tracking-wider">
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold tracking-wider uppercase">
                       {config.institutionSubName}
                     </p>
-                    <div className="pt-1">
+
+                    {/* Prestigious Certificate Title with Wing Lines */}
+                    <div className="flex items-center justify-center gap-2.5 pt-1">
+                      <div
+                        className="h-px w-8 sm:w-14"
+                        style={{
+                          background: `linear-gradient(to right, transparent, ${currentTemplate.borderColor})`,
+                        }}
+                      />
                       <span
-                        className="inline-block px-3.5 py-0.5 rounded-full text-[11px] sm:text-xs font-black shadow-xs border"
+                        className="text-xs sm:text-sm font-black tracking-widest uppercase px-3 py-0.5 rounded-full border shadow-2xs"
                         style={{
                           backgroundColor: currentTemplate.accentBadgeBg,
                           color: currentTemplate.accentTextColor,
@@ -797,13 +820,22 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                       >
                         {config.awardTitle}
                       </span>
+                      <div
+                        className="h-px w-8 sm:w-14"
+                        style={{
+                          background: `linear-gradient(to left, transparent, ${currentTemplate.borderColor})`,
+                        }}
+                      />
                     </div>
+                    <p className="text-[9px] sm:text-[10px] text-slate-600 font-medium tracking-wide pt-0.5">
+                      ขอมอบเกียรติบัตรฉบับนี้ให้ไว้เพื่อแสดงว่า
+                    </p>
                   </div>
 
                   {/* Middle: Recipient & Statement */}
-                  <div className="relative z-10 text-center my-auto py-2 space-y-1.5">
+                  <div className="relative z-10 text-center my-auto py-1 space-y-1">
                     <h1
-                      className="text-lg sm:text-2xl md:text-3xl font-black tracking-tight"
+                      className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight"
                       style={{ color: currentTemplate.titleColor }}
                     >
                       {sampleStudent.fullName}
@@ -815,13 +847,13 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                       )}
                       {config.showMajor && (
                         <>
-                          <span>•</span>
+                          <span className="text-slate-300">•</span>
                           <span>สาขาวิชา: <strong className="text-slate-900">{sampleStudent.major}</strong></span>
                         </>
                       )}
                       {config.showYearLevel && (
                         <>
-                          <span>•</span>
+                          <span className="text-slate-300">•</span>
                           <span>ชั้นปี: <strong className="text-slate-900">{sampleStudent.yearLevel}</strong></span>
                         </>
                       )}
@@ -834,11 +866,11 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                       </strong>
                     </p>
 
-                    {/* Stats & Honor Seal A+ (Prominently Placed, NEVER Sunken) */}
+                    {/* Stats & Honor Seal A+ (Harmoniously Proportioned) */}
                     <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                       {config.showAttendanceStats && (
                         <div
-                          className="px-3 py-1 rounded-xl text-[10px] sm:text-[11px] font-bold border flex items-center gap-1.5"
+                          className="px-3 py-1 rounded-xl text-[10px] sm:text-xs font-bold border flex items-center gap-1.5 shadow-2xs"
                           style={{
                             backgroundColor: currentTemplate.accentBadgeBg,
                             borderColor: currentTemplate.innerBorderColor,
@@ -846,11 +878,11 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                           }}
                         >
                           <span>สถิติการเข้าร่วม:</span>
-                          <strong className="text-emerald-700">{sampleStudent.rate.toFixed(1)}%</strong>
+                          <strong className="text-emerald-700 font-black">{sampleStudent.rate.toFixed(1)}%</strong>
                           <span>({sampleStudent.present}/{sampleStudent.total} ครั้ง)</span>
                           {config.showLevelLabel && (
                             <>
-                              <span>|</span>
+                              <span className="opacity-40">|</span>
                               <span>{sampleStudent.level}</span>
                             </>
                           )}
@@ -859,20 +891,20 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
 
                       {/* GRADE A+ HONOR BADGE */}
                       {config.showHonorBadgeA && (
-                        <div className="px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-[10px] sm:text-[11px] font-black shadow-md flex items-center gap-1.5 border border-yellow-300 animate-pulse">
+                        <div className="px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-[10px] sm:text-xs font-black shadow-sm flex items-center gap-1.5 border border-yellow-300">
                           <Award className="w-3.5 h-3.5 text-yellow-100" />
                           <span>เกียรตินิยม A+ (ผลการประเมินดีเยี่ยม)</span>
                         </div>
                       )}
                     </div>
 
-                    <p className="text-[9px] sm:text-[10px] text-slate-400 italic pt-1">
-                      {config.blessingText}
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 italic pt-0.5">
+                      “{config.blessingText}”
                     </p>
                   </div>
 
-                  {/* Footer: Signatures & Verification */}
-                  <div className="relative z-10 pt-2 border-t border-slate-200/80 flex items-end justify-between text-center text-[10px] sm:text-xs">
+                  {/* Footer: Signatures & Verification (No line cutting through middle seal) */}
+                  <div className="relative z-10 pt-2 flex items-end justify-between text-center text-[10px] sm:text-xs pb-0.5">
                     {/* Signatory 1 */}
                     <div className="space-y-0.5 w-36 sm:w-44">
                       <div className="border-b border-slate-400 w-28 mx-auto mb-1 h-6 flex items-end justify-center">
@@ -880,30 +912,30 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                           {config.signatory1Title}
                         </span>
                       </div>
-                      <p className="font-bold text-slate-800 text-[10px] sm:text-[11px]">
+                      <p className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight">
                         {config.signatory1Name}
                       </p>
-                      <p className="text-[9px] text-slate-500">{config.signatory1Role}</p>
+                      <p className="text-[9px] text-slate-500 leading-tight">{config.signatory1Role}</p>
                     </div>
 
                     {/* Middle Seal & Date */}
-                    <div className="text-center">
+                    <div className="text-center px-1">
                       <div
-                        className="w-9 h-9 rounded-full border-2 mx-auto flex items-center justify-center mb-0.5"
+                        className="w-9 h-9 rounded-full border-2 border-double mx-auto flex items-center justify-center mb-0.5 shadow-2xs"
                         style={{
                           borderColor: currentTemplate.borderColor,
                           backgroundColor: currentTemplate.accentBadgeBg,
                         }}
                       >
-                        <Sparkles className="w-5 h-5 text-amber-600" />
+                        <Sparkles className="w-4 h-4" style={{ color: currentTemplate.borderColor }} />
                       </div>
                       {config.showDocRef && (
-                        <span className="text-[8px] sm:text-[9px] text-slate-400 block font-mono">
+                        <span className="text-[8px] sm:text-[9px] text-slate-400 block font-mono font-semibold">
                           EDU-HALAQAH-{sampleStudent.studentId}
                         </span>
                       )}
                       {config.showDate && (
-                        <span className="text-[8px] sm:text-[9px] text-slate-400 block">
+                        <span className="text-[8px] sm:text-[9px] text-slate-500 block font-medium">
                           ออก ณ วันที่ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}
                         </span>
                       )}
@@ -916,10 +948,10 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                           {config.signatory2Title}
                         </span>
                       </div>
-                      <p className="font-bold text-slate-800 text-[10px] sm:text-[11px]">
+                      <p className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight">
                         {config.signatory2Name}
                       </p>
-                      <p className="text-[9px] text-slate-500">{config.signatory2Role}</p>
+                      <p className="text-[9px] text-slate-500 leading-tight">{config.signatory2Role}</p>
                     </div>
                   </div>
                 </div>

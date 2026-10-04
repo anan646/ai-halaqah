@@ -1998,12 +1998,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             {/* Sidebar Brand Header */}
             <div className="pb-3 border-b border-purple-100 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-800 to-indigo-900 text-white flex items-center justify-center font-black shadow-md shadow-purple-900/20 text-sm">
-                  HQ
-                </div>
+                {customLogo ? (
+                  <img
+                    src={customLogo}
+                    alt="Logo"
+                    className="h-9 w-auto max-w-[50px] object-contain drop-shadow-xs"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-800 to-indigo-900 text-white flex items-center justify-center font-black shadow-md shadow-purple-900/20 text-xs">
+                    HQ
+                  </div>
+                )}
                 <div>
-                  <div className="text-xs font-black text-purple-950 tracking-tight">ระบบแอดมินหะละเกาะห์</div>
-                  <div className="text-[10px] text-purple-700 font-semibold">{semesterSettings.semesterName} {semesterSettings.academicYear}</div>
+                  <div className="text-xs font-black text-purple-950 tracking-tight leading-tight">ระบบแอดมินหะละเกาะห์</div>
+                  <div className="text-[10px] text-purple-700 font-semibold leading-tight">{semesterSettings.semesterName} {semesterSettings.academicYear}</div>
                 </div>
               </div>
               <button
