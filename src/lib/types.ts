@@ -1,4 +1,5 @@
 export type AttendanceStatus = 'มา' | 'ขาด' | 'ลา';
+export type GroupLevel = '01' | '02' | '03';
 
 export interface Student {
   studentId: string;
@@ -9,6 +10,7 @@ export interface Student {
   teacherName: string; // e.g. 'อาจารย์มุสลิม หะยีสะมะแอ'
   groupId: string;
   major?: string; // สาขาวิชา เช่น 'อิสลามศึกษา', 'การสอนวิทยาศาสตร์'
+  level?: GroupLevel; // ระดับกลุ่ม 01 (พื้นฐาน), 02 (ปานกลาง), 03 (ก้าวหน้า)
 }
 
 export interface Teacher {
@@ -17,6 +19,7 @@ export interface Teacher {
   groupName: string;
   gender: 'ชาย' | 'หญิง';
   yearLevel: string;
+  level?: GroupLevel; // ระดับกลุ่ม 01, 02, 03
 }
 
 export interface Group {
@@ -26,6 +29,7 @@ export interface Group {
   gender: 'ชาย' | 'หญิง';
   yearLevel: string;
   studentCount: number;
+  level?: GroupLevel; // ระดับกลุ่ม 01, 02, 03
 }
 
 export interface AttendanceRecord {
@@ -41,6 +45,10 @@ export interface AttendanceRecord {
   timestamp?: string; // ISO or formatted
   recordedTime?: string; // Real-time clock e.g. "16:04:15"
   major?: string; // สาขาวิชา
+  level?: GroupLevel; // ระดับ 01, 02, 03
+  leaveReason?: string; // เหตุผลการลา
+  sessionTopic?: string; // หัวข้อการเรียนรู้ / ซูเราะฮ์ที่อ่าน
+  notes?: string; // บันทึกเพิ่มเติม
 }
 
 export interface DailySummary {
@@ -65,6 +73,7 @@ export interface TeacherSummary {
   totalLeave: number;
   overallRate: number;
   lastCheckedTime?: string;
+  level?: GroupLevel;
 }
 
 export interface StudentSummary {
@@ -82,6 +91,7 @@ export interface StudentSummary {
   attendanceRate: number;
   lastStatus?: AttendanceStatus;
   lastRecordedTime?: string;
+  level?: GroupLevel;
 }
 
 export interface SubAdmin {
@@ -98,6 +108,9 @@ export interface AppSettings {
   scriptUrl?: string;
   lastSyncTime?: string;
   subAdmins?: SubAdmin[];
+  targetSessions?: number;
+  academicYear?: string;
+  semesterName?: string;
 }
 
 export interface Announcement {
@@ -110,4 +123,20 @@ export interface Announcement {
   createdAt: string;
   authorName: string;
 }
+
+export interface SessionMetadata {
+  date: string; // YYYY-MM-DD
+  teacherName: string;
+  topic?: string; // หัวข้อการเรียนรู้ / ซูเราะฮ์
+  notes?: string; // บันทึกผลการสอน/พฤติกรรม
+  pinCode?: string; // PIN 4 หลักสำหรับนักศึกษาสแกน/กรอกเช็คชื่อ
+  pinCreatedAt?: string;
+}
+
+export interface SemesterSettings {
+  targetSessions: number; // e.g. 12
+  semesterName: string; // e.g. 'ภาคเรียนที่ 1'
+  academicYear: string; // e.g. '2567'
+}
+
 

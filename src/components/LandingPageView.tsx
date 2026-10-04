@@ -21,7 +21,8 @@ import {
   Megaphone,
   Bell,
   X,
-  HelpCircle
+  HelpCircle,
+  KeyRound
 } from 'lucide-react';
 import {
   getActiveTeachers,
@@ -29,9 +30,13 @@ import {
   getFacultyPassword,
   getAnnouncements,
   getStudentMajor,
+  getStudentLevel,
 } from '@/lib/data-store';
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
+import { CertificateModal } from '@/components/CertificateModal';
+import { StudentPinCheckinModal } from '@/components/StudentPinCheckinModal';
+
 
 const STUDENT_TUTORIAL_KEY = 'halaqah_tutorial_student_dismissed_v1';
 const FACULTY_TUTORIAL_KEY = 'halaqah_tutorial_faculty_dismissed_v1';
@@ -118,6 +123,22 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
+  const [isPinCheckinOpen, setIsPinCheckinOpen] = useState(false);
+  const [checkinInitialPin, setCheckinInitialPin] = useState('');
+
+  // Check URL query params for ?checkinPin=
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const pin = params.get('checkinPin');
+      if (pin) {
+        setPortalView('student');
+        setCheckinInitialPin(pin);
+        setIsPinCheckinOpen(true);
+      }
+    }
+  }, []);
 
   // Announcements state
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -125,6 +146,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   useEffect(() => {
     setAnnouncements(getAnnouncements());
   }, [portalView, selectedStudent]);
+
 
   const allTeachers = useMemo(() => getActiveTeachers(), []);
   const allStudents = useMemo(() => getActiveStudents(), []);
@@ -978,10 +1000,21 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </p>
               </div>
 
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200/80 rounded-full text-[10px] font-extrabold text-purple-800 self-start sm:self-auto">
-                <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                <span>เห็นเฉพาะข้อมูลของตนเอง</span>
+              <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsPinCheckinOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-full text-xs font-black shadow-sm transition active:scale-95 cursor-pointer"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>⚡ เช็คชื่อด่วนด้วย PIN</span>
+                </button>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200/80 rounded-full text-[10px] font-extrabold text-purple-800">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                  <span>เห็นเฉพาะตนเอง</span>
+                </div>
               </div>
+
             </div>
 
             <form onSubmit={executeStudentSearch} className="flex gap-2">
@@ -1106,7 +1139,40 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                         <GraduationCap className="w-3 h-3 text-amber-300" />
                         <span>สาขาวิชา: {getStudentMajor(selectedStudent)}</span>
                       </span>
+
+                      {/* Group Level Badge (01 / 02 / 03) */}
+                      <span className="bg-gradient-to-r from-amber-400/30 to-yellow-500/30 text-yellow-200 text-[10px] font-black px-3 py-1 rounded-full border border-yellow-300/40 flex items-center gap-1.5 shadow-2xs">
+                        <Award className="w-3.5 h-3.5 text-yellow-300" />
+                        <span>
+                          {getStudentLevel(selectedStudent) === '01' && 'ระดับ 01 (ขั้นพื้นฐาน)'}
+                          {getStudentLevel(selectedStudent) === '02' && 'ระดับ 02 (ขั้นกลาง)'}
+                          {getStudentLevel(selectedStudent) === '03' && 'ระดับ 03 (ขั้นก้าวหน้า)'}
+                        </span>
+                      </span>
+
+                      {/* Gamification Badge */}
+                      {studentStats.rate === 100 && (
+                        <span className="bg-emerald-500/30 text-emerald-200 text-[10px] font-black px-3 py-1 rounded-full border border-emerald-400/40 flex items-center gap-1">
+                          <span>🥇 เหรียญทอง (เข้าครบ 100%)</span>
+                        </span>
+                      )}
+                      {studentStats.rate >= 90 && studentStats.rate < 100 && (
+                        <span className="bg-blue-500/30 text-blue-200 text-[10px] font-black px-3 py-1 rounded-full border border-blue-400/40 flex items-center gap-1">
+                          <span>🥈 เหรียญเงิน (ดีเยี่ยม 90%+)</span>
+                        </span>
+                      )}
+                      {studentStats.rate >= 80 && studentStats.rate < 90 && (
+                        <span className="bg-amber-500/30 text-amber-200 text-[10px] font-black px-3 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
+                          <span>🥉 เหรียญทองแดง (ผ่านเกณฑ์)</span>
+                        </span>
+                      )}
+                      {studentStats.rate < 80 && (
+                        <span className="bg-rose-500/30 text-rose-200 text-[10px] font-black px-3 py-1 rounded-full border border-rose-400/40 flex items-center gap-1">
+                          <span>⚠️ ระดับเฝ้าระวัง (&lt; 80%)</span>
+                        </span>
+                      )}
                     </div>
+
 
                     <div className="text-[11px] text-purple-300 font-semibold uppercase tracking-wider">
                       ชื่อ - สกุล นักศึกษา:
@@ -1232,8 +1298,37 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </div>
               </div>
 
+              {/* E-Certificate Claim Banner (สำหรับนักศึกษาที่ผ่านเกณฑ์ 80%) */}
+              {studentStats.isPassed && (
+                <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-3xl p-5 text-white shadow-xl shadow-amber-900/15 border-2 border-yellow-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-2xl bg-white/20 text-white shrink-0">
+                        <Award className="w-6 h-6 text-yellow-100 animate-bounce" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black tracking-wide">
+                        ยินดีด้วย! ท่านผ่านเกณฑ์การเข้าร่วมกิจกรรม ({studentStats.rate.toFixed(1)}%)
+                      </h3>
+                    </div>
+                    <p className="text-xs text-amber-100 font-medium sm:pl-10">
+                      ท่านสามารถกดรับวุฒิบัตรอิเล็กทรอนิกส์ (E-Certificate) อย่างเป็นทางการเพื่อเก็บไว้ในแฟ้มสะสมงานได้ทันที
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsCertModalOpen(true)}
+                    className="px-5 py-3 rounded-2xl bg-white text-amber-900 hover:bg-amber-50 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer shrink-0"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>ดูและพิมพ์เกียรติบัตร (E-Certificate)</span>
+                  </button>
+                </div>
+              )}
+
               {/* Attendance History Timeline (ทุกวันที่เช็คชื่อ) */}
               <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-3">
+
                 <div className="flex items-center justify-between border-b border-purple-100 pb-3">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-purple-700" />
@@ -1335,6 +1430,33 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           onDismissForever={handleDismissRoleTutorialForever}
         />
       )}
+
+      {/* Student Self PIN Check-in Modal */}
+      {isPinCheckinOpen && (
+        <StudentPinCheckinModal
+          initialPin={checkinInitialPin}
+          onCheckinSuccess={(studentName) => {
+            // refresh data
+            if (typeof window !== 'undefined') {
+              window.location.reload();
+            }
+          }}
+          onClose={() => setIsPinCheckinOpen(false)}
+        />
+      )}
+
+      {/* Official E-Certificate Modal */}
+      {isCertModalOpen && selectedStudent && studentStats && (
+        <CertificateModal
+          student={selectedStudent}
+          attendanceRate={studentStats.rate}
+          totalPresent={studentStats.present}
+          totalSessions={studentStats.total}
+          customLogo={customLogo}
+          onClose={() => setIsCertModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
+

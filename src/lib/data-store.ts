@@ -1,11 +1,14 @@
-import { Student, Teacher, Announcement } from './types';
+import { Student, Teacher, Announcement, GroupLevel, SessionMetadata, SemesterSettings } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 
-const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v4';
-const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v3';
+const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v5';
+const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v4';
 const STORAGE_KEY_FACULTY_PASS = 'halaqah_faculty_password_v1';
 const STORAGE_KEY_ANNOUNCEMENTS = 'halaqah_announcements_v1';
 const STORAGE_KEY_MAJORS = 'halaqah_active_majors_v2';
+const STORAGE_KEY_SESSIONS = 'halaqah_sessions_metadata_v1';
+const STORAGE_KEY_SEMESTER = 'halaqah_semester_settings_v1';
+
 
 // รหัสสาขาวิชาจากรหัสนักศึกษาคณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี (หลักที่ 4-6 เช่น 681441001 -> 441)
 // สำหรับชั้นปีทั่วไป (ปี 1, 2, 3)
@@ -161,6 +164,12 @@ export function deleteCustomMajor(majorName: string): { success: boolean; messag
 const hydrateStudentWithMajor = (s: Student): Student => ({
   ...s,
   major: getStudentMajor(s),
+  level: (s.level as GroupLevel) || '01',
+});
+
+const hydrateTeacher = (t: Teacher): Teacher => ({
+  ...t,
+  level: (t.level as GroupLevel) || '01',
 });
 
 export function getActiveStudents(): Student[] {
@@ -168,8 +177,8 @@ export function getActiveStudents(): Student[] {
   try {
     let raw = localStorage.getItem(STORAGE_KEY_STUDENTS);
     if (!raw) {
-      // Migrate from previous key if available to preserve any newly added custom students
-      const prevRaw = localStorage.getItem('halaqah_active_students_v3');
+      // Migrate from previous key v4 or v3 if available
+      const prevRaw = localStorage.getItem('halaqah_active_students_v4') || localStorage.getItem('halaqah_active_students_v3');
       if (prevRaw) {
         try {
           const prevList = JSON.parse(prevRaw);
@@ -204,16 +213,32 @@ export function saveActiveStudents(students: Student[]): void {
 }
 
 export function getActiveTeachers(): Teacher[] {
-  if (typeof window === 'undefined') return INITIAL_TEACHERS;
+  if (typeof window === 'undefined') return INITIAL_TEACHERS.map(hydrateTeacher);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_TEACHERS);
+    let raw = localStorage.getItem(STORAGE_KEY_TEACHERS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(INITIAL_TEACHERS));
-      return INITIAL_TEACHERS;
+      const prevRaw = localStorage.getItem('halaqah_active_teachers_v3');
+      if (prevRaw) {
+        try {
+          const prevList = JSON.parse(prevRaw);
+          if (Array.isArray(prevList)) {
+            const remapped = prevList.map(hydrateTeacher);
+            localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(remapped));
+            return remapped;
+          }
+        } catch {}
+      }
+      const initHydrated = INITIAL_TEACHERS.map(hydrateTeacher);
+      localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(initHydrated));
+      return initHydrated;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map(hydrateTeacher);
+    }
+    return INITIAL_TEACHERS.map(hydrateTeacher);
   } catch {
-    return INITIAL_TEACHERS;
+    return INITIAL_TEACHERS.map(hydrateTeacher);
   }
 }
 
@@ -519,4 +544,349 @@ export function deleteTeacher(teacherName: string): { success: boolean; message:
   saveActiveTeachers(updated);
   return { success: true, message: `ลบอาจารย์ ${teacherName} เรียบร้อยแล้ว` };
 }
+
+// ----------------------------------------------------
+// 11. ระบบการจัดการและเลื่อน/ลดระดับกลุ่ม (Levels 01, 02, 03)
+// ----------------------------------------------------
+
+export function getStudentLevel(s?: Partial<Student> | null): GroupLevel {
+  if (!s || !s.level) return '01';
+  if (s.level === '02' || s.level === '03') return s.level;
+  return '01';
+}
+
+export function setStudentLevel(
+  studentId: string,
+  newLevel: GroupLevel
+): { success: boolean; message: string; updatedStudent?: Student } {
+  const students = getActiveStudents();
+  const idx = students.findIndex((s) => s.studentId === studentId);
+  if (idx === -1) {
+    return { success: false, message: 'ไม่พบรหัสนักศึกษานี้ในระบบ' };
+  }
+  const updated: Student = { ...students[idx], level: newLevel };
+  students[idx] = updated;
+  saveActiveStudents(students);
+  return {
+    success: true,
+    message: `ปรับระดับของ ${updated.fullName} เป็นระดับ ${newLevel} เรียบร้อยแล้ว`,
+    updatedStudent: updated,
+  };
+}
+
+export function promoteStudentLevel(
+  studentId: string
+): { success: boolean; newLevel: GroupLevel; message: string; updatedStudent?: Student } {
+  const students = getActiveStudents();
+  const idx = students.findIndex((s) => s.studentId === studentId);
+  if (idx === -1) {
+    return { success: false, newLevel: '01', message: 'ไม่พบรหัสนักศึกษา' };
+  }
+  const currentLevel = students[idx].level || '01';
+  let nextLevel: GroupLevel = currentLevel;
+  if (currentLevel === '01') nextLevel = '02';
+  else if (currentLevel === '02') nextLevel = '03';
+  else {
+    return { success: false, newLevel: '03', message: 'นักศึกษาอยู่ในระดับสูงสุด (ระดับ 03) แล้ว' };
+  }
+
+  const updated: Student = { ...students[idx], level: nextLevel };
+  students[idx] = updated;
+  saveActiveStudents(students);
+  return {
+    success: true,
+    newLevel: nextLevel,
+    message: `เลื่อนระดับ ${updated.fullName} เป็นระดับ ${nextLevel} สำเร็จ! 🌟`,
+    updatedStudent: updated,
+  };
+}
+
+export function demoteStudentLevel(
+  studentId: string
+): { success: boolean; newLevel: GroupLevel; message: string; updatedStudent?: Student } {
+  const students = getActiveStudents();
+  const idx = students.findIndex((s) => s.studentId === studentId);
+  if (idx === -1) {
+    return { success: false, newLevel: '01', message: 'ไม่พบรหัสนักศึกษา' };
+  }
+  const currentLevel = students[idx].level || '01';
+  let prevLevel: GroupLevel = currentLevel;
+  if (currentLevel === '03') prevLevel = '02';
+  else if (currentLevel === '02') prevLevel = '01';
+  else {
+    return { success: false, newLevel: '01', message: 'นักศึกษาอยู่ในระดับเริ่มต้น (ระดับ 01) แล้ว' };
+  }
+
+  const updated: Student = { ...students[idx], level: prevLevel };
+  students[idx] = updated;
+  saveActiveStudents(students);
+  return {
+    success: true,
+    newLevel: prevLevel,
+    message: `ปรับลดระดับ ${updated.fullName} เป็นระดับ ${prevLevel} เรียบร้อยแล้ว`,
+    updatedStudent: updated,
+  };
+}
+
+export function getGroupLevel(teacherName: string): GroupLevel {
+  const teachers = getActiveTeachers();
+  const t = teachers.find((tch) => tch.name === teacherName);
+  return (t?.level as GroupLevel) || '01';
+}
+
+export function setGroupLevel(
+  teacherName: string,
+  newLevel: GroupLevel,
+  cascadeToStudents = true
+): { success: boolean; message: string; newLevel: GroupLevel; affectedStudents: number } {
+  const teachers = getActiveTeachers();
+  const tIdx = teachers.findIndex((t) => t.name === teacherName);
+  if (tIdx === -1) {
+    return { success: false, message: 'ไม่พบอาจารย์ประจำกลุ่ม', newLevel: '01', affectedStudents: 0 };
+  }
+
+  teachers[tIdx].level = newLevel;
+  saveActiveTeachers(teachers);
+
+  let affectedStudents = 0;
+  if (cascadeToStudents) {
+    const students = getActiveStudents();
+    const updated = students.map((s) => {
+      if (s.teacherName === teacherName) {
+        affectedStudents++;
+        return { ...s, level: newLevel };
+      }
+      return s;
+    });
+    saveActiveStudents(updated);
+  }
+
+  return {
+    success: true,
+    message: `ปรับระดับกลุ่มอาจารย์ ${teacherName} เป็นระดับ ${newLevel}${cascadeToStudents ? ` (อัปเดตนักศึกษาในกลุ่ม ${affectedStudents} คน)` : ''} สำเร็จแล้ว`,
+    newLevel: newLevel,
+    affectedStudents,
+  };
+}
+
+export function promoteGroupLevel(
+  teacherName: string,
+  cascadeToStudents = true
+): { success: boolean; newLevel: GroupLevel; message: string; affectedStudents: number } {
+  const currentLevel = getGroupLevel(teacherName);
+  let nextLevel: GroupLevel = currentLevel;
+  if (currentLevel === '01') nextLevel = '02';
+  else if (currentLevel === '02') nextLevel = '03';
+  else {
+    return { success: false, newLevel: '03', message: 'กลุ่มนี้อยู่ในระดับสูงสุด (ระดับ 03) แล้ว', affectedStudents: 0 };
+  }
+  return setGroupLevel(teacherName, nextLevel, cascadeToStudents);
+}
+
+export function demoteGroupLevel(
+  teacherName: string,
+  cascadeToStudents = true
+): { success: boolean; newLevel: GroupLevel; message: string; affectedStudents: number } {
+  const currentLevel = getGroupLevel(teacherName);
+  let prevLevel: GroupLevel = currentLevel;
+  if (currentLevel === '03') prevLevel = '02';
+  else if (currentLevel === '02') prevLevel = '01';
+  else {
+    return { success: false, newLevel: '01', message: 'กลุ่มนี้อยู่ในระดับเริ่มต้น (ระดับ 01) แล้ว', affectedStudents: 0 };
+  }
+  return setGroupLevel(teacherName, prevLevel, cascadeToStudents);
+}
+
+// ----------------------------------------------------
+// 12. ระบบเลื่อนชั้นปีการศึกษา (Academic Year Roll-over)
+// ----------------------------------------------------
+
+export function promoteAcademicYear(): {
+  success: boolean;
+  message: string;
+  promotedCount: number;
+  graduatedCount: number;
+} {
+  const students = getActiveStudents();
+  let promoted = 0;
+  let graduated = 0;
+
+  const updatedStudents = students.map((s) => {
+    const y = (s.yearLevel || '').trim();
+    if (y.includes('2') || y === 'ปี 2') {
+      promoted++;
+      return {
+        ...s,
+        yearLevel: 'ปี 3',
+        groupName: s.groupName.replace('ชั้นปีที่ 2', 'ชั้นปีที่ 3').replace('ปี 2', 'ปี 3'),
+      };
+    } else if (y.includes('3') || y === 'ปี 3') {
+      promoted++;
+      return {
+        ...s,
+        yearLevel: 'ปี 4',
+        groupName: s.groupName.replace('ชั้นปีที่ 3', 'ชั้นปีที่ 4').replace('ปี 3', 'ปี 4'),
+        major: inferMajorFromStudentId(s.studentId, 'ปี 4'),
+      };
+    } else if (y.includes('4') || y === 'ปี 4') {
+      graduated++;
+      return {
+        ...s,
+        yearLevel: 'สำเร็จการศึกษา',
+      };
+    }
+    return s;
+  });
+
+  saveActiveStudents(updatedStudents);
+
+  return {
+    success: true,
+    message: `เลื่อนชั้นปีสำเร็จ: เลื่อนระดับชั้น ${promoted} คน, สำเร็จการศึกษา ${graduated} คน`,
+    promotedCount: promoted,
+    graduatedCount: graduated,
+  };
+}
+
+// ----------------------------------------------------
+// 13. ระบบบันทึกบทเรียน / ซูเราะฮ์ และ รหัส PIN ประจำคาบ (Session Metadata)
+// ----------------------------------------------------
+
+export function getAllSessionMetadata(): SessionMetadata[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SESSIONS);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export function saveAllSessionMetadata(list: SessionMetadata[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(list));
+}
+
+export function getSessionMetadata(date: string, teacherName: string): SessionMetadata | null {
+  const list = getAllSessionMetadata();
+  return list.find((s) => s.date === date && s.teacherName === teacherName) || null;
+}
+
+export function saveSessionMetadata(meta: SessionMetadata): void {
+  const list = getAllSessionMetadata();
+  const idx = list.findIndex((s) => s.date === meta.date && s.teacherName === meta.teacherName);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...meta };
+  } else {
+    list.push(meta);
+  }
+  saveAllSessionMetadata(list);
+}
+
+export function getOrGenerateSessionPin(date: string, teacherName: string): string {
+  const current = getSessionMetadata(date, teacherName);
+  if (current && current.pinCode) {
+    return current.pinCode;
+  }
+  // สุ่ม PIN 4 หลัก ไม่ซ้ำง่าย
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  saveSessionMetadata({
+    date,
+    teacherName,
+    pinCode: pin,
+    pinCreatedAt: new Date().toISOString(),
+  });
+  return pin;
+}
+
+export function findSessionByPin(pin: string, date?: string): SessionMetadata | null {
+  const cleanPin = pin.trim();
+  if (!cleanPin) return null;
+  const list = getAllSessionMetadata();
+  if (date) {
+    return list.find((s) => s.date === date && s.pinCode === cleanPin) || null;
+  }
+  return list.find((s) => s.pinCode === cleanPin) || null;
+}
+
+// ----------------------------------------------------
+// 14. ระบบกำหนดเป้าหมายภาคเรียน (Semester Settings)
+// ----------------------------------------------------
+
+export const DEFAULT_SEMESTER_SETTINGS: SemesterSettings = {
+  targetSessions: 12,
+  semesterName: 'ภาคเรียนที่ 1',
+  academicYear: '2567',
+};
+
+export function getSemesterSettings(): SemesterSettings {
+  if (typeof window === 'undefined') return DEFAULT_SEMESTER_SETTINGS;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SEMESTER);
+    if (!raw) return DEFAULT_SEMESTER_SETTINGS;
+    return { ...DEFAULT_SEMESTER_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_SEMESTER_SETTINGS;
+  }
+}
+
+export function saveSemesterSettings(settings: SemesterSettings): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_SEMESTER, JSON.stringify(settings));
+}
+
+// ----------------------------------------------------
+// 15. ระบบสำรองและกู้คืนฐานข้อมูลฉุกเฉิน (JSON Backup & Restore)
+// ----------------------------------------------------
+
+export function exportFullDatabaseJson(): string {
+  const data = {
+    exportedAt: new Date().toISOString(),
+    version: '2.0.0',
+    students: getActiveStudents(),
+    teachers: getActiveTeachers(),
+    majors: getActiveMajors(),
+    announcements: getAnnouncements(),
+    sessions: getAllSessionMetadata(),
+    semester: getSemesterSettings(),
+  };
+  return JSON.stringify(data, null, 2);
+}
+
+export function importFullDatabaseJson(jsonStr: string): { success: boolean; message: string } {
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!parsed || (!parsed.students && !parsed.teachers)) {
+      return { success: false, message: 'รูปแบบไฟล์สำรองข้อมูลไม่ถูกต้อง' };
+    }
+
+    if (Array.isArray(parsed.students) && parsed.students.length > 0) {
+      saveActiveStudents(parsed.students);
+    }
+    if (Array.isArray(parsed.teachers) && parsed.teachers.length > 0) {
+      saveActiveTeachers(parsed.teachers);
+    }
+    if (Array.isArray(parsed.majors) && parsed.majors.length > 0) {
+      saveActiveMajors(parsed.majors);
+    }
+    if (Array.isArray(parsed.announcements)) {
+      saveAnnouncements(parsed.announcements);
+    }
+    if (Array.isArray(parsed.sessions)) {
+      saveAllSessionMetadata(parsed.sessions);
+    }
+    if (parsed.semester) {
+      saveSemesterSettings(parsed.semester);
+    }
+
+    return {
+      success: true,
+      message: `กู้คืนข้อมูลสำเร็จ! นำเข้านักศึกษา ${parsed.students?.length || 0} คน, อาจารย์ ${parsed.teachers?.length || 0} ท่าน เรียบร้อยแล้ว`,
+    };
+  } catch (err: any) {
+    return { success: false, message: `เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message || err}` };
+  }
+}
+
 

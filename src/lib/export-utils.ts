@@ -17,6 +17,7 @@ export function exportToExcel(
     'ลำดับ': i + 1,
     'อาจารย์ผู้รับผิดชอบ': t.teacherName,
     'กลุ่ม': t.groupName,
+    'ระดับกลุ่ม': t.level ? `ระดับ ${t.level}` : 'ระดับ 01',
     'ชั้นปี': t.yearLevel,
     'เพศ': t.gender,
     'จำนวนนักศึกษา (คน)': t.studentCount,
@@ -39,6 +40,7 @@ export function exportToExcel(
       'รหัสนักศึกษา': s.studentId,
       'ชื่อ-นามสกุล': s.fullName,
       'สาขาวิชา': s.major || '-',
+      'ระดับทักษะ': s.level ? `ระดับ ${s.level}` : 'ระดับ 01',
       'กลุ่ม': s.groupName,
       'อาจารย์ผู้รับผิดชอบ': s.teacherName,
       'ชั้นปี': s.yearLevel,
@@ -52,6 +54,7 @@ export function exportToExcel(
       'เวลาบันทึกล่าสุด': s.lastRecordedTime || '-',
     };
   });
+
   const wsStudents = XLSX.utils.json_to_sheet(studentRows);
   XLSX.utils.book_append_sheet(wb, wsStudents, 'ผลการประเมินนักศึกษา');
 
@@ -119,6 +122,7 @@ export function exportComprehensiveMasterExcel(
     'ลำดับ': i + 1,
     'อาจารย์ผู้รับผิดชอบ': t.teacherName,
     'กลุ่ม': t.groupName,
+    'ระดับกลุ่ม': t.level ? `ระดับ ${t.level}` : 'ระดับ 01',
     'ชั้นปี': t.yearLevel,
     'เพศ': t.gender,
     'จำนวน นศ. (คน)': t.studentCount,
@@ -142,6 +146,7 @@ export function exportComprehensiveMasterExcel(
       'รหัสนักศึกษา': s.studentId,
       'ชื่อ-นามสกุล': s.fullName,
       'สาขาวิชา': s.major || '-',
+      'ระดับทักษะ': s.level ? `ระดับ ${s.level}` : 'ระดับ 01',
       'กลุ่ม': s.groupName,
       'อาจารย์ผู้รับผิดชอบ': s.teacherName,
       'ชั้นปี': s.yearLevel,
@@ -165,6 +170,7 @@ export function exportComprehensiveMasterExcel(
       'รหัสนักศึกษา': s.studentId,
       'ชื่อ-นามสกุล': s.fullName,
       'สาขาวิชา': s.major || '-',
+      'ระดับทักษะ': s.level ? `ระดับ ${s.level}` : 'ระดับ 01',
       'กลุ่ม': s.groupName,
       'อาจารย์ผู้รับผิดชอบ': s.teacherName,
       'ชั้นปี': s.yearLevel,
@@ -177,6 +183,7 @@ export function exportComprehensiveMasterExcel(
     }));
   const wsFailed = XLSX.utils.json_to_sheet(failedStudentRows);
   XLSX.utils.book_append_sheet(wb, wsFailed, 'นักศึกษาไม่ผ่านเกณฑ์');
+
 
   // Sheet 5: ตาราง Matrix เช็คชื่อรายวันของนักศึกษาทุกคน
   const sortedDates = [...allDates].sort();
@@ -214,7 +221,7 @@ export function exportComprehensiveMasterExcel(
 export function exportGroupDetailedExcel(
   teacherName: string,
   teacherGroup: string,
-  groupStudents: { studentId: string; fullName: string; major?: string; gender: string; yearLevel: string }[],
+  groupStudents: { studentId: string; fullName: string; major?: string; gender: string; yearLevel: string; level?: string }[],
   groupRecords: AttendanceRecord[]
 ) {
   const wb = XLSX.utils.book_new();
@@ -232,9 +239,11 @@ export function exportGroupDetailedExcel(
       'รหัสนักศึกษา': st.studentId,
       'ชื่อ-นามสกุล': st.fullName,
       'สาขาวิชา': st.major || '-',
+      'ระดับทักษะ': st.level ? `ระดับ ${st.level}` : 'ระดับ 01',
       'ชั้นปี': st.yearLevel,
       'เพศ': st.gender,
     };
+
 
     uniqueDates.forEach((d) => {
       const match = stRecords.find((r) => r.date === d);

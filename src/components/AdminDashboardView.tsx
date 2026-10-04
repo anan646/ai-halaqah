@@ -44,9 +44,22 @@ import {
   Key,
   Database as DatabaseIcon,
   GraduationCap,
-  BookOpen
+  BookOpen,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
-import { AttendanceRecord, TeacherSummary, StudentSummary, DailySummary, SubAdmin, Teacher, Student, Announcement } from '@/lib/types';
+import {
+  AttendanceRecord,
+  TeacherSummary,
+  StudentSummary,
+  DailySummary,
+  SubAdmin,
+  Teacher,
+  Student,
+  Announcement,
+  GroupLevel,
+  SemesterSettings,
+} from '@/lib/types';
 import {
   getActiveTeachers,
   getActiveStudents,
@@ -69,6 +82,19 @@ import {
   getStudentMajor,
   inferMajorFromStudentId,
   DEFAULT_MAJORS,
+  getGroupLevel,
+  setGroupLevel,
+  promoteGroupLevel,
+  demoteGroupLevel,
+  getStudentLevel,
+  setStudentLevel,
+  promoteStudentLevel,
+  demoteStudentLevel,
+  promoteAcademicYear,
+  getSemesterSettings,
+  saveSemesterSettings,
+  exportFullDatabaseJson,
+  importFullDatabaseJson,
 } from '@/lib/data-store';
 import {
   exportToExcel,
@@ -97,6 +123,7 @@ type TabType =
   | 'overview'
   | 'teachers'
   | 'pending'
+  | 'levels'
   | 'matrix'
   | 'analytics'
   | 'periodic'
@@ -105,6 +132,7 @@ type TabType =
   | 'announcements'
   | 'system_management'
   | 'export';
+
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   records,
@@ -136,6 +164,108 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     reloadDataStore();
   }, []);
 
+  // ==================== LEVEL MANAGEMENT STATE (ระดับ 01, 02, 03) ====================
+  const [levelFilter, setLevelFilter] = useState<'all' | '01' | '02' | '03'>('all');
+  const [levelSearchTerm, setLevelSearchTerm] = useState('');
+  const [cascadeLevelToStudents, setCascadeLevelToStudents] = useState(true);
+  const [expandedLevelGroup, setExpandedLevelGroup] = useState<string | null>(null);
+  const [levelActionMsg, setLevelActionMsg] = useState<{ text: string; success: boolean } | null>(null);
+
+  // ==================== SEMESTER & PROMOTION STATE ====================
+  const [semesterSettings, setSemesterSettings] = useState<SemesterSettings>(() => getSemesterSettings());
+  const [promotionResult, setPromotionResult] = useState<string | null>(null);
+  const [backupRestoreMsg, setBackupRestoreMsg] = useState<{ text: string; success: boolean } | null>(null);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePromoteGroupLevelAdmin = (teacherName: string) => {
+    const res = promoteGroupLevel(teacherName, cascadeLevelToStudents);
+    setLevelActionMsg({ text: res.message, success: res.success });
+    reloadDataStore();
+    setTimeout(() => setLevelActionMsg(null), 4000);
+  };
+
+  const handleDemoteGroupLevelAdmin = (teacherName: string) => {
+    const res = demoteGroupLevel(teacherName, cascadeLevelToStudents);
+    setLevelActionMsg({ text: res.message, success: res.success });
+    reloadDataStore();
+    setTimeout(() => setLevelActionMsg(null), 4000);
+  };
+
+  const handleSetGroupLevelAdmin = (teacherName: string, newLevel: GroupLevel) => {
+    const res = setGroupLevel(teacherName, newLevel, cascadeLevelToStudents);
+    setLevelActionMsg({ text: res.message, success: res.success });
+    reloadDataStore();
+    setTimeout(() => setLevelActionMsg(null), 4000);
+  };
+
+  const handlePromoteStudentLevelAdmin = (studentId: string) => {
+    const res = promoteStudentLevel(studentId);
+    setLevelActionMsg({ text: res.message, success: res.success });
+    reloadDataStore();
+    setTimeout(() => setLevelActionMsg(null), 4000);
+  };
+
+  const handleDemoteStudentLevelAdmin = (studentId: string) => {
+    const res = demoteStudentLevel(studentId);
+    setLevelActionMsg({ text: res.message, success: res.success });
+    reloadDataStore();
+    setTimeout(() => setLevelActionMsg(null), 4000);
+  };
+
+  const handleExecuteAcademicYearPromotion = () => {
+    const confirmPrompt = window.confirm(
+      'คำเตือน: การเลื่อนชั้นปีการศึกษาจะปรับระดับชั้นของนักศึกษาทุกคนดังนี้:\n- ชั้นปีที่ 2 -> ชั้นปีที่ 3\n- ชั้นปีที่ 3 -> ชั้นปีที่ 4 (และปรับหลักสูตรเป็น "การสอน...")\n- ชั้นปีที่ 4 -> "สำเร็จการศึกษา"\n\nคุณแน่ใจหรือไม่ว่าต้องการดำเนินการเลื่อนชั้นปีการศึกษา?'
+    );
+    if (!confirmPrompt) return;
+
+    const res = promoteAcademicYear();
+    reloadDataStore();
+    setPromotionResult(res.message);
+  };
+
+  const handleDownloadFullBackup = () => {
+    const jsonStr = exportFullDatabaseJson();
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `halaqah_full_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setBackupRestoreMsg({ text: 'ดาวน์โหลดไฟล์สำรองข้อมูล JSON เรียบร้อยแล้ว', success: true });
+    setTimeout(() => setBackupRestoreMsg(null), 4000);
+  };
+
+  const handleRestoreFullBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (!content) return;
+      const res = importFullDatabaseJson(content);
+      reloadDataStore();
+      setBackupRestoreMsg({ text: res.message, success: res.success });
+      setTimeout(() => setBackupRestoreMsg(null), 5000);
+    };
+    reader.readAsText(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const [semesterSavedMsg, setSemesterSavedMsg] = useState<string | null>(null);
+
+  const handleSaveSemesterConfig = () => {
+    saveSemesterSettings(semesterSettings);
+    setSemesterSavedMsg('บันทึกการตั้งค่าเป้าหมายภาคเรียนเรียบร้อย');
+    setTimeout(() => setSemesterSavedMsg(null), 3500);
+  };
+
+  const uniqueRecordedDatesCount = useMemo(() => {
+    return new Set(records.map((r) => r.date)).size;
+  }, [records]);
   // ==================== MATRIX VIEW STATE (ตามรูปแนบ 4) ====================
   const [matrixTeacherName, setMatrixTeacherName] = useState<string>('');
   const [selectedStudentForModal, setSelectedStudentForModal] = useState<Student | null>(null);
@@ -2033,6 +2163,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('levels')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'levels'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>🏷️</span>
+          <span>ระดับกลุ่ม (01/02/03)</span>
+        </button>
+
+
+        <button
           onClick={() => setActiveTab('editor')}
           className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
             activeTab === 'editor'
@@ -2166,6 +2309,50 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
               <div className="mt-2 text-xs font-semibold text-purple-700 relative z-10">
                 เกณฑ์ผ่าน 80% (หะละเกาะห์รวม)
+              </div>
+            </div>
+          </div>
+
+          {/* Semester Target Progress Banner */}
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-purple-950 text-[11px] font-black uppercase tracking-wider">
+                    เป้าหมายหลักสูตร
+                  </span>
+                  <span className="text-xs text-purple-200">
+                    {semesterSettings.semesterName} ปีการศึกษา {semesterSettings.academicYear}
+                  </span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-black">
+                  ความคืบหน้ากิจกรรมหะละเกาะห์ ({uniqueRecordedDatesCount} / {semesterSettings.targetSessions} สัปดาห์)
+                </h3>
+                <p className="text-xs text-purple-200/80">
+                  {uniqueRecordedDatesCount >= semesterSettings.targetSessions
+                    ? '🎉 จัดกิจกรรมครบตามเกณฑ์เป้าหมายของภาคเรียนนี้แล้ว'
+                    : `เหลืออีก ${Math.max(0, semesterSettings.targetSessions - uniqueRecordedDatesCount)} สัปดาห์/ครั้ง เพื่อให้ครบตามเป้าหมายของภาคเรียน`}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 min-w-[260px]">
+                <div className="flex-1">
+                  <div className="flex justify-between text-xs font-bold mb-1">
+                    <span className="text-purple-200">ความคืบหน้า</span>
+                    <span className="font-mono text-amber-300">
+                      {Math.min(100, Math.round((uniqueRecordedDatesCount / (semesterSettings.targetSessions || 1)) * 100))}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-white/20 h-3 rounded-full overflow-hidden p-0.5">
+                    <div
+                      className="bg-gradient-to-r from-amber-400 to-amber-300 h-full rounded-full transition-all duration-700 shadow-sm"
+                      style={{
+                        width: `${Math.min(100, Math.round((uniqueRecordedDatesCount / (semesterSettings.targetSessions || 1)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2948,8 +3135,386 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
+      {/* ==================== TAB: จัดการระดับกลุ่ม (LEVELS 01, 02, 03) ==================== */}
+      {activeTab === 'levels' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Action Notification Toast */}
+          {levelActionMsg && (
+            <div
+              className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-bold animate-fadeIn ${
+                levelActionMsg.success
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>{levelActionMsg.text}</span>
+              </div>
+              <button onClick={() => setLevelActionMsg(null)} className="underline ml-2 text-xs">
+                ปิด
+              </button>
+            </div>
+          )}
+
+          {/* Level Header Banner */}
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 rounded-3xl p-6 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2.5 rounded-2xl bg-white/20 text-white text-xl">🏷️</span>
+                <h2 className="text-xl sm:text-2xl font-black">
+                  ระบบจัดการและเลื่อน/ลดระดับกลุ่ม (Levels 01, 02, 03)
+                </h2>
+              </div>
+              <p className="text-xs sm:text-sm text-purple-200 font-medium">
+                บริหารจัดการระดับทักษะความสามารถของกลุ่มศึกษาฮะละเกาะฮ์และนักศึกษารายบุคคล
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto bg-white/10 px-3.5 py-2 rounded-2xl border border-white/20">
+              <label className="text-xs font-bold text-purple-100 flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={cascadeLevelToStudents}
+                  onChange={(e) => setCascadeLevelToStudents(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                />
+                <span>ปรับระดับ นศ. ในกลุ่มตามอัตโนมัติ (Cascade)</span>
+              </label>
+            </div>
+          </div>
+
+          {/* 3-Level Distribution KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Level 01 */}
+            <div
+              onClick={() => setLevelFilter('01')}
+              className={`p-5 rounded-3xl border cursor-pointer transition shadow-card hover:shadow-card-hover space-y-2 ${
+                levelFilter === '01'
+                  ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-500/20'
+                  : 'bg-white border-blue-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-black">
+                  ระดับ 01
+                </span>
+                <span className="text-2xl">🌱</span>
+              </div>
+              <h3 className="text-sm font-black text-blue-950">
+                ขั้นพื้นฐาน (ตะฮ์ซีน / มุบตะดิอ์)
+              </h3>
+              <div className="flex items-center justify-between text-xs text-blue-800 font-semibold pt-1 border-t border-blue-100">
+                <span>
+                  กลุ่มอาจารย์:{' '}
+                  <strong className="text-base text-blue-950">
+                    {teachers.filter((t) => (t.level || '01') === '01').length}
+                  </strong>{' '}
+                  กลุ่ม
+                </span>
+                <span>
+                  นักศึกษา:{' '}
+                  <strong className="text-base text-blue-950">
+                    {students.filter((s) => (s.level || '01') === '01').length}
+                  </strong>{' '}
+                  คน
+                </span>
+              </div>
+            </div>
+
+            {/* Level 02 */}
+            <div
+              onClick={() => setLevelFilter('02')}
+              className={`p-5 rounded-3xl border cursor-pointer transition shadow-card hover:shadow-card-hover space-y-2 ${
+                levelFilter === '02'
+                  ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-500/20'
+                  : 'bg-white border-purple-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 text-xs font-black">
+                  ระดับ 02
+                </span>
+                <span className="text-2xl">📖</span>
+              </div>
+              <h3 className="text-sm font-black text-purple-950">
+                ขั้นปานกลาง (ตะลาวาฮ์ / มุตะวัซซิฏ)
+              </h3>
+              <div className="flex items-center justify-between text-xs text-purple-800 font-semibold pt-1 border-t border-purple-100">
+                <span>
+                  กลุ่มอาจารย์:{' '}
+                  <strong className="text-base text-purple-950">
+                    {teachers.filter((t) => t.level === '02').length}
+                  </strong>{' '}
+                  กลุ่ม
+                </span>
+                <span>
+                  นักศึกษา:{' '}
+                  <strong className="text-base text-purple-950">
+                    {students.filter((s) => s.level === '02').length}
+                  </strong>{' '}
+                  คน
+                </span>
+              </div>
+            </div>
+
+            {/* Level 03 */}
+            <div
+              onClick={() => setLevelFilter('03')}
+              className={`p-5 rounded-3xl border cursor-pointer transition shadow-card hover:shadow-card-hover space-y-2 ${
+                levelFilter === '03'
+                  ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20'
+                  : 'bg-white border-emerald-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black">
+                  ระดับ 03
+                </span>
+                <span className="text-2xl">🌟</span>
+              </div>
+              <h3 className="text-sm font-black text-emerald-950">
+                ขั้นก้าวหน้า (ฮิฟซ์ ท่องจำ / ตัฟซีร)
+              </h3>
+              <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold pt-1 border-t border-emerald-100">
+                <span>
+                  กลุ่มอาจารย์:{' '}
+                  <strong className="text-base text-emerald-950">
+                    {teachers.filter((t) => t.level === '03').length}
+                  </strong>{' '}
+                  กลุ่ม
+                </span>
+                <span>
+                  นักศึกษา:{' '}
+                  <strong className="text-base text-emerald-950">
+                    {students.filter((s) => s.level === '03').length}
+                  </strong>{' '}
+                  คน
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter & Search Bar */}
+          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-purple-950">ตัวกรองระดับ:</span>
+              {(['all', '01', '02', '03'] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  onClick={() => setLevelFilter(lvl)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 ${
+                    levelFilter === lvl
+                      ? 'bg-purple-900 text-white shadow-sm'
+                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100'
+                  }`}
+                >
+                  {lvl === 'all' && 'ทั้งหมด (ทุกระดับ)'}
+                  {lvl === '01' && 'เฉพาะ ระดับ 01 (พื้นฐาน)'}
+                  {lvl === '02' && 'เฉพาะ ระดับ 02 (ปานกลาง)'}
+                  {lvl === '03' && 'เฉพาะ ระดับ 03 (ก้าวหน้า)'}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="ค้นหาชื่ออาจารย์ หรือกลุ่ม..."
+                value={levelSearchTerm}
+                onChange={(e) => setLevelSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-purple-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+              />
+            </div>
+          </div>
+
+          {/* Group Level Cards Grid */}
+          <div className="space-y-3">
+            {teachers
+              .filter((t) => {
+                const lvl = t.level || '01';
+                if (levelFilter !== 'all' && lvl !== levelFilter) return false;
+                if (levelSearchTerm.trim()) {
+                  const s = levelSearchTerm.toLowerCase();
+                  return t.name.toLowerCase().includes(s) || t.groupName.toLowerCase().includes(s);
+                }
+                return true;
+              })
+              .map((t, idx) => {
+                const currentLvl = (t.level as GroupLevel) || '01';
+                const groupStList = students.filter((s) => s.teacherName === t.name);
+                const isExpanded = expandedLevelGroup === t.name;
+
+                return (
+                  <div
+                    key={t.name}
+                    className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-5 shadow-card hover:shadow-card-hover transition space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      {/* Left: Info */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900">
+                            กลุ่มที่ {idx + 1}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-800">
+                            {t.yearLevel} • {t.gender === 'ชาย' ? 'ชาย' : 'หญิง'}
+                          </span>
+                          <span
+                            className={`text-xs font-black px-3 py-0.5 rounded-full border ${
+                              currentLvl === '01'
+                                ? 'bg-blue-50 text-blue-900 border-blue-200'
+                                : currentLvl === '02'
+                                ? 'bg-purple-50 text-purple-900 border-purple-200'
+                                : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                            }`}
+                          >
+                            🏷️ ระดับ {currentLvl} (
+                            {currentLvl === '01' && 'ขั้นพื้นฐาน'}
+                            {currentLvl === '02' && 'ขั้นปานกลาง'}
+                            {currentLvl === '03' && 'ขั้นก้าวหน้า'}
+                            )
+                          </span>
+                        </div>
+
+                        <h4 className="text-sm sm:text-base font-black text-purple-950">
+                          {t.name}
+                        </h4>
+                        <p className="text-xs text-purple-800/80 font-medium">
+                          {t.groupName} • นักศึกษาในกลุ่ม <strong>{groupStList.length}</strong> คน
+                        </p>
+                      </div>
+
+                      {/* Right: Promote, Demote & Direct Select */}
+                      <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+                        {/* Direct Select */}
+                        <select
+                          value={currentLvl}
+                          onChange={(e) =>
+                            handleSetGroupLevelAdmin(t.name, e.target.value as GroupLevel)
+                          }
+                          className="px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-50 border border-purple-200 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 cursor-pointer"
+                        >
+                          <option value="01">ระดับ 01 (พื้นฐาน)</option>
+                          <option value="02">ระดับ 02 (ปานกลาง)</option>
+                          <option value="03">ระดับ 03 (ก้าวหน้า)</option>
+                        </select>
+
+                        {/* Promote Button */}
+                        <button
+                          onClick={() => handlePromoteGroupLevelAdmin(t.name)}
+                          disabled={currentLvl === '03'}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                          title="เลื่อนระดับกลุ่มขึ้น (01 -> 02 -> 03)"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                          <span>เลื่อนระดับ ⬆️</span>
+                        </button>
+
+                        {/* Demote Button */}
+                        <button
+                          onClick={() => handleDemoteGroupLevelAdmin(t.name)}
+                          disabled={currentLvl === '01'}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                          title="ลดระดับกลุ่มลง (03 -> 02 -> 01)"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                          <span>ลดระดับ ⬇️</span>
+                        </button>
+
+                        {/* Expand Student Accordion */}
+                        <button
+                          onClick={() =>
+                            setExpandedLevelGroup(isExpanded ? null : t.name)
+                          }
+                          className="px-3 py-1.5 rounded-xl border border-purple-200 hover:bg-purple-50 text-purple-900 font-bold text-xs transition flex items-center gap-1"
+                        >
+                          <span>{isExpanded ? 'ย่อรายชื่อ' : `ดู นศ. (${groupStList.length})`}</span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 transition-transform ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Student Level List */}
+                    {isExpanded && (
+                      <div className="pt-3 border-t border-purple-50 space-y-2 animate-fadeIn bg-purple-50/30 p-3 rounded-2xl">
+                        <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+                          <span>รายชื่อนักศึกษาในกลุ่มนี้ ({groupStList.length} คน)</span>
+                          <span className="text-[11px] text-purple-700 font-normal">
+                            * สามารถปรับระดับนักศึกษารายคนได้อิสระ
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+                          {groupStList.map((st, sIdx) => {
+                            const stLvl = (st.level as GroupLevel) || '01';
+                            return (
+                              <div
+                                key={st.studentId}
+                                className="bg-white p-2.5 rounded-xl border border-purple-100 flex items-center justify-between gap-2 shadow-2xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-xs font-black text-purple-950 truncate">
+                                    {sIdx + 1}. {st.fullName}
+                                  </div>
+                                  <div className="text-[10px] text-purple-700 font-mono flex items-center gap-1.5">
+                                    <span>{st.studentId}</span>
+                                    <span>•</span>
+                                    <span>{st.major || '-'}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                      stLvl === '01'
+                                        ? 'bg-blue-100 text-blue-900'
+                                        : stLvl === '02'
+                                        ? 'bg-purple-100 text-purple-900'
+                                        : 'bg-emerald-100 text-emerald-900'
+                                    }`}
+                                  >
+                                    ระดับ {stLvl}
+                                  </span>
+
+                                  <button
+                                    onClick={() => handlePromoteStudentLevelAdmin(st.studentId)}
+                                    disabled={stLvl === '03'}
+                                    className="p-1 rounded bg-purple-50 hover:bg-emerald-100 text-purple-900 hover:text-emerald-700 disabled:opacity-30 transition"
+                                    title="เลื่อนระดับ"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDemoteStudentLevelAdmin(st.studentId)}
+                                    disabled={stLvl === '01'}
+                                    className="p-1 rounded bg-purple-50 hover:bg-rose-100 text-purple-900 hover:text-rose-700 disabled:opacity-30 transition"
+                                    title="ลดระดับ"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* ==================== TAB 3: PERIODIC SUMMARY (วัน/เดือน/ปี ที่บันทึกจริง) ==================== */}
       {activeTab === 'periodic' && (
+
         <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-5 animate-fadeIn">
           {/* Header & Mode Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-4">
@@ -4878,6 +5443,188 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <span>แก้ไข URL การเชื่อมต่อ Web App</span>
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* 5. ACADEMIC YEAR ROLL-OVER */}
+            <div className="p-5 rounded-3xl border border-indigo-200/80 bg-indigo-50/40 space-y-4 md:col-span-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    เลื่อนชั้นปีการศึกษา (Academic Year Rollover)
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    ปรับชั้นปีนักศึกษาอัตโนมัติเมื่อขึ้นปีการศึกษาใหม่
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-white/80 rounded-2xl border border-indigo-100 text-xs text-purple-900 space-y-1.5 leading-relaxed">
+                <div className="font-bold flex items-center gap-1.5 text-indigo-950">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>กฎการปรับระดับชั้นปี:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-purple-800/80 ml-1">
+                  <li>ชั้นปีที่ 2 ➔ เลื่อนเป็น <b>ชั้นปีที่ 3</b></li>
+                  <li>ชั้นปีที่ 3 ➔ เลื่อนเป็น <b>ชั้นปีที่ 4</b> (ปรับสาขาเป็น &quot;การสอน...&quot;)</li>
+                  <li>ชั้นปีที่ 4 ➔ ปรับสถานะเป็น <b>สำเร็จการศึกษา</b></li>
+                </ul>
+              </div>
+
+              {promotionResult && (
+                <div className="p-3 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{promotionResult}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleExecuteAcademicYearPromotion}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>ดำเนินการเลื่อนชั้นปีการศึกษา</span>
+              </button>
+            </div>
+
+            {/* 6. SEMESTER TARGET SETTINGS */}
+            <div className="p-5 rounded-3xl border border-amber-200/80 bg-amber-50/40 space-y-4 md:col-span-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    เป้าหมายกิจกรรมประจำภาคเรียน
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    กำหนดเกณฑ์จำนวนครั้งและการแสดงผลในแดชบอร์ด
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">ภาคเรียน</label>
+                    <input
+                      type="text"
+                      value={semesterSettings.semesterName}
+                      onChange={(e) =>
+                        setSemesterSettings({ ...semesterSettings, semesterName: e.target.value })
+                      }
+                      placeholder="ภาคเรียนที่ 1"
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-900 mb-1">ปีการศึกษา</label>
+                    <input
+                      type="text"
+                      value={semesterSettings.academicYear}
+                      onChange={(e) =>
+                        setSemesterSettings({ ...semesterSettings, academicYear: e.target.value })
+                      }
+                      placeholder="2567"
+                      className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                    เป้าหมายจำนวนสัปดาห์ / ครั้ง (Target Sessions)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={semesterSettings.targetSessions}
+                    onChange={(e) =>
+                      setSemesterSettings({
+                        ...semesterSettings,
+                        targetSessions: parseInt(e.target.value) || 12,
+                      })
+                    }
+                    className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono font-bold"
+                  />
+                  <p className="text-[10px] text-purple-600 mt-1">
+                    ระบบจะใช้วัดเปอร์เซ็นต์ความคืบหน้าของกิจกรรม เช่น 12 ครั้งต่อภาคเรียน
+                  </p>
+                </div>
+
+                {semesterSavedMsg && (
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{semesterSavedMsg}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSaveSemesterConfig}
+                  className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกการตั้งค่าเป้าหมาย</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 7. EMERGENCY JSON FULL BACKUP & RESTORE */}
+            <div className="p-5 rounded-3xl border border-sky-200/80 bg-sky-50/40 space-y-4 md:col-span-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center font-bold">
+                  <DatabaseIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    สำรองและกู้คืนฐานข้อมูลฉุกเฉิน (JSON Snapshot 1-Click)
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    ดาวน์โหลดหรือกู้คืนข้อมูลโครงสร้างทั้งหมด (นักศึกษา, อาจารย์, สาขา, ประวัติคาบ, ระดับกลุ่ม) ได้ทันทีโดยไม่ต้องผ่านเซิร์ฟเวอร์
+                  </p>
+                </div>
+              </div>
+
+              {backupRestoreMsg && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                    backupRestoreMsg.success
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{backupRestoreMsg.text}</span>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={handleDownloadFullBackup}
+                  className="flex-1 py-2.5 px-4 bg-sky-700 hover:bg-sky-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>ดาวน์โหลดไฟล์ Snapshot (.json)</span>
+                </button>
+
+                <label className="flex-1 py-2.5 px-4 bg-white hover:bg-sky-100 active:scale-95 text-sky-900 border border-sky-300 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer">
+                  <Upload className="w-4 h-4 text-sky-700" />
+                  <span>กู้คืนข้อมูลจากไฟล์ Snapshot (.json)</span>
+                  <input
+                    ref={restoreFileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestoreFullBackup}
+                    className="hidden"
+                  />
+                </label>
               </div>
             </div>
           </div>

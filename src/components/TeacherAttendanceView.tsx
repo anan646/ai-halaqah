@@ -18,12 +18,34 @@ import {
   Check,
   UserX,
   FileText,
-  HelpCircle
+  HelpCircle,
+  QrCode,
+  KeyRound,
+  Award,
+  BookOpen,
+  MessageSquare,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
-import { getActiveTeachers, getActiveStudents, getStudentMajor } from '@/lib/data-store';
+import { AttendanceRecord, AttendanceStatus, GroupLevel } from '@/lib/types';
+import {
+  getActiveTeachers,
+  getActiveStudents,
+  getStudentMajor,
+  getStudentLevel,
+  promoteStudentLevel,
+  demoteStudentLevel,
+  getGroupLevel,
+  promoteGroupLevel,
+  demoteGroupLevel,
+  getSessionMetadata,
+  saveSessionMetadata,
+  getOrGenerateSessionPin,
+} from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
+import { DynamicQrModal } from './DynamicQrModal';
+
 
 interface TeacherAttendanceViewProps {
   records: AttendanceRecord[];
@@ -102,8 +124,16 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
 
   // 3. Student statuses & timestamps for selected date
   const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; time: string }>>({});
+  const [leaveReasonMap, setLeaveReasonMap] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  // 3.1 QR Modal, PIN, Topic & Notes, Level refresh
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [sessionTopic, setSessionTopic] = useState('');
+  const [sessionNotes, setSessionNotes] = useState('');
+  const [sessionPin, setSessionPin] = useState('');
+  const [levelRefresh, setLevelRefresh] = useState(0);
 
   // Initialize selected teacher
   useEffect(() => {
@@ -123,6 +153,76 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     return teachers.find((t) => t.name === selectedTeacherName) || teachers[0];
   }, [selectedTeacherName, teachers]);
 
+  // Load session metadata and pin
+  useEffect(() => {
+    if (!currentTeacher || !selectedDate) return;
+    const meta = getSessionMetadata(selectedDate, currentTeacher.name);
+    if (meta) {
+      setSessionTopic(meta.topic || '');
+      setSessionNotes(meta.notes || '');
+      setSessionPin(meta.pinCode || getOrGenerateSessionPin(selectedDate, currentTeacher.name));
+    } else {
+      setSessionTopic('');
+      setSessionNotes('');
+      setSessionPin(getOrGenerateSessionPin(selectedDate, currentTeacher.name));
+    }
+  }, [currentTeacher, selectedDate]);
+
+  const handleRefreshPin = () => {
+    if (!currentTeacher || !selectedDate) return;
+    const newPin = String(Math.floor(1000 + Math.random() * 9000));
+    setSessionPin(newPin);
+    saveSessionMetadata({
+      date: selectedDate,
+      teacherName: currentTeacher.name,
+      topic: sessionTopic,
+      notes: sessionNotes,
+      pinCode: newPin,
+      pinCreatedAt: new Date().toISOString(),
+    });
+  };
+
+  const currentGroupLevel = useMemo(() => {
+    if (!currentTeacher) return '01';
+    return getGroupLevel(currentTeacher.name);
+  }, [currentTeacher, levelRefresh]);
+
+  const handlePromoteGroup = () => {
+    if (!currentTeacher) return;
+    const res = promoteGroupLevel(currentTeacher.name, true);
+    if (res.success) {
+      setLevelRefresh((k) => k + 1);
+      setSaveMessage({ type: 'success', text: res.message });
+    } else {
+      setSaveMessage({ type: 'info', text: res.message });
+    }
+  };
+
+  const handleDemoteGroup = () => {
+    if (!currentTeacher) return;
+    const res = demoteGroupLevel(currentTeacher.name, true);
+    if (res.success) {
+      setLevelRefresh((k) => k + 1);
+      setSaveMessage({ type: 'info', text: res.message });
+    } else {
+      setSaveMessage({ type: 'info', text: res.message });
+    }
+  };
+
+  const handlePromoteStudent = (studentId: string) => {
+    const res = promoteStudentLevel(studentId);
+    if (res.success) {
+      setLevelRefresh((k) => k + 1);
+    }
+  };
+
+  const handleDemoteStudent = (studentId: string) => {
+    const res = demoteStudentLevel(studentId);
+    if (res.success) {
+      setLevelRefresh((k) => k + 1);
+    }
+  };
+
   const handleTeacherChange = (teacherName: string) => {
     setSelectedTeacherName(teacherName);
     localStorage.setItem('last_selected_teacher', teacherName);
@@ -132,13 +232,14 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const groupStudents = useMemo(() => {
     if (!currentTeacher) return [];
     return allStudents.filter((st) => st.teacherName === currentTeacher.name);
-  }, [currentTeacher, allStudents]);
+  }, [currentTeacher, allStudents, levelRefresh]);
 
   // Load existing records or default
   useEffect(() => {
     if (!currentTeacher || groupStudents.length === 0) return;
 
     const newMap: Record<string, { status: AttendanceStatus; time: string }> = {};
+    const newReasons: Record<string, string> = {};
     const nowTimeStr = new Date().toLocaleTimeString('th-TH', { hour12: false });
 
     groupStudents.forEach((st) => {
@@ -150,6 +251,9 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           status: existing.status,
           time: existing.recordedTime || nowTimeStr,
         };
+        if (existing.leaveReason) {
+          newReasons[st.studentId] = existing.leaveReason;
+        }
       } else {
         newMap[st.studentId] = {
           status: 'มา',
@@ -159,6 +263,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     });
 
     setAttendanceMap(newMap);
+    setLeaveReasonMap(newReasons);
     setSaveMessage(null);
   }, [currentTeacher, selectedDate, records, groupStudents]);
 
@@ -192,6 +297,13 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         time: nowTimeStr,
       },
     }));
+
+    if (status === 'ลา' && !leaveReasonMap[studentId]) {
+      const promptReason = window.prompt('ระบุเหตุผลการลา (เช่น ป่วย, ติดสอบ, ลากิจ):', 'ลากิจจำเป็น');
+      if (promptReason && promptReason.trim()) {
+        setLeaveReasonMap((prev) => ({ ...prev, [studentId]: promptReason.trim() }));
+      }
+    }
   };
 
   // Mark all
@@ -272,8 +384,23 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         timestamp: nowISO,
         recordedTime: item.time || currentTime,
         major: getStudentMajor(st),
+        level: getStudentLevel(st),
+        leaveReason: item.status === 'ลา' ? (leaveReasonMap[st.studentId] || 'ลากิจ') : undefined,
+        sessionTopic: sessionTopic.trim() || undefined,
+        notes: sessionNotes.trim() || undefined,
       };
     });
+
+    // Save session metadata
+    saveSessionMetadata({
+      date: selectedDate,
+      teacherName: currentTeacher.name,
+      topic: sessionTopic.trim(),
+      notes: sessionNotes.trim(),
+      pinCode: sessionPin,
+      pinCreatedAt: nowISO,
+    });
+
 
     try {
       const res = await saveAttendanceBatch(payload);
@@ -385,12 +512,45 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
             </p>
           </div>
 
-          {/* Right badge: Group Info */}
-          <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-2xl">
-            <Users className="w-4 h-4 text-purple-200" />
-            <span className="text-xs font-bold text-purple-100">
-              {groupStudents.length} คนในกลุ่ม
-            </span>
+          {/* Right badge: Group Info & Level (01, 02, 03) */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Group Level Badge & Stepper */}
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 px-3.5 py-1.5 rounded-2xl flex items-center gap-2.5">
+              <Award className="w-4 h-4 text-amber-300" />
+              <div className="text-left">
+                <span className="text-[10px] text-purple-200 block font-medium">ระดับของกลุ่ม</span>
+                <span className="text-xs font-black text-amber-300">
+                  {currentGroupLevel === '01' && 'ระดับ 01 (พื้นฐาน)'}
+                  {currentGroupLevel === '02' && 'ระดับ 02 (ปานกลาง)'}
+                  {currentGroupLevel === '03' && 'ระดับ 03 (ก้าวหน้า)'}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5 ml-1">
+                <button
+                  type="button"
+                  onClick={handlePromoteGroup}
+                  title="เลื่อนระดับกลุ่ม (01 -> 02 -> 03)"
+                  className="w-5 h-5 rounded-md bg-white/20 hover:bg-emerald-500 text-white flex items-center justify-center transition active:scale-90 cursor-pointer"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDemoteGroup}
+                  title="ลดระดับกลุ่ม (03 -> 02 -> 01)"
+                  className="w-5 h-5 rounded-md bg-white/20 hover:bg-rose-500 text-white flex items-center justify-center transition active:scale-90 cursor-pointer"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-2 rounded-2xl">
+              <Users className="w-4 h-4 text-purple-200" />
+              <span className="text-xs font-bold text-purple-100">
+                {groupStudents.length} คน
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -492,6 +652,17 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
               <span>เลือกวันย้อนหลัง</span>
             </button>
 
+            {/* Dynamic QR & PIN Button */}
+            <button
+              type="button"
+              onClick={() => setIsQrModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-gradient-to-r from-purple-800 to-indigo-800 hover:from-purple-900 hover:to-indigo-900 text-white shadow-sm transition-all active:scale-95 cursor-pointer"
+              title="เปิด QR Code และรหัส PIN 4 หลักให้นักศึกษาสแกนหรือกรอกเช็คชื่อ"
+            >
+              <QrCode className="w-3.5 h-3.5 text-purple-200" />
+              <span>QR & PIN ({sessionPin})</span>
+            </button>
+
             {/* Native date input invoked by showPicker */}
             <input
               ref={dateInputRef}
@@ -551,6 +722,38 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
             </div>
           </div>
         )}
+
+        {/* Session Topic & Notes (หัวข้อบทเรียน/ซูเราะฮ์) */}
+        <div className="pt-2 border-t border-purple-50 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-purple-50/40 p-3 rounded-2xl border border-purple-100/70">
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold text-purple-950 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-purple-700" />
+              <span>หัวข้อบทเรียน / ซูเราะฮ์ที่อ่านประจำคาบ:</span>
+            </label>
+            <input
+              type="text"
+              placeholder="เช่น ซูเราะฮ์ อัล-มุลก์ 1-15, ตัฟซีรเรื่องคุณธรรม..."
+              value={sessionTopic}
+              onChange={(e) => setSessionTopic(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-xl border border-purple-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold text-purple-950 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
+              <span>บันทึกผลการสอน / พฤติกรรมเพิ่มเติม:</span>
+            </label>
+            <input
+              type="text"
+              placeholder="บันทึกย่อประจำคาบ (ไม่บังคับ)..."
+              value={sessionNotes}
+              onChange={(e) => setSessionNotes(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-xl border border-purple-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+            />
+          </div>
+        </div>
+
 
         {/* Live Counts Cards (Tactile 3-Card Bento) */}
         <div className="grid grid-cols-3 gap-2.5 text-center pt-3 border-t border-purple-50">
@@ -648,8 +851,35 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                     {idx + 1}
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-extrabold text-purple-950 truncate">
-                      {st.fullName}
+                    <div className="text-sm font-extrabold text-purple-950 truncate flex items-center gap-2 flex-wrap">
+                      <span>{st.fullName}</span>
+                      {/* Student Level Badge & Quick Steppers */}
+                      <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/90 px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-900 shadow-2xs">
+                        <Award className="w-3 h-3 text-amber-600" />
+                        <span>ระดับ {getStudentLevel(st)}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePromoteStudent(st.studentId);
+                          }}
+                          title="เลื่อนระดับนักศึกษา (01 -> 02 -> 03)"
+                          className="hover:text-emerald-700 hover:bg-emerald-100 rounded px-0.5 transition cursor-pointer"
+                        >
+                          <ArrowUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDemoteStudent(st.studentId);
+                          }}
+                          title="ลดระดับนักศึกษา (03 -> 02 -> 01)"
+                          className="hover:text-rose-700 hover:bg-rose-100 rounded px-0.5 transition cursor-pointer"
+                        >
+                          <ArrowDown className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
                     </div>
                     <div className="text-[11px] font-mono text-purple-800/70 flex items-center gap-2 mt-0.5 flex-wrap">
                       <span>รหัส {st.studentId}</span>
@@ -662,9 +892,22 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
                       <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-sans font-bold border border-purple-200">
                         🎓 {getStudentMajor(st)}
                       </span>
+                      {entry.status === 'ลา' && (
+                        <span
+                          onClick={() => {
+                            const newR = window.prompt('แก้ไขเหตุผลการลา:', leaveReasonMap[st.studentId] || 'ลากิจ');
+                            if (newR) setLeaveReasonMap((prev) => ({ ...prev, [st.studentId]: newR.trim() }));
+                          }}
+                          className="px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-sans font-bold border border-amber-300 cursor-pointer"
+                          title="คลิกเพื่อแก้ไขเหตุผลการลา"
+                        >
+                          📝 เหตุผล: {leaveReasonMap[st.studentId] || 'ลากิจ'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
+
 
                 {/* Big Segmented Status Buttons (Min 44px touch target) */}
                 <div className="flex items-center space-x-1.5 w-full sm:w-auto pt-1 sm:pt-0">
@@ -760,6 +1003,21 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           </button>
         </div>
       </div>
+      {/* 8. DYNAMIC QR CODE & PIN MODAL */}
+      {isQrModalOpen && (
+        <DynamicQrModal
+          teacherName={currentTeacher.name}
+          groupName={currentTeacher.groupName}
+          date={selectedDate}
+          pinCode={sessionPin}
+          sessionTopic={sessionTopic}
+          checkedCount={counts.present}
+          totalStudents={groupStudents.length}
+          onRefreshPin={handleRefreshPin}
+          onClose={() => setIsQrModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
+
