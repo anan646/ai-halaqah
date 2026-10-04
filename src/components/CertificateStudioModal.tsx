@@ -154,6 +154,11 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
   };
 
   const activeLogo = config.customLogoUrl || systemLogo;
+  const rawTitle = (config.awardTitle || 'เกียรติบัตร').trim();
+  const cleanAwardTitle =
+    rawTitle.includes('มอบให้ไว้') || rawTitle.includes('เพื่อแสดงว่า')
+      ? 'เกียรติบัตร'
+      : rawTitle;
 
   return (
     <ModalPortal>
@@ -735,34 +740,65 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                         style={{ borderColor: currentTemplate.innerBorderColor }}
                       />
 
-                      {/* 4 Corner Classical Filigree Accents */}
-                      <div className="absolute top-2 left-2 pointer-events-none">
-                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
-                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
-                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
-                        </svg>
+                      {/* 4 Corner Classical Accents (Pure CSS for 100% canvas alignment & symmetry) */}
+                      {/* Top-Left */}
+                      <div
+                        className="absolute top-2.5 left-2.5 w-6 h-6 pointer-events-none border-t-2 border-l-2"
+                        style={{ borderColor: currentTemplate.borderColor }}
+                      >
+                        <div
+                          className="w-3.5 h-3.5 border-t border-l m-0.5"
+                          style={{ borderColor: currentTemplate.innerBorderColor }}
+                        />
+                        <div
+                          className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: currentTemplate.borderColor }}
+                        />
                       </div>
-                      <div className="absolute top-2 right-2 pointer-events-none rotate-90">
-                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
-                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
-                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
-                        </svg>
+
+                      {/* Top-Right */}
+                      <div
+                        className="absolute top-2.5 right-2.5 w-6 h-6 pointer-events-none border-t-2 border-r-2"
+                        style={{ borderColor: currentTemplate.borderColor }}
+                      >
+                        <div
+                          className="w-3.5 h-3.5 border-t border-r m-0.5 float-right"
+                          style={{ borderColor: currentTemplate.innerBorderColor }}
+                        />
+                        <div
+                          className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: currentTemplate.borderColor }}
+                        />
                       </div>
-                      <div className="absolute bottom-2 right-2 pointer-events-none rotate-180">
-                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
-                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
-                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
-                        </svg>
+
+                      {/* Bottom-Left */}
+                      <div
+                        className="absolute bottom-2.5 left-2.5 w-6 h-6 pointer-events-none border-b-2 border-l-2"
+                        style={{ borderColor: currentTemplate.borderColor }}
+                      >
+                        <div
+                          className="w-3.5 h-3.5 border-b border-l m-0.5"
+                          style={{ borderColor: currentTemplate.innerBorderColor }}
+                        />
+                        <div
+                          className="absolute bottom-1.5 left-1.5 w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: currentTemplate.borderColor }}
+                        />
                       </div>
-                      <div className="absolute bottom-2 left-2 pointer-events-none -rotate-90">
-                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                          <path d="M2 34V10C2 5.58172 5.58172 2 10 2H34" stroke={currentTemplate.borderColor} strokeWidth="2.5" />
-                          <path d="M6 30V12C6 8.68629 8.68629 6 12 6H30" stroke={currentTemplate.innerBorderColor} strokeWidth="1" />
-                          <circle cx="12" cy="12" r="2.5" fill={currentTemplate.borderColor} />
-                        </svg>
+
+                      {/* Bottom-Right */}
+                      <div
+                        className="absolute bottom-2.5 right-2.5 w-6 h-6 pointer-events-none border-b-2 border-r-2"
+                        style={{ borderColor: currentTemplate.borderColor }}
+                      >
+                        <div
+                          className="w-3.5 h-3.5 border-b border-r m-0.5 float-right"
+                          style={{ borderColor: currentTemplate.innerBorderColor }}
+                        />
+                        <div
+                          className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: currentTemplate.borderColor }}
+                        />
                       </div>
                     </>
                   )}
@@ -818,7 +854,7 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                           borderColor: currentTemplate.innerBorderColor,
                         }}
                       >
-                        {config.awardTitle}
+                        {cleanAwardTitle}
                       </span>
                       <div
                         className="h-px w-8 sm:w-14"

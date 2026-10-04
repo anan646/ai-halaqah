@@ -183,7 +183,7 @@ export const DEFAULT_CERTIFICATE_CONFIG: CertificateConfig = {
   institutionName: 'คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี',
   institutionSubName: 'FACULTY OF EDUCATION, FATONI UNIVERSITY',
   activityTitle: 'โครงการฮะละเกาะฮ์อัลกุรอาน',
-  awardTitle: 'เกียรติบัตรฉบับนี้มอบให้ไว้เพื่อแสดงว่า',
+  awardTitle: 'เกียรติบัตร',
   bodyText: 'ได้เข้าร่วมและผ่านเกณฑ์การประเมินในโครงการฮะละเกาะฮ์อัลกุรอาน',
   blessingText: '"ขอให้อัลลอฮ์ (ซ.บ.) ทรงประทานความรู้ ความบะรอกัต และความเจริญก้าวหน้าแก่ท่านสืบไป"',
   signatory1Title: 'ผู้รับผิดชอบโครงการ',
@@ -213,7 +213,11 @@ export function getCertificateConfig(): CertificateConfig {
   try {
     const raw = localStorage.getItem(CERT_STORAGE_KEY);
     if (!raw) return DEFAULT_CERTIFICATE_CONFIG;
-    return { ...DEFAULT_CERTIFICATE_CONFIG, ...JSON.parse(raw) };
+    const parsed = { ...DEFAULT_CERTIFICATE_CONFIG, ...JSON.parse(raw) };
+    if (parsed.awardTitle === 'เกียรติบัตรฉบับนี้มอบให้ไว้เพื่อแสดงว่า') {
+      parsed.awardTitle = 'เกียรติบัตร';
+    }
+    return parsed;
   } catch {
     return DEFAULT_CERTIFICATE_CONFIG;
   }

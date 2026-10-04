@@ -32,9 +32,10 @@ export async function exportCertificateToPdf(
     const canvas = await html2canvas(element, {
       scale,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
+      imageTimeout: 15000,
       onclone: (clonedDoc) => {
         const id = typeof elementIdOrElement === 'string' ? elementIdOrElement : element.id;
         const clonedEl = id ? clonedDoc.getElementById(id) : null;
@@ -43,10 +44,16 @@ export async function exportCertificateToPdf(
           clonedEl.style.borderRadius = '0px';
           clonedEl.style.boxShadow = 'none';
         }
+        // Ensure images don't block canvas exporting
+        const imgs = clonedDoc.getElementsByTagName('img');
+        for (let i = 0; i < imgs.length; i++) {
+          imgs[i].crossOrigin = 'anonymous';
+        }
       },
     });
 
     const imgData = canvas.toDataURL('image/png', 1.0);
+    const format = imgData.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
 
     // Standard A4 Landscape: 297mm width x 210mm height
     const pdf = new jsPDF({
@@ -57,7 +64,7 @@ export async function exportCertificateToPdf(
     });
 
     // Fill entire A4 landscape page with exact proportions (0, 0, 297mm, 210mm)
-    pdf.addImage(imgData, 'PNG', 0, 0, 297, 210, undefined, 'FAST');
+    pdf.addImage(imgData, format, 0, 0, 297, 210, undefined, 'FAST');
 
     const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
     pdf.save(cleanFilename);
@@ -89,11 +96,12 @@ export async function printCertificate(
 
   try {
     const canvas = await html2canvas(element, {
-      scale: 3,
+      scale: 2.5,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
+      imageTimeout: 15000,
       onclone: (clonedDoc) => {
         const id = typeof elementIdOrElement === 'string' ? elementIdOrElement : element.id;
         const clonedEl = id ? clonedDoc.getElementById(id) : null;
@@ -101,17 +109,16 @@ export async function printCertificate(
           clonedEl.style.borderRadius = '0px';
           clonedEl.style.boxShadow = 'none';
         }
+        const imgs = clonedDoc.getElementsByTagName('img');
+        for (let i = 0; i < imgs.length; i++) {
+          imgs[i].crossOrigin = 'anonymous';
+        }
       },
     });
 
     const imgData = canvas.toDataURL('image/png', 1.0);
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      window.print();
-      return true;
-    }
 
-    printWindow.document.write(`
+    const printHtml = `
       <!DOCTYPE html>
       <html lang="th">
       <head>
@@ -154,7 +161,7 @@ export async function printCertificate(
           window.onload = function() {
             setTimeout(function() {
               window.print();
-            }, 250);
+            }, 300);
             window.onafterprint = function() {
               window.close();
             };
@@ -162,8 +169,44 @@ export async function printCertificate(
         </script>
       </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    // Try popup window first
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
+      return true;
+    }
+
+    // Popup was blocked: print via hidden iframe seamlessly
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (iframeDoc) {
+      iframeDoc.open();
+      iframeDoc.write(printHtml);
+      iframeDoc.close();
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        }, 1500);
+      }, 400);
+      return true;
+    }
+
+    window.print();
     return true;
   } catch (err) {
     console.error('Failed to print certificate via canvas, falling back to window.print():', err);
