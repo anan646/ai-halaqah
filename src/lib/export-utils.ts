@@ -509,3 +509,67 @@ export function downloadPdfReport(
 export function printReport() {
   window.print();
 }
+
+// ======================== EXCEL IMPORT TEMPLATE ========================
+export function downloadStudentImportTemplate(teachersList: { name: string; groupName: string }[] = []) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Template with examples
+  const templateRows = [
+    {
+      'รหัสนักศึกษา': '681441001',
+      'ชื่อ-นามสกุล': 'นายฮาซัน อาลี',
+      'เพศ': 'ชาย',
+      'ชั้นปี': 'ปี 1',
+      'สาขาวิชา': 'อิสลามศึกษา',
+      'อาจารย์ผู้ดูแล': teachersList[0]?.name || 'อ.อับดุลลอฮ์',
+      'ระดับ': '01',
+    },
+    {
+      'รหัสนักศึกษา': '681442002',
+      'ชื่อ-นามสกุล': 'นางสาวฟาฏิมะห์ ยะโกะ',
+      'เพศ': 'หญิง',
+      'ชั้นปี': 'ปี 1',
+      'สาขาวิชา': 'ภาษาอาหรับ',
+      'อาจารย์ผู้ดูแล': teachersList[1]?.name || 'อ.มูฮัมหมัด',
+      'ระดับ': '01',
+    },
+    {
+      'รหัสนักศึกษา': '681443003',
+      'ชื่อ-นามสกุล': 'นายอิบรอฮีม มามะ',
+      'เพศ': 'ชาย',
+      'ชั้นปี': 'ปี 1',
+      'สาขาวิชา': 'วิทยาศาสตร์ทั่วไป',
+      'อาจารย์ผู้ดูแล': teachersList[2]?.name || 'อ.อิสมาแอ',
+      'ระดับ': '01',
+    },
+  ];
+
+  const ws = XLSX.utils.json_to_sheet(templateRows);
+  ws['!cols'] = [
+    { wch: 16 }, // รหัสนักศึกษา
+    { wch: 26 }, // ชื่อ-นามสกุล
+    { wch: 10 }, // เพศ
+    { wch: 10 }, // ชั้นปี
+    { wch: 24 }, // สาขาวิชา
+    { wch: 25 }, // อาจารย์ผู้ดูแล
+    { wch: 10 }, // ระดับ
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'รายชื่อนักศึกษาใหม่');
+
+  // Sheet 2: Teachers Reference
+  if (teachersList.length > 0) {
+    const refRows = teachersList.map((t, i) => ({
+      'ลำดับ': i + 1,
+      'ชื่ออาจารย์ผู้ดูแล': t.name,
+      'กลุ่มหะละเกาะห์': t.groupName,
+    }));
+    const wsRef = XLSX.utils.json_to_sheet(refRows);
+    wsRef['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsRef, 'รายชื่ออาจารย์ในระบบ');
+  }
+
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  saveAs(blob, 'เทมเพลตนำเข้านักศึกษา_หะละเกาะห์.xlsx');
+}

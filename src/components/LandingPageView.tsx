@@ -35,7 +35,6 @@ import {
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
 import { CertificateModal } from '@/components/CertificateModal';
-import { StudentPinCheckinModal } from '@/components/StudentPinCheckinModal';
 
 
 const STUDENT_TUTORIAL_KEY = 'halaqah_tutorial_student_dismissed_v1';
@@ -124,22 +123,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
-  const [isPinCheckinOpen, setIsPinCheckinOpen] = useState(false);
-  const [checkinInitialPin, setCheckinInitialPin] = useState('');
-
-  // Check URL query params for ?checkinPin=
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const pin = params.get('checkinPin');
-      if (pin) {
-        setPortalView('student');
-        setCheckinInitialPin(pin);
-        setIsPinCheckinOpen(true);
-      }
-    }
-  }, []);
-
   // Announcements state
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
@@ -1001,15 +984,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               </div>
 
               <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setIsPinCheckinOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-full text-xs font-black shadow-sm transition active:scale-95 cursor-pointer"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>⚡ เช็คชื่อด่วนด้วย PIN</span>
-                </button>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200/80 rounded-full text-[10px] font-extrabold text-purple-800">
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-50 border border-purple-200/80 rounded-full text-xs font-extrabold text-purple-800">
                   <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
                   <span>เห็นเฉพาะตนเอง</span>
                 </div>
@@ -1144,9 +1119,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                       <span className="bg-gradient-to-r from-amber-400/30 to-yellow-500/30 text-yellow-200 text-[10px] font-black px-3 py-1 rounded-full border border-yellow-300/40 flex items-center gap-1.5 shadow-2xs">
                         <Award className="w-3.5 h-3.5 text-yellow-300" />
                         <span>
-                          {getStudentLevel(selectedStudent) === '01' && 'ระดับ 01 (ขั้นพื้นฐาน)'}
-                          {getStudentLevel(selectedStudent) === '02' && 'ระดับ 02 (ขั้นกลาง)'}
-                          {getStudentLevel(selectedStudent) === '03' && 'ระดับ 03 (ขั้นก้าวหน้า)'}
+                          {getStudentLevel(selectedStudent) === '01' && 'ระดับ 01'}
+                          {getStudentLevel(selectedStudent) === '02' && 'ระดับ 02'}
+                          {getStudentLevel(selectedStudent) === '03' && 'ระดับ 03'}
                         </span>
                       </span>
 
@@ -1431,19 +1406,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         />
       )}
 
-      {/* Student Self PIN Check-in Modal */}
-      {isPinCheckinOpen && (
-        <StudentPinCheckinModal
-          initialPin={checkinInitialPin}
-          onCheckinSuccess={(studentName) => {
-            // refresh data
-            if (typeof window !== 'undefined') {
-              window.location.reload();
-            }
-          }}
-          onClose={() => setIsPinCheckinOpen(false)}
-        />
-      )}
 
       {/* Official E-Certificate Modal */}
       {isCertModalOpen && selectedStudent && studentStats && (

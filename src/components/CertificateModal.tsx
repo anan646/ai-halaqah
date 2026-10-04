@@ -30,13 +30,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const getLevelLabel = (lvl: GroupLevel) => {
     switch (lvl) {
       case '01':
-        return 'ระดับ 01 (ขั้นพื้นฐาน - ตะฮ์ซีน)';
+        return 'ระดับ 01';
       case '02':
-        return 'ระดับ 02 (ขั้นกลาง - ตะลาวาฮ์)';
+        return 'ระดับ 02';
       case '03':
-        return 'ระดับ 03 (ขั้นก้าวหน้า - ฮิฟซ์/ท่องจำ)';
+        return 'ระดับ 03';
       default:
-        return 'ระดับ 01 (ขั้นพื้นฐาน)';
+        return 'ระดับ 01';
     }
   };
 

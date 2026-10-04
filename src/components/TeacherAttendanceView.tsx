@@ -19,8 +19,6 @@ import {
   UserX,
   FileText,
   HelpCircle,
-  QrCode,
-  KeyRound,
   Award,
   BookOpen,
   MessageSquare,
@@ -41,10 +39,8 @@ import {
   demoteGroupLevel,
   getSessionMetadata,
   saveSessionMetadata,
-  getOrGenerateSessionPin,
 } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
-import { DynamicQrModal } from './DynamicQrModal';
 
 
 interface TeacherAttendanceViewProps {
@@ -128,11 +124,9 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // 3.1 QR Modal, PIN, Topic & Notes, Level refresh
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  // 3.1 Topic & Notes, Level refresh
   const [sessionTopic, setSessionTopic] = useState('');
   const [sessionNotes, setSessionNotes] = useState('');
-  const [sessionPin, setSessionPin] = useState('');
   const [levelRefresh, setLevelRefresh] = useState(0);
 
   // Initialize selected teacher
@@ -153,34 +147,18 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     return teachers.find((t) => t.name === selectedTeacherName) || teachers[0];
   }, [selectedTeacherName, teachers]);
 
-  // Load session metadata and pin
+  // Load session metadata
   useEffect(() => {
     if (!currentTeacher || !selectedDate) return;
     const meta = getSessionMetadata(selectedDate, currentTeacher.name);
     if (meta) {
       setSessionTopic(meta.topic || '');
       setSessionNotes(meta.notes || '');
-      setSessionPin(meta.pinCode || getOrGenerateSessionPin(selectedDate, currentTeacher.name));
     } else {
       setSessionTopic('');
       setSessionNotes('');
-      setSessionPin(getOrGenerateSessionPin(selectedDate, currentTeacher.name));
     }
   }, [currentTeacher, selectedDate]);
-
-  const handleRefreshPin = () => {
-    if (!currentTeacher || !selectedDate) return;
-    const newPin = String(Math.floor(1000 + Math.random() * 9000));
-    setSessionPin(newPin);
-    saveSessionMetadata({
-      date: selectedDate,
-      teacherName: currentTeacher.name,
-      topic: sessionTopic,
-      notes: sessionNotes,
-      pinCode: newPin,
-      pinCreatedAt: new Date().toISOString(),
-    });
-  };
 
   const currentGroupLevel = useMemo(() => {
     if (!currentTeacher) return '01';
@@ -397,8 +375,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       teacherName: currentTeacher.name,
       topic: sessionTopic.trim(),
       notes: sessionNotes.trim(),
-      pinCode: sessionPin,
-      pinCreatedAt: nowISO,
     });
 
 
@@ -520,9 +496,9 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
               <div className="text-left">
                 <span className="text-[10px] text-purple-200 block font-medium">ระดับของกลุ่ม</span>
                 <span className="text-xs font-black text-amber-300">
-                  {currentGroupLevel === '01' && 'ระดับ 01 (พื้นฐาน)'}
-                  {currentGroupLevel === '02' && 'ระดับ 02 (ปานกลาง)'}
-                  {currentGroupLevel === '03' && 'ระดับ 03 (ก้าวหน้า)'}
+                  {currentGroupLevel === '01' && 'ระดับ 01'}
+                  {currentGroupLevel === '02' && 'ระดับ 02'}
+                  {currentGroupLevel === '03' && 'ระดับ 03'}
                 </span>
               </div>
               <div className="flex flex-col gap-0.5 ml-1">
@@ -652,16 +628,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
               <span>เลือกวันย้อนหลัง</span>
             </button>
 
-            {/* Dynamic QR & PIN Button */}
-            <button
-              type="button"
-              onClick={() => setIsQrModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-gradient-to-r from-purple-800 to-indigo-800 hover:from-purple-900 hover:to-indigo-900 text-white shadow-sm transition-all active:scale-95 cursor-pointer"
-              title="เปิด QR Code และรหัส PIN 4 หลักให้นักศึกษาสแกนหรือกรอกเช็คชื่อ"
-            >
-              <QrCode className="w-3.5 h-3.5 text-purple-200" />
-              <span>QR & PIN ({sessionPin})</span>
-            </button>
 
             {/* Native date input invoked by showPicker */}
             <input
@@ -1003,20 +969,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           </button>
         </div>
       </div>
-      {/* 8. DYNAMIC QR CODE & PIN MODAL */}
-      {isQrModalOpen && (
-        <DynamicQrModal
-          teacherName={currentTeacher.name}
-          groupName={currentTeacher.groupName}
-          date={selectedDate}
-          pinCode={sessionPin}
-          sessionTopic={sessionTopic}
-          checkedCount={counts.present}
-          totalStudents={groupStudents.length}
-          onRefreshPin={handleRefreshPin}
-          onClose={() => setIsQrModalOpen(false)}
-        />
-      )}
     </div>
   );
 };
