@@ -35,6 +35,8 @@ import {
   TrendingUp,
   Award,
   ChevronRight,
+  ChevronDown,
+  ExternalLink,
   GripVertical,
   Megaphone,
   Bell,
@@ -84,7 +86,18 @@ interface AdminDashboardViewProps {
   isBackingUp?: boolean;
 }
 
-type TabType = 'matrix' | 'analytics' | 'periodic' | 'transfer' | 'editor' | 'announcements' | 'system_management' | 'export';
+type TabType =
+  | 'overview'
+  | 'teachers'
+  | 'pending'
+  | 'matrix'
+  | 'analytics'
+  | 'periodic'
+  | 'transfer'
+  | 'editor'
+  | 'announcements'
+  | 'system_management'
+  | 'export';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   records,
@@ -97,7 +110,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onBackupAll,
   isBackingUp,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('matrix');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   // Active Teachers, Students, & Majors state from data-store
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -384,6 +397,46 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     );
     return dates.sort((a, b) => a.localeCompare(b)); // chronological
   }, [matrixCurrentTeacher, records]);
+
+  const matrixUniqueDates = matrixTeacherDates;
+
+  const matrixRecords = useMemo(() => {
+    if (!matrixCurrentTeacher) return [];
+    return records.filter((r) => r.teacherName === matrixCurrentTeacher.name);
+  }, [matrixCurrentTeacher, records]);
+
+  const matrixStudentSummaries = useMemo(() => {
+    return matrixStudents.map((st) => {
+      const studentRecs = matrixRecords.filter((r) => r.studentId === st.studentId);
+      const attendanceMap: Record<string, string> = {};
+      let present = 0;
+      let absent = 0;
+      let leave = 0;
+
+      studentRecs.forEach((r) => {
+        attendanceMap[r.date] = r.status;
+        if (r.status === 'มา') present++;
+        else if (r.status === 'ขาด') absent++;
+        else if (r.status === 'ลา') leave++;
+      });
+
+      const totalDates = matrixUniqueDates.length;
+      const rate = totalDates > 0 ? (present / totalDates) * 100 : 0;
+      const evaluation = rate >= 80 ? 'ผ่าน' : 'ไม่ผ่าน';
+
+      return {
+        studentId: st.studentId,
+        name: st.fullName,
+        major: getStudentMajor(st),
+        attendanceMap,
+        present,
+        absent,
+        leave,
+        rate,
+        evaluation,
+      };
+    });
+  }, [matrixStudents, matrixRecords, matrixUniqueDates]);
 
   // Drag and drop handlers
   const handleDropStudent = (targetTeacher: string) => {
@@ -718,15 +771,1164 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   const handleDeleteSubAdmin = (id: string) => {
-    if (confirm('คุณต้องการลบแอดมินรองท่านนี้ใช่หรือไม่?')) {
+    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบสิทธิ์แอดมินรองนี้?')) {
       deleteSubAdmin(id);
       setSubAdminsList(getSubAdmins());
     }
   };
 
+  // ==================== REAL-TIME CONTROL & STATUS STATE ====================
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState('พร้อมใช้งาน');
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(60);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
+
+  // Dropdown states for Top Bar
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+  const [isSheetsDropdownOpen, setIsSheetsDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
+  const sheetsDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setIsExportDropdownOpen(false);
+      }
+      if (sheetsDropdownRef.current && !sheetsDropdownRef.current.contains(event.target as Node)) {
+        setIsSheetsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Set initial update time
+  useEffect(() => {
+    const now = new Date();
+    setLastUpdatedTime(now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' น.');
+  }, []);
+
+  // Overview Filters & Sort
+  const [overviewSearch, setOverviewSearch] = useState('');
+  const [overviewSort, setOverviewSort] = useState<'sessions' | 'rate' | 'default'>('default');
+
+  // Teacher Details Filters
+  const [cohortFilter, setCohortFilter] = useState<'all' | 'male' | 'female2' | 'female3' | 'recorded' | 'pending'>('all');
+  const [teacherSearch, setTeacherSearch] = useState('');
+
+  const handleManualSync = async (isSilent = false) => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    if (!isSilent) {
+      setSyncToast('⏳ กำลังเชื่อมต่อและซิงค์ข้อมูลสด...');
+    }
+    try {
+      reloadDataStore();
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' น.';
+      setLastUpdatedTime(timeStr);
+      setSyncToast(`✅ ซิงค์ข้อมูลสดเรียบร้อยแล้ว (${timeStr})`);
+    } catch {
+      reloadDataStore();
+      setSyncToast('เชื่อมต่อเสร็จสิ้น (ใช้ข้อมูลที่บันทึกในระบบล่าสุด)');
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncToast(null), 3500);
+    }
+  };
+
+  // Auto-refresh timer
+  useEffect(() => {
+    if (autoRefreshInterval <= 0) return;
+    const interval = setInterval(() => {
+      handleManualSync(true);
+    }, autoRefreshInterval * 1000);
+    return () => clearInterval(interval);
+  }, [autoRefreshInterval]);
+
+  const GOOGLE_SHEETS_SOURCES = [
+    {
+      id: 'male',
+      name: 'ชาย (ทุกชั้นปี) - 12 กลุ่ม',
+      url: 'https://docs.google.com/spreadsheets/d/12RUrWwlRFCOITwt3wyYwjxYGsgrJ_P-a8P4UGf_H0_U/edit?gid=1686068478',
+    },
+    {
+      id: 'female2',
+      name: 'หญิง (ปี 2) - 15 กลุ่ม',
+      url: 'https://docs.google.com/spreadsheets/d/1iCFV5-NCUk3lexSj9VSkKH8WyFTV3523hbskrgOuonQ/edit?gid=456483790',
+    },
+    {
+      id: 'female3',
+      name: 'หญิง (ปี 3) - 13 กลุ่ม',
+      url: 'https://docs.google.com/spreadsheets/d/1-8VN0z99DCRdI-wY5rzPFYVQieXNvY0tEpcSB1LRnaQ/edit?gid=841705446',
+    },
+  ];
+
+  // ==================== 40 TEACHERS COMPARISON & DETAILED STATS ====================
+  const allTeachersComparison = useMemo(() => {
+    return teachers.map((t, index) => {
+      const groupStudents = students.filter((s) => s.teacherName === t.name);
+      const teacherRecords = records.filter((r) => r.teacherName === t.name);
+      const dates = Array.from(new Set(teacherRecords.map((r) => r.date))).sort();
+
+      let cohort: 'male' | 'female2' | 'female3' = 'male';
+      let cohortName = 'ชาย (ทุกชั้นปี)';
+      if (t.gender === 'หญิง') {
+        if (t.yearLevel?.includes('2') || t.groupName?.includes('ปี 2')) {
+          cohort = 'female2';
+          cohortName = 'หญิง (ปี 2)';
+        } else {
+          cohort = 'female3';
+          cohortName = 'หญิง (ปี 3)';
+        }
+      } else {
+        cohort = 'male';
+        cohortName = 'ชาย (ทุกชั้นปี)';
+      }
+
+      const present = teacherRecords.filter((r) => r.status === 'มา').length;
+      const absent = teacherRecords.filter((r) => r.status === 'ขาด').length;
+      const leave = teacherRecords.filter((r) => r.status === 'ลา').length;
+      const totalChecks = present + absent + leave;
+      const rate = totalChecks > 0 ? Math.round((present / totalChecks) * 100) : 0;
+      const isRecorded = dates.length > 0;
+
+      return {
+        index: index + 1,
+        id: t.name,
+        teacher: t.name,
+        group: t.groupName,
+        yearLevel: t.yearLevel,
+        gender: t.gender,
+        cohort,
+        cohortName,
+        studentsCount: groupStudents.length,
+        datesCount: dates.length,
+        dates,
+        present,
+        absent,
+        leave,
+        rate,
+        isRecorded,
+        students: groupStudents,
+      };
+    });
+  }, [teachers, students, records]);
+
+  // Overview KPI Stats
+  const overviewKpi = useMemo(() => {
+    const totalTeachers = allTeachersComparison.length;
+    const recordedTeachers = allTeachersComparison.filter((t) => t.isRecorded);
+    const recordedCount = recordedTeachers.length;
+    const pendingCount = totalTeachers - recordedCount;
+    const recordedPercent = totalTeachers > 0 ? ((recordedCount / totalTeachers) * 100).toFixed(1) : '0';
+
+    const totalSessions = allTeachersComparison.reduce((acc, t) => acc + t.datesCount, 0);
+    const totalPresent = allTeachersComparison.reduce((acc, t) => acc + t.present, 0);
+    const totalAbsent = allTeachersComparison.reduce((acc, t) => acc + t.absent, 0);
+    const totalLeave = allTeachersComparison.reduce((acc, t) => acc + t.leave, 0);
+    const totalChecks = totalPresent + totalAbsent + totalLeave;
+
+    const avgRate = totalChecks > 0 ? ((totalPresent / totalChecks) * 100).toFixed(1) : '0';
+    const absentRate = totalChecks > 0 ? ((totalAbsent / totalChecks) * 100).toFixed(1) : '0';
+    const leaveRate = totalChecks > 0 ? ((totalLeave / totalChecks) * 100).toFixed(1) : '0';
+
+    let rateLevel = 'ระดับดี';
+    const numRate = parseFloat(avgRate);
+    if (numRate >= 85) rateLevel = 'ระดับดีเยี่ยม';
+    else if (numRate >= 75) rateLevel = 'ระดับดี';
+    else if (numRate >= 60) rateLevel = 'ระดับปานกลาง';
+    else rateLevel = 'ต้องปรับปรุง';
+
+    // Top teacher
+    const sortedBySessions = [...allTeachersComparison].sort((a, b) => b.datesCount - a.datesCount || b.rate - a.rate);
+    const topTeacher = sortedBySessions[0] || null;
+
+    // Cohorts breakdown
+    const maleList = allTeachersComparison.filter((t) => t.cohort === 'male');
+    const maleRecorded = maleList.filter((t) => t.isRecorded).length;
+    const malePercent = maleList.length > 0 ? ((maleRecorded / maleList.length) * 100).toFixed(1) : '0';
+
+    const f2List = allTeachersComparison.filter((t) => t.cohort === 'female2');
+    const f2Recorded = f2List.filter((t) => t.isRecorded).length;
+    const f2Percent = f2List.length > 0 ? ((f2Recorded / f2List.length) * 100).toFixed(1) : '0';
+
+    const f3List = allTeachersComparison.filter((t) => t.cohort === 'female3');
+    const f3Recorded = f3List.filter((t) => t.isRecorded).length;
+    const f3Percent = f3List.length > 0 ? ((f3Recorded / f3List.length) * 100).toFixed(1) : '0';
+
+    const totalStudents = students.length;
+    const totalCheckins = totalChecks;
+    const attendanceRate = totalChecks > 0 ? (totalPresent / totalChecks) * 100 : 0;
+    const presentPct = totalChecks > 0 ? (totalPresent / totalChecks) * 100 : 0;
+    const absentPct = totalChecks > 0 ? (totalAbsent / totalChecks) * 100 : 0;
+    const leavePct = totalChecks > 0 ? (totalLeave / totalChecks) * 100 : 0;
+
+    const malePresent = maleList.reduce((acc, t) => acc + t.present, 0);
+    const maleTotalChecks = maleList.reduce((acc, t) => acc + t.present + t.absent + t.leave, 0);
+    const maleRate = maleTotalChecks > 0 ? (malePresent / maleTotalChecks) * 100 : 0;
+
+    const f2Present = f2List.reduce((acc, t) => acc + t.present, 0);
+    const f2TotalChecks = f2List.reduce((acc, t) => acc + t.present + t.absent + t.leave, 0);
+    const f2Rate = f2TotalChecks > 0 ? (f2Present / f2TotalChecks) * 100 : 0;
+
+    const f3Present = f3List.reduce((acc, t) => acc + t.present, 0);
+    const f3TotalChecks = f3List.reduce((acc, t) => acc + t.present + t.absent + t.leave, 0);
+    const f3Rate = f3TotalChecks > 0 ? (f3Present / f3TotalChecks) * 100 : 0;
+
+    return {
+      totalGroups: totalTeachers,
+      totalTeachers,
+      recordedCount,
+      activeTeachers: recordedCount,
+      pendingCount,
+      recordedPercent,
+      totalStudents,
+      totalSessions,
+      totalCheckins,
+      totalPresent,
+      presentCount: totalPresent,
+      totalAbsent,
+      absentCount: totalAbsent,
+      totalLeave,
+      leaveCount: totalLeave,
+      totalChecks,
+      attendanceRate,
+      avgRate,
+      presentPct,
+      absentPct,
+      leavePct,
+      absentRate,
+      leaveRate,
+      rateLevel,
+      topTeacher,
+      maleTotal: maleList.length,
+      maleRecorded,
+      malePercent,
+      f2Total: f2List.length,
+      f2Recorded,
+      f2Percent,
+      f3Total: f3List.length,
+      f3Recorded,
+      f3Percent,
+      cohortMale: {
+        totalTeachers: maleList.length,
+        activeTeachers: maleRecorded,
+        rate: maleRate,
+        totalCheckins: maleTotalChecks,
+      },
+      cohortFemale2: {
+        totalTeachers: f2List.length,
+        activeTeachers: f2Recorded,
+        rate: f2Rate,
+        totalCheckins: f2TotalChecks,
+      },
+      cohortFemale3: {
+        totalTeachers: f3List.length,
+        activeTeachers: f3Recorded,
+        rate: f3Rate,
+        totalCheckins: f3TotalChecks,
+      },
+    };
+  }, [allTeachersComparison, students.length]);
+
+  // Filtered Overview Teachers for table
+  const filteredOverviewTeachers = useMemo(() => {
+    let list = allTeachersComparison.filter((t) => {
+      if (overviewSearch.trim()) {
+        const q = overviewSearch.trim().toLowerCase();
+        return (
+          t.teacher.toLowerCase().includes(q) ||
+          t.group.toLowerCase().includes(q) ||
+          t.cohortName.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+
+    if (overviewSort === 'sessions') {
+      list = [...list].sort((a, b) => b.datesCount - a.datesCount || b.rate - a.rate);
+    } else if (overviewSort === 'rate') {
+      list = [...list].sort((a, b) => b.rate - a.rate || b.datesCount - a.datesCount);
+    }
+    return list;
+  }, [allTeachersComparison, overviewSearch, overviewSort]);
+
+  // Filtered Teachers for Teacher Details grid
+  const filteredTeachersForDetails = useMemo(() => {
+    return allTeachersComparison.filter((t) => {
+      if (cohortFilter === 'male' && t.cohort !== 'male') return false;
+      if (cohortFilter === 'female2' && t.cohort !== 'female2') return false;
+      if (cohortFilter === 'female3' && t.cohort !== 'female3') return false;
+      if (cohortFilter === 'recorded' && !t.isRecorded) return false;
+      if (cohortFilter === 'pending' && t.isRecorded) return false;
+
+      if (teacherSearch.trim()) {
+        const q = teacherSearch.trim().toLowerCase();
+        return (
+          t.teacher.toLowerCase().includes(q) ||
+          t.group.toLowerCase().includes(q) ||
+          t.cohortName.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [allTeachersComparison, cohortFilter, teacherSearch]);
+
+  // ==================== CLIENTSIDE EXPORT HELPERS ====================
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 150);
+  };
+
+  const exportOverviewExcel = () => {
+    let rowsHtml = '';
+    allTeachersComparison.forEach((t, i) => {
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center;">${i + 1}</td>
+          <td>${t.teacher}</td>
+          <td>${t.group}</td>
+          <td>${t.cohortName}</td>
+          <td style="text-align:center;">${t.studentsCount}</td>
+          <td style="text-align:center;">${t.datesCount}</td>
+          <td style="text-align:center; color:#065f46;">${t.isRecorded ? t.present : '-'}</td>
+          <td style="text-align:center; color:#991b1b;">${t.isRecorded ? t.absent : '-'}</td>
+          <td style="text-align:center; color:#92400e;">${t.isRecorded ? t.leave : '-'}</td>
+          <td style="text-align:right; font-weight:bold;">${t.isRecorded ? t.rate + '%' : '-'}</td>
+          <td style="text-align:center;">${t.isRecorded ? 'บันทึกแล้ว' : 'ยังไม่บันทึก'}</td>
+        </tr>
+      `;
+    });
+
+    const excelTemplate = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Sarabun', 'Tahoma', sans-serif; font-size: 13px; }
+          h2 { color: #581c87; margin-bottom: 4px; }
+          table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+          th { background-color: #581c87; color: #ffffff; font-weight: bold; border: 1px solid #000; padding: 6px 8px; text-align: center; }
+          td { border: 1px solid #cbd5e1; padding: 5px 8px; }
+          .summary-box { background-color: #fbfbfe; border: 1px solid #e9d5ff; padding: 10px; margin-bottom: 12px; }
+        </style>
+      </head>
+      <body>
+        <h2>รายงานสรุปผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์) - ภาพรวมโครงการ</h2>
+        <div class="summary-box">
+          <b>ข้อมูลสรุป ณ วันที่:</b> ${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')} น.<br>
+          <b>อาจารย์ทั้งหมด:</b> ${overviewKpi.totalTeachers} ท่าน (บันทึกผลแล้ว ${overviewKpi.recordedCount} ท่าน คิดเป็น ${overviewKpi.recordedPercent}%) | 
+          <b>จำนวนครั้งบันทึกรวม:</b> ${overviewKpi.totalSessions} ครั้ง | 
+          <b>อัตราการมาเรียนเฉลี่ย:</b> ${overviewKpi.avgRate}% (มา ${overviewKpi.totalPresent} ครั้ง, ขาด ${overviewKpi.totalAbsent} ครั้ง, ลา ${overviewKpi.totalLeave} ครั้ง)
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ลำดับ</th>
+              <th>ชื่ออาจารย์</th>
+              <th>กลุ่ม</th>
+              <th>ส่วน / ชั้นปี</th>
+              <th>นศ. (คน)</th>
+              <th>ครั้งที่บันทึก</th>
+              <th>มา</th>
+              <th>ขาด</th>
+              <th>ลา</th>
+              <th>อัตรามาเรียน</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+    downloadFile(excelTemplate, 'สรุปภาพรวมการเช็คชื่อหะละเกาะห์_2569.xls', 'application/vnd.ms-excel;charset=utf-8');
+    setSyncToast('📗 ดาวน์โหลดไฟล์ Excel ภาพรวมเรียบร้อยแล้ว');
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
+  const exportOverviewWord = () => {
+    let rowsHtml = '';
+    allTeachersComparison.forEach((t, i) => {
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center;">${i + 1}</td>
+          <td style="font-weight:bold;">${t.teacher}</td>
+          <td>${t.group}</td>
+          <td>${t.cohortName}</td>
+          <td style="text-align:center;">${t.studentsCount}</td>
+          <td style="text-align:center; font-weight:bold;">${t.datesCount}</td>
+          <td style="text-align:center; color:#065f46;">${t.isRecorded ? t.present : '-'}</td>
+          <td style="text-align:center; color:#991b1b;">${t.isRecorded ? t.absent : '-'}</td>
+          <td style="text-align:center; color:#92400e;">${t.isRecorded ? t.leave : '-'}</td>
+          <td style="text-align:right; font-weight:bold;">${t.isRecorded ? t.rate + '%' : '-'}</td>
+          <td style="text-align:center;">${t.isRecorded ? 'บันทึกแล้ว' : 'ยังไม่บันทึก'}</td>
+        </tr>
+      `;
+    });
+
+    const wordTemplate = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>รายงานสรุปภาพรวมการเช็คชื่อหะละเกาะห์</title>
+        <style>
+          @page { size: A4 landscape; margin: 15mm; }
+          body { font-family: 'TH Sarabun New', 'Sarabun', Tahoma, sans-serif; font-size: 14pt; line-height: 1.3; color: #1e293b; }
+          h2 { color: #581c87; font-size: 18pt; text-align: center; margin-bottom: 4px; }
+          .sub { text-align: center; font-size: 12pt; color: #64748b; margin-bottom: 15px; }
+          .kpi-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+          .kpi-table td { border: 1px solid #cbd5e1; padding: 8px 12px; background: #f8fafc; font-size: 12pt; }
+          table { border-collapse: collapse; width: 100%; font-size: 12pt; }
+          th { background-color: #581c87; color: white; border: 1px solid #333; padding: 6px; text-align: center; }
+          td { border: 1px solid #94a3b8; padding: 5px 6px; }
+        </style>
+      </head>
+      <body>
+        <h2>รายงานสรุปภาพรวมผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</h2>
+        <div class="sub">ประจำปีการศึกษา 2569 • ข้อมูล ณ วันที่ ${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')} น.</div>
+        <table class="kpi-table">
+          <tr>
+            <td><b>อาจารย์ทั้งหมด:</b> ${overviewKpi.totalTeachers} ท่าน<br>บันทึกแล้ว: ${overviewKpi.recordedCount} ท่าน (${overviewKpi.recordedPercent}%)</td>
+            <td><b>จำนวนครั้งบันทึกรวม:</b> ${overviewKpi.totalSessions} ครั้ง</td>
+            <td><b>อัตรามาเรียนเฉลี่ย:</b> <b style="color:#065f46; font-size:14pt;">${overviewKpi.avgRate}%</b><br>มา ${overviewKpi.totalPresent} | ขาด ${overviewKpi.totalAbsent} | ลา ${overviewKpi.totalLeave}</td>
+          </tr>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:35px;">#</th>
+              <th>ชื่ออาจารย์</th>
+              <th>กลุ่ม</th>
+              <th>ส่วน / ชั้นปี</th>
+              <th style="width:45px;">นศ.</th>
+              <th style="width:50px;">ครั้ง</th>
+              <th style="width:40px;">มา</th>
+              <th style="width:40px;">ขาด</th>
+              <th style="width:40px;">ลา</th>
+              <th style="width:65px;">อัตรามา</th>
+              <th style="width:75px;">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+    downloadFile(wordTemplate, 'สรุปภาพรวมการเช็คชื่อหะละเกาะห์_2569.doc', 'application/msword;charset=utf-8');
+    setSyncToast('📘 ดาวน์โหลดไฟล์ Word ภาพรวมเรียบร้อยแล้ว');
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
+  const printOverviewReport = () => {
+    let rowsHtml = '';
+    allTeachersComparison.forEach((t, i) => {
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center;">${i + 1}</td>
+          <td style="font-weight:600;">${t.teacher}</td>
+          <td>${t.group}</td>
+          <td>${t.cohortName}</td>
+          <td style="text-align:center;">${t.studentsCount}</td>
+          <td style="text-align:center; font-weight:bold;">${t.datesCount}</td>
+          <td style="text-align:center; color:#065f46;">${t.isRecorded ? t.present : '-'}</td>
+          <td style="text-align:center; color:#991b1b;">${t.isRecorded ? t.absent : '-'}</td>
+          <td style="text-align:center; color:#92400e;">${t.isRecorded ? t.leave : '-'}</td>
+          <td style="text-align:right; font-weight:bold;">${t.isRecorded ? t.rate + '%' : '-'}</td>
+          <td style="text-align:center;">${t.isRecorded ? '<span style="color:#065f46; font-weight:bold;">บันทึกแล้ว</span>' : '<span style="color:#92400e;">ยังไม่บันทึก</span>'}</td>
+        </tr>
+      `;
+    });
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <title>พิมพ์รายงานสรุปภาพรวมการเช็คชื่อหะละเกาะห์ (PDF)</title>
+        <style>
+          @page { size: A4 landscape; margin: 12mm; }
+          body { font-family: 'Sarabun', sans-serif; font-size: 11pt; color: #1e293b; padding: 10px; }
+          .header { text-align: center; border-bottom: 2px solid #581c87; padding-bottom: 8px; margin-bottom: 12px; }
+          .header h1 { margin: 0; font-size: 16pt; color: #581c87; }
+          .header p { margin: 4px 0 0; font-size: 10pt; color: #64748b; }
+          .kpi-grid { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+          .kpi-card { flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; background: #f8fafc; font-size: 10pt; }
+          table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+          th { background-color: #581c87; color: white; border: 1px solid #333; padding: 6px; text-align: center; }
+          td { border: 1px solid #cbd5e1; padding: 4px 6px; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>รายงานสรุปภาพรวมผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</h1>
+          <p>ข้อมูลอัปเดต ณ วันที่ ${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')} น.</p>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <b>อาจารย์ทั้งหมด:</b> ${overviewKpi.totalTeachers} ท่าน<br>
+            <span style="color:#065f46;">บันทึกแล้ว:</span> ${overviewKpi.recordedCount} ท่าน (${overviewKpi.recordedPercent}%)
+          </div>
+          <div class="kpi-card">
+            <b>ครั้งที่บันทึกรวม:</b> ${overviewKpi.totalSessions} ครั้ง<br>
+            <span>กลุ่มค้างส่ง: ${overviewKpi.pendingCount} ท่าน</span>
+          </div>
+          <div class="kpi-card">
+            <b>อัตราการมาเรียนเฉลี่ย:</b> <span style="color:#065f46; font-size:12pt; font-weight:bold;">${overviewKpi.avgRate}%</span><br>
+            <span>มา ${overviewKpi.totalPresent} | ขาด ${overviewKpi.totalAbsent} | ลา ${overviewKpi.totalLeave}</span>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:35px;">#</th>
+              <th>ชื่ออาจารย์</th>
+              <th>กลุ่ม</th>
+              <th>ส่วน / ชั้นปี</th>
+              <th style="width:50px;">นศ.</th>
+              <th style="width:60px;">ครั้งบันทึก</th>
+              <th style="width:40px;">มา</th>
+              <th style="width:40px;">ขาด</th>
+              <th style="width:40px;">ลา</th>
+              <th style="width:65px;">อัตรามา</th>
+              <th style="width:75px;">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(printHtml);
+      printWin.document.close();
+    }
+  };
+
+  const printAllTeachersBooklet = () => {
+    let sectionsHtml = '';
+    allTeachersComparison.forEach((g, gIdx) => {
+      const groupStudents = students.filter((s) => s.teacherName === g.teacher);
+      let dateHeaders = '';
+      g.dates.forEach((d) => {
+        dateHeaders += `<th style="text-align:center;">${d}</th>`;
+      });
+
+      let rowsHtml = '';
+      groupStudents.forEach((st, idx) => {
+        const stRecords = records.filter((r) => r.studentId === st.studentId && r.teacherName === g.teacher);
+        let present = 0, absent = 0, leave = 0;
+        let cellRecords = '';
+        g.dates.forEach((d) => {
+          const match = stRecords.find((r) => r.date === d);
+          const status = match ? match.status : '-';
+          if (status === 'มา') present++;
+          else if (status === 'ขาด') absent++;
+          else if (status === 'ลา') leave++;
+          const color = status === 'มา' ? '#065f46' : status === 'ขาด' ? '#991b1b' : status === 'ลา' ? '#92400e' : '#64748b';
+          cellRecords += `<td style="text-align:center; color:${color}; font-weight:bold;">${status}</td>`;
+        });
+        const totalChecks = present + absent + leave;
+        const rate = totalChecks > 0 ? Math.round((present / totalChecks) * 100) : 0;
+
+        rowsHtml += `
+          <tr>
+            <td style="text-align:center;">${idx + 1}</td>
+            <td style="text-align:center; font-family:monospace;">${st.studentId}</td>
+            <td>${st.fullName}</td>
+            <td>${getStudentMajor(st)}</td>
+            ${cellRecords}
+            <td style="text-align:center; font-weight:bold; color:#065f46;">${present}</td>
+            <td style="text-align:center; font-weight:bold; color:#991b1b;">${absent}</td>
+            <td style="text-align:center; font-weight:bold; color:#92400e;">${leave}</td>
+            <td style="text-align:right; font-weight:bold;">${rate}%</td>
+          </tr>
+        `;
+      });
+
+      sectionsHtml += `
+        <div class="page-section ${gIdx < allTeachersComparison.length - 1 ? 'page-break' : ''}">
+          <div class="header">
+            <h1>รายงานผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</h1>
+            <p>กลุ่มที่ ${gIdx + 1} จากทั้งหมด ${allTeachersComparison.length} กลุ่ม • ปีการศึกษา 2569</p>
+          </div>
+
+          <div class="info-box">
+            <b>อาจารย์:</b> ${g.teacher} &nbsp;&nbsp;|&nbsp;&nbsp; <b>กลุ่ม:</b> ${g.group} (${g.cohortName})<br>
+            <b>จำนวนนักศึกษา:</b> ${g.studentsCount} คน &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <b>สถานะ:</b> ${g.isRecorded ? `บันทึกแล้ว (${g.datesCount} ครั้ง)` : 'ยังไม่มีการบันทึก'}<br>
+            <b>อัตรามาเรียน:</b> ${g.rate}% (มา ${g.present} | ขาด ${g.absent} | ลา ${g.leave})
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width:30px;">#</th>
+                <th style="width:85px;">รหัสนักศึกษา</th>
+                <th>ชื่อ - สกุล นักศึกษา</th>
+                <th style="width:110px;">สาขาวิชา</th>
+                ${dateHeaders}
+                <th style="width:30px;">มา</th>
+                <th style="width:30px;">ขาด</th>
+                <th style="width:30px;">ลา</th>
+                <th style="width:50px;">อัตรามา</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || '<tr><td colspan="10" style="text-align:center; color:#94a3b8; padding:15px;">ยังไม่มีรายชื่อนักศึกษาในกลุ่ม</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      `;
+    });
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <title>รายงานผลการเช็คชื่อครบทุกกลุ่ม (40 อาจารย์)</title>
+        <style>
+          @page { size: A4 landscape; margin: 12mm; }
+          body { font-family: 'Sarabun', sans-serif; font-size: 11pt; color: #1e293b; padding: 0; }
+          .page-break { page-break-after: always; }
+          .page-section { padding-top: 5px; }
+          .header { text-align: center; border-bottom: 2px solid #581c87; padding-bottom: 6px; margin-bottom: 12px; }
+          .header h1 { margin: 0; font-size: 15pt; color: #581c87; }
+          .header p { margin: 3px 0 0; font-size: 9.5pt; color: #64748b; }
+          .info-box { background: #fbfbfe; border: 1px solid #e9d5ff; border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 10pt; }
+          table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+          th { background-color: #581c87; color: white; border: 1px solid #333; padding: 5px; text-align: center; }
+          td { border: 1px solid #cbd5e1; padding: 4px 6px; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+        </style>
+      </head>
+      <body>
+        ${sectionsHtml}
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(printHtml);
+      printWin.document.close();
+    }
+  };
+
+  const exportTeacherExcel = (tName: string) => {
+    const t = allTeachersComparison.find((x) => x.teacher === tName) || allTeachersComparison[0];
+    if (!t) return;
+    const groupStudents = students.filter((s) => s.teacherName === t.teacher);
+
+    let dateHeaders = '';
+    t.dates.forEach((d) => {
+      dateHeaders += `<th style="background-color:#581c87; color:white; border:1px solid #000;">${d}</th>`;
+    });
+
+    let rowsHtml = '';
+    groupStudents.forEach((st, idx) => {
+      const stRecords = records.filter((r) => r.studentId === st.studentId && r.teacherName === t.teacher);
+      let present = 0, absent = 0, leave = 0;
+      let cellRecords = '';
+      t.dates.forEach((d) => {
+        const match = stRecords.find((r) => r.date === d);
+        const status = match ? match.status : '-';
+        if (status === 'มา') present++;
+        else if (status === 'ขาด') absent++;
+        else if (status === 'ลา') leave++;
+        const color = status === 'มา' ? '#065f46' : status === 'ขาด' ? '#991b1b' : status === 'ลา' ? '#92400e' : '#64748b';
+        cellRecords += `<td style="text-align:center; color:${color}; font-weight:bold; border:1px solid #cbd5e1;">${status}</td>`;
+      });
+      const totalChecks = present + absent + leave;
+      const rate = totalChecks > 0 ? Math.round((present / totalChecks) * 100) : 0;
+
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center; border:1px solid #cbd5e1;">${idx + 1}</td>
+          <td style="text-align:center; font-family:monospace; border:1px solid #cbd5e1;">${st.studentId}</td>
+          <td style="border:1px solid #cbd5e1;">${st.fullName}</td>
+          <td style="border:1px solid #cbd5e1;">${getStudentMajor(st)}</td>
+          ${cellRecords}
+          <td style="text-align:center; font-weight:bold; color:#065f46; border:1px solid #cbd5e1;">${present}</td>
+          <td style="text-align:center; font-weight:bold; color:#991b1b; border:1px solid #cbd5e1;">${absent}</td>
+          <td style="text-align:center; font-weight:bold; color:#92400e; border:1px solid #cbd5e1;">${leave}</td>
+          <td style="text-align:right; font-weight:bold; border:1px solid #cbd5e1;">${rate}%</td>
+        </tr>
+      `;
+    });
+
+    const excelTemplate = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Sarabun', 'Tahoma', sans-serif; font-size: 13px; }
+          h2 { color: #581c87; }
+          table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+          th { background-color: #581c87; color: #ffffff; border: 1px solid #000; padding: 6px; text-align: center; }
+          td { border: 1px solid #cbd5e1; padding: 5px; }
+          .box { background: #fbfbfe; border: 1px solid #e9d5ff; padding: 10px; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <h2>รายงานผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</h2>
+        <div class="box">
+          <b>อาจารย์ผู้รับผิดชอบ:</b> ${t.teacher}<br>
+          <b>กลุ่ม:</b> ${t.group} (${t.cohortName}) | <b>จำนวนนักศึกษา:</b> ${t.studentsCount} คน<br>
+          <b>จำนวนครั้งที่บันทึก:</b> ${t.datesCount} ครั้ง | <b>อัตราการมาเรียนของกลุ่ม:</b> ${t.rate}%<br>
+          <b>สถิติรวม:</b> มา ${t.present} ครั้ง, ขาด ${t.absent} ครั้ง, ลา ${t.leave} ครั้ง
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ลำดับ</th>
+              <th>รหัสนักศึกษา</th>
+              <th>ชื่อ - นามสกุล นักศึกษา</th>
+              <th>สาขาวิชา</th>
+              ${dateHeaders}
+              <th>มา</th>
+              <th>ขาด</th>
+              <th>ลา</th>
+              <th>อัตราการมา</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+    downloadFile(excelTemplate, `เช็คชื่อหะละเกาะห์_${t.teacher}.xls`, 'application/vnd.ms-excel;charset=utf-8');
+    setSyncToast(`📗 ดาวน์โหลดไฟล์ Excel ของ ${t.teacher} เรียบร้อย`);
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
+  const exportTeacherWord = (tName: string) => {
+    const t = allTeachersComparison.find((x) => x.teacher === tName) || allTeachersComparison[0];
+    if (!t) return;
+    const groupStudents = students.filter((s) => s.teacherName === t.teacher);
+
+    let dateHeaders = '';
+    t.dates.forEach((d) => {
+      dateHeaders += `<th>${d}</th>`;
+    });
+
+    let rowsHtml = '';
+    groupStudents.forEach((st, idx) => {
+      const stRecords = records.filter((r) => r.studentId === st.studentId && r.teacherName === t.teacher);
+      let present = 0, absent = 0, leave = 0;
+      let cellRecords = '';
+      t.dates.forEach((d) => {
+        const match = stRecords.find((r) => r.date === d);
+        const status = match ? match.status : '-';
+        if (status === 'มา') present++;
+        else if (status === 'ขาด') absent++;
+        else if (status === 'ลา') leave++;
+        const color = status === 'มา' ? '#065f46' : status === 'ขาด' ? '#991b1b' : status === 'ลา' ? '#92400e' : '#64748b';
+        cellRecords += `<td style="text-align:center; color:${color}; font-weight:bold;">${status}</td>`;
+      });
+      const totalChecks = present + absent + leave;
+      const rate = totalChecks > 0 ? Math.round((present / totalChecks) * 100) : 0;
+
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center;">${idx + 1}</td>
+          <td style="text-align:center; font-family:monospace;">${st.studentId}</td>
+          <td style="font-weight:500;">${st.fullName}</td>
+          <td>${getStudentMajor(st)}</td>
+          ${cellRecords}
+          <td style="text-align:center; font-weight:bold; color:#065f46;">${present}</td>
+          <td style="text-align:center; font-weight:bold; color:#991b1b;">${absent}</td>
+          <td style="text-align:center; font-weight:bold; color:#92400e;">${leave}</td>
+          <td style="text-align:right; font-weight:bold;">${rate}%</td>
+        </tr>
+      `;
+    });
+
+    const wordTemplate = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>รายงานผลการเช็คชื่อ - ${t.teacher}</title>
+        <style>
+          @page { size: A4 landscape; margin: 15mm; }
+          body { font-family: 'TH Sarabun New', 'Sarabun', Tahoma, sans-serif; font-size: 14pt; line-height: 1.3; color: #1e293b; }
+          h2 { color: #581c87; font-size: 18pt; text-align: center; margin-bottom: 4px; }
+          .sub { text-align: center; font-size: 12pt; color: #64748b; margin-bottom: 12px; }
+          .info-box { background: #fbfbfe; border: 1px solid #e9d5ff; padding: 10px 14px; margin-bottom: 14px; font-size: 13pt; }
+          table { border-collapse: collapse; width: 100%; font-size: 12pt; }
+          th { background-color: #581c87; color: white; border: 1px solid #333; padding: 6px; text-align: center; }
+          td { border: 1px solid #94a3b8; padding: 5px 6px; }
+        </style>
+      </head>
+      <body>
+        <h2>รายงานผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</h2>
+        <div class="sub">ประจำปีการศึกษา 2569</div>
+
+        <div class="info-box">
+          <b>อาจารย์ผู้รับผิดชอบ:</b> ${t.teacher} &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <b>กลุ่ม:</b> ${t.group} (${t.cohortName})<br>
+          <b>จำนวนนักศึกษาในกลุ่ม:</b> ${t.studentsCount} คน &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <b>วันที่เช็คชื่อ:</b> ${t.dates.join(', ') || '-'}<br>
+          <b>อัตราการมาเรียนเฉลี่ย:</b> ${t.rate}% (มา ${t.present} | ขาด ${t.absent} | ลา ${t.leave})
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:35px;">#</th>
+              <th style="width:90px;">รหัสนักศึกษา</th>
+              <th>ชื่อ - สกุล นักศึกษา</th>
+              <th style="width:110px;">สาขาวิชา</th>
+              ${dateHeaders}
+              <th style="width:35px;">มา</th>
+              <th style="width:35px;">ขาด</th>
+              <th style="width:35px;">ลา</th>
+              <th style="width:65px;">อัตรามา</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+    downloadFile(wordTemplate, `เช็คชื่อหะละเกาะห์_${t.teacher}.doc`, 'application/msword;charset=utf-8');
+    setSyncToast(`📘 ดาวน์โหลดไฟล์ Word ของ ${t.teacher} เรียบร้อย`);
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
+  const printTeacherReport = (tName: string) => {
+    const t = allTeachersComparison.find((x) => x.teacher === tName) || allTeachersComparison[0];
+    if (!t) return;
+    const groupStudents = students.filter((s) => s.teacherName === t.teacher);
+
+    let dateHeaders = '';
+    t.dates.forEach((d) => {
+      dateHeaders += `<th style="text-align:center;">${d}</th>`;
+    });
+
+    let rowsHtml = '';
+    groupStudents.forEach((st, idx) => {
+      const stRecords = records.filter((r) => r.studentId === st.studentId && r.teacherName === t.teacher);
+      let present = 0, absent = 0, leave = 0;
+      let cellRecords = '';
+      t.dates.forEach((d) => {
+        const match = stRecords.find((r) => r.date === d);
+        const status = match ? match.status : '-';
+        if (status === 'มา') present++;
+        else if (status === 'ขาด') absent++;
+        else if (status === 'ลา') leave++;
+        const color = status === 'มา' ? '#065f46' : status === 'ขาด' ? '#991b1b' : status === 'ลา' ? '#92400e' : '#64748b';
+        cellRecords += `<td style="text-align:center; color:${color}; font-weight:bold;">${status}</td>`;
+      });
+      const totalChecks = present + absent + leave;
+      const rate = totalChecks > 0 ? Math.round((present / totalChecks) * 100) : 0;
+
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center;">${idx + 1}</td>
+          <td style="text-align:center; font-family:monospace;">${st.studentId}</td>
+          <td>${st.fullName}</td>
+          <td>${getStudentMajor(st)}</td>
+          ${cellRecords}
+          <td style="text-align:center; font-weight:bold; color:#065f46;">${present}</td>
+          <td style="text-align:center; font-weight:bold; color:#991b1b;">${absent}</td>
+          <td style="text-align:center; font-weight:bold; color:#92400e;">${leave}</td>
+          <td style="text-align:right; font-weight:bold;">${rate}%</td>
+        </tr>
+      `;
+    });
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <title>พิมพ์รายงานผลการเช็คชื่อ - ${t.teacher}</title>
+        <style>
+          @page { size: A4 landscape; margin: 12mm; }
+          body { font-family: 'Sarabun', sans-serif; font-size: 11pt; color: #1e293b; padding: 10px; }
+          .header { text-align: center; border-bottom: 2px solid #581c87; padding-bottom: 8px; margin-bottom: 12px; }
+          .header h1 { margin: 0; font-size: 16pt; color: #581c87; }
+          .header p { margin: 4px 0 0; font-size: 10pt; color: #64748b; }
+          .info-box { background: #fbfbfe; border: 1px solid #e9d5ff; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 11pt; }
+          table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+          th { background-color: #581c87; color: white; border: 1px solid #333; padding: 6px; text-align: center; }
+          td { border: 1px solid #cbd5e1; padding: 4px 6px; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>รายงานผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)</h1>
+          <p>ข้อมูล ณ วันที่ ${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')} น.</p>
+        </div>
+
+        <div class="info-box">
+          <b>อาจารย์:</b> ${t.teacher} &nbsp;&nbsp;|&nbsp;&nbsp; <b>กลุ่ม:</b> ${t.group} (${t.cohortName})<br>
+          <b>จำนวนนักศึกษา:</b> ${t.studentsCount} คน &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <b>วันที่เช็คชื่อ:</b> ${t.dates.join(', ') || '-'}<br>
+          <b>อัตราการมาเรียนเฉลี่ย:</b> ${t.rate}% (มา ${t.present} | ขาด ${t.absent} | ลา ${t.leave})
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:35px;">#</th>
+              <th style="width:90px;">รหัสนักศึกษา</th>
+              <th>ชื่อ - สกุล นักศึกษา</th>
+              <th style="width:110px;">สาขาวิชา</th>
+              ${dateHeaders}
+              <th style="width:35px;">มา</th>
+              <th style="width:35px;">ขาด</th>
+              <th style="width:35px;">ลา</th>
+              <th style="width:65px;">อัตรามา</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(printHtml);
+      printWin.document.close();
+    }
+  };
+
+  const exportPendingExcel = () => {
+    const pending = allTeachersComparison.filter((t) => !t.isRecorded);
+    let rowsHtml = '';
+    pending.forEach((t, i) => {
+      rowsHtml += `
+        <tr>
+          <td style="text-align:center;">${i + 1}</td>
+          <td>${t.teacher}</td>
+          <td>${t.group}</td>
+          <td>${t.cohortName}</td>
+          <td style="text-align:center;">${t.studentsCount}</td>
+          <td style="text-align:center; color:#991b1b; font-weight:bold;">ยังไม่ส่งผลเช็คชื่อ</td>
+        </tr>
+      `;
+    });
+
+    const excelTemplate = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Sarabun', 'Tahoma', sans-serif; font-size: 13px; }
+          h2 { color: #b45309; }
+          table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+          th { background-color: #d97706; color: #ffffff; border: 1px solid #000; padding: 6px; text-align: center; }
+          td { border: 1px solid #cbd5e1; padding: 5px; }
+        </style>
+      </head>
+      <body>
+        <h2>รายชื่อกลุ่มที่ยังไม่พบประวัติการเช็คชื่อหะละเกาะห์ (${pending.length} ท่าน)</h2>
+        <p>ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')} น.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>ลำดับ</th>
+              <th>ชื่ออาจารย์</th>
+              <th>กลุ่ม</th>
+              <th>ส่วน / ชั้นปี</th>
+              <th>จำนวนนักศึกษา (คน)</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+    downloadFile(excelTemplate, 'รายชื่ออาจารย์ที่ยังไม่เช็คชื่อหะละเกาะห์.xls', 'application/vnd.ms-excel;charset=utf-8');
+    setSyncToast('📗 ดาวน์โหลดรายชื่อกลุ่มค้างส่งเรียบร้อยแล้ว');
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 animate-fadeIn">
-      {/* ==================== 1. TOP EXECUTIVE HEADER ==================== */}
+      {/* ==================== 1. REAL-TIME CONTROL & STATUS BAR ==================== */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-purple-200/80 p-3 sm:p-4 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3 print:hidden">
+        {/* Status Indicator */}
+        <div className="flex items-center gap-2 text-xs">
+          <span
+            className={`inline-block w-2.5 h-2.5 rounded-full ${
+              isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-500 animate-pulse'
+            }`}
+          />
+          <span className="font-extrabold text-purple-950">
+            {isSyncing ? 'กำลังซิงค์ข้อมูล...' : 'เชื่อมต่อสดระบบฐานข้อมูล'}
+          </span>
+          <span className="text-purple-300">•</span>
+          <span className="text-purple-700/80 font-medium">อัปเดตล่าสุด: {lastUpdatedTime}</span>
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Auto Refresh Selector */}
+          <div className="flex items-center gap-1.5 text-xs text-purple-900 bg-purple-50/80 px-3 py-1.5 rounded-xl border border-purple-200/70">
+            <span>⏱️ รีเฟรชอัตโนมัติ:</span>
+            <select
+              value={autoRefreshInterval}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setAutoRefreshInterval(val);
+                if (val > 0) {
+                  setSyncToast(`⏱️ ตั้งเวลารีเฟรชอัตโนมัติทุก ${val >= 60 ? `${val / 60} นาที` : `${val} วินาที`}`);
+                } else {
+                  setSyncToast('⏸️ ปิดการรีเฟรชอัตโนมัติ');
+                }
+                setTimeout(() => setSyncToast(null), 3000);
+              }}
+              className="bg-transparent font-bold text-purple-900 focus:outline-none cursor-pointer"
+            >
+              <option value={0}>ปิด (Manual)</option>
+              <option value={30}>ทุก 30 วินาที</option>
+              <option value={60}>ทุก 1 นาที</option>
+              <option value={300}>ทุก 5 นาที</option>
+            </select>
+          </div>
+
+          {/* Manual Sync Button */}
+          <button
+            onClick={() => handleManualSync(false)}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-1.5 bg-purple-800 hover:bg-purple-900 active:scale-95 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'กำลังซิงค์...' : 'ซิงค์ข้อมูลสดเดี๋ยวนี้'}</span>
+          </button>
+
+          {/* Quick Export Master Dropdown */}
+          <div className="relative" ref={exportDropdownRef}>
+            <button
+              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-900 hover:bg-purple-100 transition flex items-center gap-1.5 border border-purple-200"
+            >
+              <Download className="w-3.5 h-3.5 text-purple-700" />
+              <span>ดาวน์โหลด / พิมพ์</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {isExportDropdownOpen && (
+              <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                <div className="text-[10px] font-bold text-purple-500 px-3 py-1 uppercase">ข้อมูลภาพรวมทั้งโครงการ</div>
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    exportOverviewExcel();
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>ส่งออก Excel ภาพรวม (.xls)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    exportOverviewWord();
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                  <span>ส่งออก Word ภาพรวม (.doc)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    printOverviewReport();
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                >
+                  <Printer className="w-3.5 h-3.5 text-purple-700" />
+                  <span>พิมพ์ / ดาวน์โหลด PDF ภาพรวม</span>
+                </button>
+                <div className="border-t border-purple-100 my-1" />
+                <div className="text-[10px] font-bold text-purple-500 px-3 py-1 uppercase">ข้อมูลรวมทุกกลุ่มอาจารย์</div>
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    printAllTeachersBooklet();
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                  <span>พิมพ์รายงานสรุปทุกกลุ่ม (40 กลุ่ม)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Google Sheets Links Dropdown */}
+          <div className="relative" ref={sheetsDropdownRef}>
+            <button
+              onClick={() => setIsSheetsDropdownOpen(!isSheetsDropdownOpen)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-purple-900 hover:text-purple-950 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1 border border-slate-200"
+            >
+              <span>🔗 แหล่งข้อมูลต้นฉบับ</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {isSheetsDropdownOpen && (
+              <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                <div className="text-[10px] font-bold text-purple-500 px-3 py-1 uppercase">Google Sheets แต่ละส่วน</div>
+                {GOOGLE_SHEETS_SOURCES.map((s) => (
+                  <a
+                    key={s.id}
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block px-3 py-2 text-xs rounded-xl hover:bg-purple-50 text-purple-950 font-medium transition"
+                  >
+                    📊 {s.name}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ==================== 2. TOP EXECUTIVE HEADER ==================== */}
       <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card hover:shadow-card-hover transition-all duration-300 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {/* Back button & Title */}
@@ -754,18 +1956,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <h1 className="text-lg sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight">
                 ศูนย์จัดการระบบและแดชบอร์ดแอดมิน
               </h1>
+              <p className="text-xs text-purple-800/70 mt-0.5">
+                ระบบติดตามและประเมินผลการเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์) ประจำปีการศึกษา 2569
+              </p>
             </div>
           </div>
 
-          {/* Quick Action Pills */}
+          {/* Status Badge & Logout */}
           <div className="flex items-center space-x-2 print:hidden">
-            <button
-              onClick={() => setActiveTab('export')}
-              className="flex items-center space-x-1.5 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-full shadow-sm transition-all"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>ส่งออกไฟล์</span>
-            </button>
+            <div className="bg-purple-50 border border-purple-200 rounded-2xl px-3.5 py-2 text-right hidden sm:block">
+              <div className="text-[10px] text-purple-600 font-bold uppercase">สถานะบันทึกผล</div>
+              <div className="text-xs font-black text-purple-950">
+                บันทึกแล้ว {overviewKpi.recordedCount} / {overviewKpi.totalTeachers} ท่าน ({overviewKpi.recordedPercent}%)
+              </div>
+            </div>
 
             <button
               onClick={onLogout}
@@ -777,347 +1981,958 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </button>
           </div>
         </div>
+      </div>
 
-        {/* 4 Minimal High-Contrast KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pt-3 border-t border-purple-50">
-          <div className="bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100/90">
-            <div className="text-[11px] font-bold text-purple-700">อัตราเข้าเรียนรวม</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.rate.toFixed(1)}%</div>
-            <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">มา {kpi.present} • ขาด {kpi.absent} • ลา {kpi.leave}</div>
-          </div>
+      {/* ==================== 3. MAIN NAVIGATION TABS ==================== */}
+      <div className="flex flex-wrap items-center gap-2 bg-purple-100/70 p-1.5 rounded-2xl border border-purple-200/80 shadow-sm text-xs sm:text-sm font-bold print:hidden">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'overview' || activeTab === 'analytics'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>📊</span>
+          <span>ภาพรวมทั้งหมด (Overview)</span>
+        </button>
 
-          <div className="bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100/90">
-            <div className="text-[11px] font-bold text-purple-700">บันทึกทั้งหมด</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.totalRecords} ครั้ง</div>
-            <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">จาก {kpi.distinctDates} วันที่เช็คจริง</div>
-          </div>
+        <button
+          onClick={() => setActiveTab('teachers')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'teachers' || activeTab === 'matrix'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>👨‍🏫</span>
+          <span>ข้อมูลรายอาจารย์ (Teacher Details)</span>
+        </button>
 
-          <div className="bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100/90">
-            <div className="text-[11px] font-bold text-purple-700">นักศึกษาในระบบ</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.totalRegisteredStudents} คน</div>
-            <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">
-              ชาย {students.filter(s => s.gender === 'ชาย').length} / หญิง {students.filter(s => s.gender === 'หญิง').length}
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'pending'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>⏳</span>
+          <span>กลุ่มที่ยังไม่บันทึก ({overviewKpi.pendingCount} ท่าน)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('editor')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'editor'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>✏️</span>
+          <span>จัดการข้อมูล (อาจารย์/นศ./สาขา)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transfer')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'transfer'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>🔄</span>
+          <span>โยกย้ายกลุ่ม</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('periodic')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'periodic'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>📅</span>
+          <span>สรุปตามวัน/เดือน/ปี</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('announcements')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'announcements'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>📢</span>
+          <span>ส่งประกาศ {announcementsList.length > 0 ? `(${announcementsList.length})` : ''}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('system_management')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'system_management'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>⚙️</span>
+          <span>ตั้งค่าระบบ</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('export')}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl transition flex items-center gap-2 ${
+            activeTab === 'export'
+              ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20'
+              : 'text-purple-900/80 hover:text-purple-950 hover:bg-white/80'
+          }`}
+        >
+          <span>📤</span>
+          <span>ศูนย์ส่งออกไฟล์</span>
+        </button>
+      </div>
+
+      {/* ==================== TAB 1: ภาพรวมทั้งหมด (OVERVIEW & MATRIX COMPARISON) ==================== */}
+      {(activeTab === 'overview' || activeTab === 'analytics') && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Top 4 KPI Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-3xl border border-purple-100 p-5 shadow-card relative overflow-hidden group hover:shadow-card-hover transition">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-bl-full pointer-events-none -mr-4 -mt-4 transition group-hover:scale-110" />
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <span className="text-xs font-bold text-purple-900/70">กลุ่มหะละเกาะห์ทั้งหมด</span>
+                <span className="p-2.5 rounded-2xl bg-purple-100 text-purple-900 text-lg">👥</span>
+              </div>
+              <div className="text-3xl font-black text-purple-950 font-mono tracking-tight relative z-10">
+                {overviewKpi.totalGroups}
+              </div>
+              <div className="mt-2 text-xs font-semibold text-purple-700 flex items-center gap-1.5 relative z-10">
+                <span>บันทึกแล้ว {overviewKpi.activeTeachers} กลุ่ม</span>
+                <span className="text-purple-300">•</span>
+                <span className="text-amber-700 font-bold">รอ {overviewKpi.pendingCount}</span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-purple-100 p-5 shadow-card relative overflow-hidden group hover:shadow-card-hover transition">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-bl-full pointer-events-none -mr-4 -mt-4 transition group-hover:scale-110" />
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <span className="text-xs font-bold text-purple-900/70">จำนวนนักศึกษาทั้งหมด</span>
+                <span className="p-2.5 rounded-2xl bg-purple-100 text-purple-900 text-lg">🎓</span>
+              </div>
+              <div className="text-3xl font-black text-purple-950 font-mono tracking-tight relative z-10">
+                {overviewKpi.totalStudents} <span className="text-sm font-bold text-purple-900/60">คน</span>
+              </div>
+              <div className="mt-2 text-xs font-semibold text-purple-700 relative z-10">
+                เฉลี่ย {overviewKpi.totalGroups > 0 ? (overviewKpi.totalStudents / overviewKpi.totalGroups).toFixed(1) : 0} คน / กลุ่ม
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-purple-100 p-5 shadow-card relative overflow-hidden group hover:shadow-card-hover transition">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full pointer-events-none -mr-4 -mt-4 transition group-hover:scale-110" />
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <span className="text-xs font-bold text-purple-900/70">จำนวนครั้งเช็คชื่อรวม</span>
+                <span className="p-2.5 rounded-2xl bg-emerald-100 text-emerald-800 text-lg">📝</span>
+              </div>
+              <div className="text-3xl font-black text-purple-950 font-mono tracking-tight relative z-10">
+                {overviewKpi.totalCheckins.toLocaleString()} <span className="text-sm font-bold text-purple-900/60">ครั้ง</span>
+              </div>
+              <div className="mt-2 text-xs font-semibold text-emerald-700 flex items-center gap-2 relative z-10">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>มา {overviewKpi.presentCount.toLocaleString()} • ขาด {overviewKpi.absentCount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-purple-100 p-5 shadow-card relative overflow-hidden group hover:shadow-card-hover transition">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-bl-full pointer-events-none -mr-4 -mt-4 transition group-hover:scale-110" />
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <span className="text-xs font-bold text-purple-900/70">อัตราการมาเรียนเฉลี่ย</span>
+                <span className="p-2.5 rounded-2xl bg-amber-100 text-amber-900 text-lg">📊</span>
+              </div>
+              <div className="text-3xl font-black text-purple-950 font-mono tracking-tight relative z-10">
+                {overviewKpi.attendanceRate.toFixed(1)}%
+              </div>
+              <div className="mt-2 text-xs font-semibold text-purple-700 relative z-10">
+                เกณฑ์ผ่าน 80% (หะละเกาะห์รวม)
+              </div>
             </div>
           </div>
 
-          <div className="bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100/90">
-            <div className="text-[11px] font-bold text-purple-700">อาจารย์ผู้ดูแล</div>
-            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-1 tabular-nums">{kpi.totalRegisteredTeachers} ท่าน</div>
-            <div className="text-[10px] text-purple-800/70 mt-0.5 font-medium">
-              {teachers.filter(t => t.gender === 'ชาย').length} กลุ่มชาย / {teachers.filter(t => t.gender === 'หญิง').length} กลุ่มหญิง
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ==================== 2. MAIN TABS SWITCHER ==================== */}
-      <div className="flex bg-white/95 backdrop-blur-md p-1.5 rounded-full border border-purple-200/70 shadow-sm overflow-x-auto space-x-1.5 scrollbar-none print:hidden">
-        {[
-          { id: 'matrix', label: '📋 ตารางเช็คชื่อรายอาจารย์' },
-          { id: 'analytics', label: '📊 แดชบอร์ด & กราฟสถิติ' },
-          { id: 'periodic', label: '📅 สรุปตาม วัน/เดือน/ปี ที่บันทึกจริง' },
-          { id: 'transfer', label: '🔄 โยกย้ายนักศึกษา (ลากวางได้)' },
-          { id: 'editor', label: '✏️ แก้ไขข้อมูล (อาจารย์/นศ.)' },
-          { id: 'announcements', label: `📢 ส่งประกาศ ${announcementsList.length > 0 ? `(${announcementsList.length})` : ''}` },
-          { id: 'system_management', label: '⚙️ การจัดการระบบ (รหัสผ่าน/โลโก้)' },
-          { id: 'export', label: '📤 ศูนย์ส่งออกไฟล์' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id as TabType)}
-            className={`px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all duration-300 active:scale-95 ${
-              activeTab === tab.id
-                ? 'bg-purple-800 text-white shadow-md shadow-purple-900/20'
-                : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-50'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ==================== TAB 1: MATRIX VIEW (ตามรูปแนบ 4) ==================== */}
-      {activeTab === 'matrix' && (
-        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-5 animate-fadeIn">
-          {/* Header & Teacher Picker */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-100 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="bg-purple-100 text-purple-900 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
-                  ตารางสรุปผลรายกลุ่ม
-                </span>
-                <span className="text-xs text-purple-700 font-semibold">
-                  {matrixCurrentTeacher?.groupName} ({matrixCurrentTeacher?.yearLevel})
+          {/* Visual Charts & Cohort Progress (2 Columns) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Donut Distribution Card */}
+            <div className="bg-white rounded-3xl border border-purple-100 p-6 shadow-card space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black text-purple-950 flex items-center gap-2">
+                    <PieChart className="w-5 h-5 text-purple-700" />
+                    <span>สัดส่วนการเข้าเรียน (มา • ขาด • ลา)</span>
+                  </h3>
+                  <p className="text-xs text-purple-800/70 mt-0.5">
+                    อัตราส่วนของสถานะการเช็คชื่อทั้งหมดในระบบ
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-950 text-xs font-bold">
+                  {overviewKpi.totalCheckins.toLocaleString()} รายการ
                 </span>
               </div>
-              <h2 className="text-base sm:text-xl font-black text-purple-950 mt-1">
-                ตารางบันทึกการเช็คชื่อ: {matrixCurrentTeacher?.name}
-              </h2>
-              <p className="text-xs text-purple-800/70 mt-0.5">
-                แสดงผลการเช็คชื่อของนักศึกษาทุกคนในกลุ่มตามวันที่บันทึกจริง พร้อมการประเมินผลผ่านเกณฑ์
-              </p>
+
+              {/* SVG Donut and Legend */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-8 py-2">
+                {/* SVG Donut */}
+                <div className="relative w-44 h-44 flex items-center justify-center">
+                  {(() => {
+                    const total = overviewKpi.totalCheckins || 1;
+                    const r = 58;
+                    const circ = 2 * Math.PI * r;
+                    const p1 = (overviewKpi.presentCount / total) * circ;
+                    const p2 = (overviewKpi.absentCount / total) * circ;
+                    const p3 = (overviewKpi.leaveCount / total) * circ;
+                    const o1 = 0;
+                    const o2 = -p1;
+                    const o3 = -(p1 + p2);
+
+                    return (
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 160 160">
+                        <circle cx="80" cy="80" r={r} fill="none" stroke="#f3f4f6" strokeWidth="22" />
+                        {overviewKpi.totalCheckins > 0 ? (
+                          <>
+                            <circle
+                              cx="80"
+                              cy="80"
+                              r={r}
+                              fill="none"
+                              stroke="#10b981"
+                              strokeWidth="22"
+                              strokeDasharray={`${p1} ${circ - p1}`}
+                              strokeDashoffset={o1}
+                              className="transition-all duration-700"
+                            />
+                            <circle
+                              cx="80"
+                              cy="80"
+                              r={r}
+                              fill="none"
+                              stroke="#ef4444"
+                              strokeWidth="22"
+                              strokeDasharray={`${p2} ${circ - p2}`}
+                              strokeDashoffset={o2}
+                              className="transition-all duration-700"
+                            />
+                            <circle
+                              cx="80"
+                              cy="80"
+                              r={r}
+                              fill="none"
+                              stroke="#f59e0b"
+                              strokeWidth="22"
+                              strokeDasharray={`${p3} ${circ - p3}`}
+                              strokeDashoffset={o3}
+                              className="transition-all duration-700"
+                            />
+                          </>
+                        ) : (
+                          <circle cx="80" cy="80" r={r} fill="none" stroke="#e5e7eb" strokeWidth="22" />
+                        )}
+                      </svg>
+                    );
+                  })()}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                    <span className="text-2xl font-black text-purple-950 font-mono">
+                      {overviewKpi.attendanceRate.toFixed(1)}%
+                    </span>
+                    <span className="text-[11px] font-bold text-purple-800/70">อัตราการมา</span>
+                  </div>
+                </div>
+
+                {/* Legend & Stats */}
+                <div className="space-y-3 w-full sm:w-56">
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-md bg-emerald-500 shadow-sm" />
+                      <span className="text-xs font-bold text-purple-950">มาเรียน</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-black text-emerald-900 font-mono">
+                        {overviewKpi.presentCount.toLocaleString()} ({overviewKpi.presentPct.toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-md bg-rose-500 shadow-sm" />
+                      <span className="text-xs font-bold text-purple-950">ขาดเรียน</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-black text-rose-900 font-mono">
+                        {overviewKpi.absentCount.toLocaleString()} ({overviewKpi.absentPct.toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-amber-50/70 border border-amber-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-md bg-amber-500 shadow-sm" />
+                      <span className="text-xs font-bold text-purple-950">ลากิจ / ป่วย</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-black text-amber-900 font-mono">
+                        {overviewKpi.leaveCount.toLocaleString()} ({overviewKpi.leavePct.toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Teacher Dropdown */}
-            <div className="w-full sm:w-80">
-              <label className="text-[11px] font-bold text-purple-900 block mb-1">เลือกอาจารย์ผู้ดูแล:</label>
-              <select
-                value={matrixTeacherName}
-                onChange={(e) => setMatrixTeacherName(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs font-bold border border-purple-200 rounded-2xl bg-purple-50/50 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-sm"
-              >
-                {teachers.map((t) => (
-                  <option key={t.groupId} value={t.name}>
-                    {t.name} ({t.groupName} - {t.gender})
-                  </option>
-                ))}
-              </select>
+            {/* Cohort Progress Bars Card */}
+            <div className="bg-white rounded-3xl border border-purple-100 p-6 shadow-card space-y-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-black text-purple-950 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-purple-700" />
+                    <span>ความก้าวหน้ารายช่วงชั้น / กลุ่ม</span>
+                  </h3>
+                  <span className="text-xs text-purple-800/70 font-semibold">แยกตามเพศและชั้นปี</span>
+                </div>
+                <p className="text-xs text-purple-800/70">
+                  สัดส่วนและอัตราการเข้าเรียนจำแนกตาม 3 สายกลุ่มหลัก
+                </p>
+              </div>
+
+              <div className="space-y-4 py-2">
+                {/* Cohort 1: ชาย */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-black text-purple-950 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      กลุ่มนักศึกษาชาย ({overviewKpi.cohortMale.totalTeachers} กลุ่ม)
+                    </span>
+                    <span className="font-mono font-bold text-purple-900">
+                      {overviewKpi.cohortMale.rate.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-3 w-full bg-purple-100/70 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${overviewKpi.cohortMale.rate}%` }}
+                      className="h-full bg-blue-600 rounded-full transition-all duration-700"
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-purple-800/70">
+                    <span>บันทึกแล้ว {overviewKpi.cohortMale.activeTeachers}/{overviewKpi.cohortMale.totalTeachers} กลุ่ม</span>
+                    <span>เช็คชื่อรวม {overviewKpi.cohortMale.totalCheckins.toLocaleString()} ครั้ง</span>
+                  </div>
+                </div>
+
+                {/* Cohort 2: หญิง ปี 2 */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-black text-purple-950 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-pink-500" />
+                      กลุ่มนักศึกษาหญิง ปี 2 ({overviewKpi.cohortFemale2.totalTeachers} กลุ่ม)
+                    </span>
+                    <span className="font-mono font-bold text-purple-900">
+                      {overviewKpi.cohortFemale2.rate.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-3 w-full bg-purple-100/70 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${overviewKpi.cohortFemale2.rate}%` }}
+                      className="h-full bg-pink-600 rounded-full transition-all duration-700"
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-purple-800/70">
+                    <span>บันทึกแล้ว {overviewKpi.cohortFemale2.activeTeachers}/{overviewKpi.cohortFemale2.totalTeachers} กลุ่ม</span>
+                    <span>เช็คชื่อรวม {overviewKpi.cohortFemale2.totalCheckins.toLocaleString()} ครั้ง</span>
+                  </div>
+                </div>
+
+                {/* Cohort 3: หญิง ปี 3 */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-black text-purple-950 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                      กลุ่มนักศึกษาหญิง ปี 3 ({overviewKpi.cohortFemale3.totalTeachers} กลุ่ม)
+                    </span>
+                    <span className="font-mono font-bold text-purple-900">
+                      {overviewKpi.cohortFemale3.rate.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-3 w-full bg-purple-100/70 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${overviewKpi.cohortFemale3.rate}%` }}
+                      className="h-full bg-purple-600 rounded-full transition-all duration-700"
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-purple-800/70">
+                    <span>บันทึกแล้ว {overviewKpi.cohortFemale3.activeTeachers}/{overviewKpi.cohortFemale3.totalTeachers} กลุ่ม</span>
+                    <span>เช็คชื่อรวม {overviewKpi.cohortFemale3.totalCheckins.toLocaleString()} ครั้ง</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Matrix Table (Matching Image 3 Layout Exactly) */}
-          <div className="overflow-x-auto border border-purple-100 rounded-2xl shadow-sm">
-            <table className="w-full text-left text-xs border-collapse min-w-[850px]">
-              <thead>
-                <tr className="bg-purple-100/60 text-purple-950 font-extrabold border-b border-purple-200">
-                  <th className="py-3 px-3 text-center w-12">ลำดับ</th>
-                  <th className="py-3 px-3 font-mono">รหัสนักศึกษา</th>
-                  <th className="py-3 px-4">ชื่อ - นามสกุล</th>
-                  <th className="py-3 px-2 text-center">เพศ</th>
-                  <th className="py-3 px-3">ชั้นปี</th>
-                  <th className="py-3 px-3">กลุ่ม</th>
+          {/* Teacher Comparison Matrix Table (ตารางเปรียบเทียบทุกกลุ่ม 40 อาจารย์) */}
+          <div className="bg-white rounded-3xl border border-purple-100 p-5 sm:p-6 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-4">
+              <div>
+                <h3 className="text-base font-black text-purple-950 flex items-center gap-2">
+                  <span>ตารางเปรียบเทียบความก้าวหน้าและการเช็คชื่อทุกกลุ่ม</span>
+                  <span className="text-xs bg-purple-100 text-purple-900 font-bold px-2 py-0.5 rounded-full">
+                    {filteredOverviewTeachers.length} กลุ่ม
+                  </span>
+                </h3>
+                <p className="text-xs text-purple-800/70 mt-0.5">
+                  แสดงสถิติ มา-ขาด-ลา อัตราการเข้าร่วม และวันที่บันทึกล่าสุดของอาจารย์ทุกกลุ่ม
+                </p>
+              </div>
 
-                  {/* Dynamic Date Columns for this teacher */}
-                  {matrixTeacherDates.map((date) => (
-                    <th key={date} className="py-3 px-2 text-center whitespace-nowrap font-mono text-[11px]">
-                      {formatThaiDate(date)}
-                    </th>
-                  ))}
+              {/* Controls: Search, Sort, Export Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={overviewSearch}
+                    onChange={(e) => setOverviewSearch(e.target.value)}
+                    placeholder="ค้นหาชื่ออาจารย์ / กลุ่ม..."
+                    className="pl-9 pr-3 py-1.5 text-xs font-semibold rounded-xl border border-purple-200 bg-purple-50/40 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 w-48 sm:w-56"
+                  />
+                </div>
 
-                  {matrixTeacherDates.length === 0 && (
-                    <th className="py-3 px-3 text-center text-purple-400 font-medium">ยังไม่มีวันที่เช็คชื่อ</th>
-                  )}
+                <div className="flex items-center gap-1 bg-purple-50 p-1 rounded-xl border border-purple-200 text-xs">
+                  <button
+                    onClick={() => setOverviewSort('default')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                      overviewSort === 'default' ? 'bg-purple-900 text-white shadow-sm' : 'text-purple-900 hover:bg-purple-100'
+                    }`}
+                  >
+                    ลำดับกลุ่ม
+                  </button>
+                  <button
+                    onClick={() => setOverviewSort('rate')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                      overviewSort === 'rate' ? 'bg-purple-900 text-white shadow-sm' : 'text-purple-900 hover:bg-purple-100'
+                    }`}
+                  >
+                    เรียงตาม %
+                  </button>
+                  <button
+                    onClick={() => setOverviewSort('sessions')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                      overviewSort === 'sessions' ? 'bg-purple-900 text-white shadow-sm' : 'text-purple-900 hover:bg-purple-100'
+                    }`}
+                  >
+                    เรียงครั้ง
+                  </button>
+                </div>
 
-                  <th className="py-3 px-3 text-center whitespace-nowrap font-bold">รวม (ครั้ง)</th>
-                  <th className="py-3 px-3 text-center whitespace-nowrap font-bold">คิดเป็น %</th>
-                  <th className="py-3 px-3 text-center whitespace-nowrap font-bold">ผลการประเมิน</th>
-                  <th className="py-3 px-3 text-center whitespace-nowrap">ดูข้อมูล</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-purple-50">
-                {matrixStudents.map((st, idx) => {
-                  const studentRecs = records.filter(
-                    (r) => r.studentId === st.studentId && r.teacherName === matrixCurrentTeacher.name
-                  );
-                  const presentCount = studentRecs.filter((r) => r.status === 'มา').length;
-                  const totalDates = matrixTeacherDates.length;
-                  const rate = totalDates > 0 ? (presentCount / totalDates) * 100 : 0;
-                  const isPassed = rate >= 80;
+                <button
+                  onClick={exportOverviewExcel}
+                  className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-950 font-bold text-xs flex items-center gap-1.5 transition"
+                  title="ดาวน์โหลดตารางเปรียบเทียบเป็นไฟล์ Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-purple-800" />
+                  <span>Excel</span>
+                </button>
 
-                  return (
-                    <tr key={st.studentId} className="hover:bg-purple-50/40 transition-colors">
-                      <td className="py-3 px-3 text-center font-bold text-purple-900/60">{idx + 1}</td>
-                      <td className="py-3 px-3 font-mono font-medium text-purple-950">{st.studentId}</td>
-                      <td className="py-3 px-4 font-extrabold text-purple-950 whitespace-nowrap">{st.fullName}</td>
-                      <td className="py-3 px-2 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          st.gender === 'ชาย' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
-                        }`}>
-                          {st.gender}
-                        </span>
+                <button
+                  onClick={exportOverviewWord}
+                  className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-950 font-bold text-xs flex items-center gap-1.5 transition"
+                  title="ดาวน์โหลดตารางเปรียบเทียบเป็นไฟล์ Word"
+                >
+                  <FileText className="w-3.5 h-3.5 text-purple-800" />
+                  <span>Word</span>
+                </button>
+
+                <button
+                  onClick={printOverviewReport}
+                  className="px-3 py-1.5 rounded-xl bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+                  title="พิมพ์รายงานสรุปภาพรวม"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>พิมพ์</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Matrix Table */}
+            <div className="overflow-x-auto rounded-2xl border border-purple-100">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-purple-900 text-white">
+                    <th className="py-3 px-3 font-black text-center w-12">ที่</th>
+                    <th className="py-3 px-4 font-black">ชื่ออาจารย์ผู้ดูแล</th>
+                    <th className="py-3 px-3 font-black">กลุ่ม</th>
+                    <th className="py-3 px-3 font-black text-center">นักศึกษา</th>
+                    <th className="py-3 px-3 font-black text-center">จำนวนครั้ง</th>
+                    <th className="py-3 px-3 font-black text-center">มา</th>
+                    <th className="py-3 px-3 font-black text-center">ขาด</th>
+                    <th className="py-3 px-3 font-black text-center">ลา</th>
+                    <th className="py-3 px-4 font-black text-center w-36">อัตราการมา</th>
+                    <th className="py-3 px-3 font-black text-center">บันทึกล่าสุด</th>
+                    <th className="py-3 px-3 font-black text-center">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-purple-100">
+                  {filteredOverviewTeachers.map((t, idx) => (
+                    <tr
+                      key={t.id}
+                      className="hover:bg-purple-50/60 transition group cursor-pointer"
+                      onClick={() => {
+                        setTeacherSearch(t.teacher);
+                        setActiveTab('teachers');
+                      }}
+                    >
+                      <td className="py-3 px-3 text-center font-mono font-bold text-purple-900/70">
+                        {idx + 1}
                       </td>
-                      <td className="py-3 px-3 text-purple-800 font-semibold">{st.yearLevel}</td>
-                      <td className="py-3 px-3 text-purple-800/80 text-[11px] font-mono">{st.groupName}</td>
-
-                      {/* Attendance status cells for each date */}
-                      {matrixTeacherDates.map((date) => {
-                        const rec = studentRecs.find((r) => r.date === date);
-                        return (
-                          <td key={date} className="py-2.5 px-2 text-center">
-                            {rec ? (
-                              rec.status === 'มา' ? (
-                                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs mx-auto shadow-sm" title="มา">
-                                  ✓
-                                </div>
-                              ) : rec.status === 'ขาด' ? (
-                                <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-xs mx-auto shadow-sm" title="ขาด">
-                                  ✕
-                                </div>
-                              ) : (
-                                <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-[10px] mx-auto shadow-sm" title="ลา">
-                                  ลา
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-gray-300">-</span>
-                            )}
-                          </td>
-                        );
-                      })}
-
-                      {matrixTeacherDates.length === 0 && (
-                        <td className="py-3 px-3 text-center text-gray-300">-</td>
-                      )}
-
-                      {/* Total sessions */}
+                      <td className="py-3 px-4 font-bold text-purple-950 group-hover:text-purple-700">
+                        <div className="flex items-center gap-1.5">
+                          <span>{t.teacher}</span>
+                          {!t.isRecorded && (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">
+                              ยังไม่บันทึก
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-purple-800">
+                        {t.group} ({t.cohortName})
+                      </td>
                       <td className="py-3 px-3 text-center font-mono font-bold text-purple-950">
-                        {presentCount} / {totalDates}
+                        {t.studentsCount}
                       </td>
-
-                      {/* Percentage */}
-                      <td className="py-3 px-3 text-center font-mono font-black text-purple-900">
-                        {rate.toFixed(0)}%
+                      <td className="py-3 px-3 text-center font-mono font-bold text-purple-950">
+                        {t.datesCount}
                       </td>
-
-                      {/* Evaluation Badge (เหมือนรูปแนบ 4: ผ่านเกณฑ์ / ยังไม่ผ่าน) */}
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
-                            isPassed
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : 'bg-rose-100 text-rose-800 border border-rose-200'
-                          }`}
-                        >
-                          {isPassed ? 'ผ่านเกณฑ์' : 'ยังไม่ผ่าน'}
-                        </span>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-emerald-700">
+                        {t.present}
                       </td>
-
-                      {/* Action */}
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-3 text-center font-mono font-bold text-rose-700">
+                        {t.absent}
+                      </td>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-amber-700">
+                        {t.leave}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px] font-mono font-bold">
+                            <span
+                              className={
+                                t.rate >= 80
+                                  ? 'text-emerald-700'
+                                  : t.rate >= 50
+                                  ? 'text-amber-700'
+                                  : 'text-rose-700'
+                              }
+                            >
+                              {t.rate}%
+                            </span>
+                          </div>
+                          <div className="h-2 w-full bg-purple-100/60 rounded-full overflow-hidden">
+                            <div
+                              style={{ width: `${t.rate}%` }}
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                t.rate >= 80 ? 'bg-emerald-500' : t.rate >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center text-[11px] font-semibold text-purple-800/80">
+                        {t.dates.length > 0 ? t.dates[t.dates.length - 1] : '-'}
+                      </td>
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <button
-                          type="button"
-                          onClick={() => setSelectedStudentForModal(st)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-purple-700 hover:text-purple-950 bg-purple-100/60 hover:bg-purple-200 rounded-lg transition-colors"
+                          onClick={() => {
+                            setTeacherSearch(t.teacher);
+                            setActiveTab('teachers');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-900 hover:text-white text-purple-900 font-bold text-[11px] transition"
                         >
-                          ดูประวัติ
+                          ดูรายละเอียด
                         </button>
                       </td>
                     </tr>
-                  );
-                })}
-
-                {matrixStudents.length === 0 && (
-                  <tr>
-                    <td colSpan={10 + matrixTeacherDates.length} className="py-12 text-center text-gray-400">
-                      ไม่พบรายชื่อนักศึกษาในกลุ่มอาจารย์ท่านนี้
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ))}
+                  {filteredOverviewTeachers.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="py-8 text-center text-purple-800/60 font-medium">
+                        ไม่พบข้อมูลกลุ่มหรืออาจารย์ที่ตรงกับคำค้นหา
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ==================== TAB 2: ANALYTICS & CHARTS (แดชบอร์ด & กราฟสถิติ) ==================== */}
-      {activeTab === 'analytics' && (
+      {/* ==================== TAB 2: ข้อมูลรายอาจารย์ (TEACHER DETAILS & STUDENT MATRIX) ==================== */}
+      {(activeTab === 'teachers' || activeTab === 'matrix') && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Top Visual Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {/* Visual Donut / Distribution Chart */}
-            <div className="bg-white p-5 sm:p-6 rounded-3xl border border-purple-100 shadow-card space-y-4">
-              <h3 className="font-black text-purple-950 text-sm sm:text-base flex items-center gap-2">
-                <PieChart className="w-4 h-4 text-purple-700" />
-                <span>สัดส่วนการเข้าเรียนทั้งหมด (มา • ขาด • ลา)</span>
-              </h3>
+          {/* Cohort Selector Pills & Search Bar */}
+          <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-5 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Cohort filter pills */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-bold text-purple-900 mr-1">เลือกช่วงชั้น/กลุ่ม:</span>
+                <button
+                  onClick={() => setCohortFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    cohortFilter === 'all'
+                      ? 'bg-purple-900 text-white shadow-sm'
+                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100'
+                  }`}
+                >
+                  ทั้งหมด ({teachers.length})
+                </button>
+                <button
+                  onClick={() => setCohortFilter('male')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    cohortFilter === 'male'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-blue-50 text-blue-900 hover:bg-blue-100'
+                  }`}
+                >
+                  นักศึกษาชาย ({teachers.filter((t) => t.gender === 'ชาย').length})
+                </button>
+                <button
+                  onClick={() => setCohortFilter('female2')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    cohortFilter === 'female2'
+                      ? 'bg-pink-600 text-white shadow-sm'
+                      : 'bg-pink-50 text-pink-900 hover:bg-pink-100'
+                  }`}
+                >
+                  นักศึกษาหญิง ปี 2 ({teachers.filter((t) => t.gender === 'หญิง' && (t.yearLevel?.includes('2') || t.groupName?.includes('2'))).length})
+                </button>
+                <button
+                  onClick={() => setCohortFilter('female3')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    cohortFilter === 'female3'
+                      ? 'bg-purple-700 text-white shadow-sm'
+                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100'
+                  }`}
+                >
+                  นักศึกษาหญิง ปี 3 ({teachers.filter((t) => t.gender === 'หญิง' && (t.yearLevel?.includes('3') || t.groupName?.includes('3'))).length})
+                </button>
+              </div>
 
-              {/* Visual Progress Bar */}
-              <div className="space-y-2">
-                <div className="h-6 w-full bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
-                  <div
-                    style={{ width: `${kpi.totalRecords > 0 ? (kpi.present / kpi.totalRecords) * 100 : 0}%` }}
-                    className="bg-emerald-500 h-full transition-all duration-500"
-                    title={`มา: ${kpi.present} ครั้ง`}
-                  />
-                  <div
-                    style={{ width: `${kpi.totalRecords > 0 ? (kpi.absent / kpi.totalRecords) * 100 : 0}%` }}
-                    className="bg-rose-500 h-full transition-all duration-500"
-                    title={`ขาด: ${kpi.absent} ครั้ง`}
-                  />
-                  <div
-                    style={{ width: `${kpi.totalRecords > 0 ? (kpi.leave / kpi.totalRecords) * 100 : 0}%` }}
-                    className="bg-amber-400 h-full transition-all duration-500"
-                    title={`ลา: ${kpi.leave} ครั้ง`}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-center pt-2">
-                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-800">
-                    <div className="text-lg font-black">{kpi.present}</div>
-                    <div className="text-[10px] font-bold">มา ({kpi.totalRecords > 0 ? ((kpi.present / kpi.totalRecords) * 100).toFixed(1) : 0}%)</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-rose-50 text-rose-800">
-                    <div className="text-lg font-black">{kpi.absent}</div>
-                    <div className="text-[10px] font-bold">ขาด ({kpi.totalRecords > 0 ? ((kpi.absent / kpi.totalRecords) * 100).toFixed(1) : 0}%)</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-amber-50 text-amber-800">
-                    <div className="text-lg font-black">{kpi.leave}</div>
-                    <div className="text-[10px] font-bold">ลา ({kpi.totalRecords > 0 ? ((kpi.leave / kpi.totalRecords) * 100).toFixed(1) : 0}%)</div>
-                  </div>
-                </div>
+              {/* Teacher Search */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={teacherSearch}
+                  onChange={(e) => setTeacherSearch(e.target.value)}
+                  placeholder="พิมพ์ค้นหาชื่ออาจารย์..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs font-semibold rounded-xl border border-purple-200 bg-purple-50/40 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                />
               </div>
             </div>
 
-            {/* Evaluation Passing Rate */}
-            <div className="bg-white p-5 sm:p-6 rounded-3xl border border-purple-100 shadow-card space-y-4">
-              <h3 className="font-black text-purple-950 text-sm sm:text-base flex items-center gap-2">
-                <Award className="w-4 h-4 text-purple-700" />
-                <span>การประเมินภาพรวมนักศึกษา (เกณฑ์ 80%)</span>
-              </h3>
-
-              {(() => {
-                const passedCount = studentSummaries.filter((s) => s.attendanceRate >= 80).length;
-                const failedCount = studentSummaries.length - passedCount;
-                const passedRate = studentSummaries.length > 0 ? (passedCount / studentSummaries.length) * 100 : 0;
+            {/* Quick Cards Grid for Teacher Selection */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-52 overflow-y-auto pr-1">
+              {filteredTeachersForDetails.map((t) => {
+                const isSelected = matrixTeacherName === t.teacher;
+                const hasRecorded = t.isRecorded;
 
                 return (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-emerald-700">ผ่านเกณฑ์: {passedCount} คน ({passedRate.toFixed(1)}%)</span>
-                      <span className="text-rose-700">ยังไม่ผ่าน: {failedCount} คน</span>
+                  <button
+                    key={t.id}
+                    onClick={() => setMatrixTeacherName(t.teacher)}
+                    className={`p-2.5 rounded-2xl text-left border transition text-xs flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-purple-900 text-white border-purple-950 shadow-md ring-2 ring-purple-600'
+                        : 'bg-purple-50/50 hover:bg-purple-100/70 border-purple-100 text-purple-950'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold truncate text-[11px]">{t.teacher}</div>
+                      <div className={`text-[10px] truncate ${isSelected ? 'text-purple-200' : 'text-purple-700'}`}>
+                        {t.group}
+                      </div>
                     </div>
-                    <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden flex">
-                      <div style={{ width: `${passedRate}%` }} className="bg-emerald-500 h-full transition-all" />
-                      <div style={{ width: `${100 - passedRate}%` }} className="bg-rose-400 h-full transition-all" />
+                    <div className="mt-1 flex items-center justify-between text-[10px]">
+                      <span className={isSelected ? 'text-purple-200' : 'text-purple-800/70'}>
+                        {t.studentsCount} คน
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded font-bold ${
+                          isSelected
+                            ? 'bg-purple-800 text-purple-100'
+                            : hasRecorded
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {hasRecorded ? 'บันทึกแล้ว' : 'รอ'}
+                      </span>
                     </div>
-                    <p className="text-xs text-purple-800/70">
-                      * นักศึกษาที่มีอัตราการเข้าร่วมกิจกรรมหะละเกาะห์ตั้งแต่ 80% ขึ้นไป ถือว่าผ่านเกณฑ์ตามข้อกำหนดของหลักสูตร
-                    </p>
-                  </div>
+                  </button>
                 );
-              })()}
+              })}
             </div>
           </div>
 
-          {/* Bar Chart: Attendance by Teacher Group */}
-          <div className="bg-white p-5 sm:p-6 rounded-3xl border border-purple-100 shadow-card space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-black text-purple-950 text-sm sm:text-base flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-purple-700" />
-                <span>กราฟอัตราการเข้าเรียนจำแนกตามกลุ่มอาจารย์ผู้ดูแล</span>
-              </h3>
-              <span className="text-[11px] text-purple-700 font-semibold">{teacherSummaries.length} กลุ่ม</span>
+          {/* Active Teacher Banner + Actions Toolbar */}
+          <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-950 rounded-3xl p-5 sm:p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-400 text-purple-950 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  อาจารย์ที่เลือก
+                </span>
+                <span className="text-xs text-purple-200 font-semibold">
+                  {matrixCurrentTeacher?.groupName} ({matrixCurrentTeacher?.gender}) • {matrixCurrentTeacher?.yearLevel}
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black mt-1">
+                {matrixCurrentTeacher?.name}
+              </h2>
+              <p className="text-xs text-purple-200/80 mt-1">
+                จำนวนนักศึกษาในกลุ่ม {matrixStudents.length} คน • เช็คชื่อรวม {matrixRecords.length} ครั้ง • ผ่านเกณฑ์ (≥80%):{' '}
+                <span className="text-emerald-300 font-bold">
+                  {matrixStudentSummaries.filter((s) => s.rate >= 80).length} คน
+                </span>
+              </p>
             </div>
 
-            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-2">
-              {teacherSummaries.map((t) => (
-                <div key={t.teacherName} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-purple-950 truncate max-w-xs">{t.teacherName} ({t.groupName})</span>
-                    <span className="font-mono text-purple-900">{t.overallRate.toFixed(1)}%</span>
+            {/* Teacher Specific Exporters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => exportTeacherExcel(matrixTeacherName)}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Excel กลุ่มนี้</span>
+              </button>
+              <button
+                onClick={() => exportTeacherWord(matrixTeacherName)}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition"
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-300" />
+                <span>Word กลุ่มนี้</span>
+              </button>
+              <button
+                onClick={() => printTeacherReport(matrixTeacherName)}
+                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-black text-xs flex items-center gap-1.5 shadow-md transition"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>พิมพ์ใบบันทึก</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Matrix Table: Students x Attendance Dates */}
+          <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-purple-950">
+                  ตารางบันทึกการเช็คชื่อรายบุคคลและวันที่
+                </h3>
+                <p className="text-xs text-purple-800/70">
+                  สัญลักษณ์: <span className="font-bold text-emerald-700">✓ มา</span> •{' '}
+                  <span className="font-bold text-rose-700">✗ ขาด</span> •{' '}
+                  <span className="font-bold text-amber-700">△ ลา</span> •{' '}
+                  <span className="text-gray-400">- ยังไม่บันทึก</span>
+                </p>
+              </div>
+              <div className="text-xs font-bold text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-100">
+                พบ {matrixUniqueDates.length} วันที่มีการบันทึก
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-purple-100">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-purple-900 text-white">
+                    <th className="py-3 px-3 font-black text-center w-12 sticky left-0 bg-purple-900 z-10">ที่</th>
+                    <th className="py-3 px-3 font-black sticky left-12 bg-purple-900 z-10 w-28">รหัสนักศึกษา</th>
+                    <th className="py-3 px-4 font-black sticky left-40 bg-purple-900 z-10 min-w-[160px]">ชื่อ-สกุล</th>
+                    <th className="py-3 px-3 font-black min-w-[130px]">สาขาวิชา</th>
+                    {matrixUniqueDates.map((dateStr) => (
+                      <th key={dateStr} className="py-3 px-2 font-black text-center whitespace-nowrap min-w-[70px]">
+                        {dateStr}
+                      </th>
+                    ))}
+                    <th className="py-3 px-2 font-black text-center bg-purple-950 w-12">มา</th>
+                    <th className="py-3 px-2 font-black text-center bg-purple-950 w-12">ขาด</th>
+                    <th className="py-3 px-2 font-black text-center bg-purple-950 w-12">ลา</th>
+                    <th className="py-3 px-3 font-black text-center bg-purple-950 w-16">ร้อยละ</th>
+                    <th className="py-3 px-3 font-black text-center bg-purple-950 w-24">ผลการประเมิน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-purple-100">
+                  {matrixStudentSummaries.map((s, idx) => (
+                    <tr key={s.studentId} className="hover:bg-purple-50/50 transition">
+                      <td className="py-2.5 px-3 text-center font-mono font-bold text-purple-900/70 sticky left-0 bg-white group-hover:bg-purple-50/50">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-purple-950 sticky left-12 bg-white group-hover:bg-purple-50/50">
+                        {s.studentId}
+                      </td>
+                      <td className="py-2.5 px-4 font-bold text-purple-950 sticky left-40 bg-white group-hover:bg-purple-50/50">
+                        {s.name}
+                      </td>
+                      <td className="py-2.5 px-3 text-purple-800 text-[11px] font-semibold">
+                        {s.major || '-'}
+                      </td>
+                      {matrixUniqueDates.map((dateStr) => {
+                        const status = s.attendanceMap[dateStr];
+                        return (
+                          <td key={dateStr} className="py-2.5 px-2 text-center font-bold">
+                            {status === 'มา' && (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px]">
+                                ✓
+                              </span>
+                            )}
+                            {status === 'ขาด' && (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[11px]">
+                                ✗
+                              </span>
+                            )}
+                            {status === 'ลา' && (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px]">
+                                △
+                              </span>
+                            )}
+                            {!status && <span className="text-gray-300">-</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-emerald-700 bg-purple-50/20">
+                        {s.present}
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-rose-700 bg-purple-50/20">
+                        {s.absent}
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-amber-700 bg-purple-50/20">
+                        {s.leave}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono font-black text-purple-950 bg-purple-50/40">
+                        {s.rate.toFixed(1)}%
+                      </td>
+                      <td className="py-2.5 px-3 text-center bg-purple-50/40">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            s.evaluation === 'ผ่าน'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {s.evaluation}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {matrixStudentSummaries.length === 0 && (
+                    <tr>
+                      <td colSpan={9 + matrixUniqueDates.length} className="py-8 text-center text-purple-800/60 font-medium">
+                        ไม่พบรายชื่อนักศึกษาในกลุ่มอาจารย์ท่านนี้
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB 3: กลุ่มที่ยังไม่บันทึก (PENDING GROUPS ALERT) ==================== */}
+      {activeTab === 'pending' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Amber Alert Banner */}
+          <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-2xl bg-white/20 text-white text-xl">⚠️</span>
+                <h2 className="text-xl sm:text-2xl font-black">
+                  กลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ
+                </h2>
+              </div>
+              <p className="text-xs sm:text-sm text-amber-100 font-medium">
+                พบอาจารย์ที่ยังไม่มีการส่งข้อมูลการเช็คชื่อในระบบจำนวน{' '}
+                <span className="font-black text-white underline text-base">
+                  {allTeachersComparison.filter((t) => !t.isRecorded).length} กลุ่ม
+                </span>{' '}
+                (จากทั้งหมด {allTeachersComparison.length} กลุ่ม)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportPendingExcel}
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-amber-900 font-bold text-xs flex items-center gap-2 shadow-sm transition"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-amber-700" />
+                <span>ดาวน์โหลดรายชื่อ (Excel)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Pending Groups Grid Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {allTeachersComparison
+              .filter((t) => !t.isRecorded)
+              .map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="bg-white rounded-3xl border border-amber-200 p-5 shadow-card hover:shadow-card-hover transition space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                        ลำดับที่ {idx + 1}
+                      </span>
+                      <h4 className="text-sm font-black text-purple-950 mt-1">
+                        {t.teacher}
+                      </h4>
+                      <p className="text-xs text-purple-800/80 font-semibold">
+                        {t.group} ({t.cohortName})
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 rounded-xl bg-rose-100 text-rose-800 text-[10px] font-black">
+                      ยังไม่บันทึก
+                    </span>
                   </div>
-                  <div className="h-3 w-full bg-purple-50 rounded-full overflow-hidden">
-                    <div
-                      style={{ width: `${t.overallRate}%` }}
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        t.overallRate >= 80 ? 'bg-purple-700' : t.overallRate >= 50 ? 'bg-amber-500' : 'bg-rose-500'
-                      }`}
-                    />
+
+                  <div className="pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-purple-900/70">
+                    <span>จำนวนนักศึกษา: <strong className="text-purple-950">{t.studentsCount}</strong> คน</span>
+                    <span>ช่วงชั้น: <strong className="text-purple-950">{t.yearLevel || '-'}</strong></span>
+                  </div>
+
+                  <div className="pt-1">
+                    <button
+                      onClick={() => {
+                        setTeacherSearch(t.teacher);
+                        setActiveTab('teachers');
+                      }}
+                      className="w-full py-2 rounded-xl bg-purple-50 hover:bg-purple-900 hover:text-white text-purple-900 font-bold text-xs transition text-center"
+                    >
+                      ตรวจสอบข้อมูลกลุ่มนี้ →
+                    </button>
                   </div>
                 </div>
               ))}
-            </div>
+
+            {allTeachersComparison.filter((t) => !t.isRecorded).length === 0 && (
+              <div className="col-span-full bg-white rounded-3xl border border-emerald-200 p-8 text-center space-y-2">
+                <div className="text-4xl">🎉</div>
+                <h3 className="text-lg font-black text-emerald-900">
+                  ยอดเยี่ยมมาก! อาจารย์ทุกกลุ่มได้ทำการบันทึกข้อมูลครบถ้วนแล้ว
+                </h3>
+                <p className="text-xs text-emerald-700">
+                  ไม่มีกลุ่มค้างส่งข้อมูลการเช็คชื่อในระบบ
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2941,6 +4756,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Sync Toast Notification */}
+      {syncToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-bounce bg-purple-950 text-white px-5 py-3 rounded-2xl shadow-2xl border border-purple-400/30 flex items-center gap-2 text-xs font-bold">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+          <span>{syncToast}</span>
         </div>
       )}
     </div>
