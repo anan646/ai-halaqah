@@ -243,18 +243,59 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
                   <span>ยังไม่มีไฟล์เทมเพลตสำหรับกรอก?</span>
                 </div>
                 <p className="text-[11px] text-purple-800/80">
-                  ดาวน์โหลดไฟล์เทมเพลตที่มีหัวตารางและตัวอย่างข้อมูลพร้อมใช้
+                  ดาวน์โหลดไฟล์เทมเพลตมาตรฐาน (มีเฉพาะหัวตาราง 7 ช่องตามกำหนด ไม่มีข้อมูลค้าง)
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => downloadStudentImportTemplate(teachers)}
+                onClick={() => downloadStudentImportTemplate()}
                 className="px-4 py-2 bg-white hover:bg-purple-100 text-purple-950 border border-purple-300 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0"
               >
                 <Download className="w-4 h-4 text-purple-700" />
                 <span>ดาวน์โหลดเทมเพลต Excel</span>
               </button>
+            </div>
+
+            {/* Target Teacher Assign Selector */}
+            <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>กำหนดอาจารย์ผู้ดูแลกลุ่มสำหรับนักศึกษาใหม่:</span>
+                </span>
+                <p className="text-[11px] text-indigo-800/80">
+                  หากในไฟล์ไม่ได้ระบุชื่ออาจารย์ หรือต้องการกำหนดให้ทุกคนอยู่ในกลุ่มเดียวกัน
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedDefaultTeacher}
+                  onChange={(e) => {
+                    const chosen = e.target.value;
+                    setSelectedDefaultTeacher(chosen);
+                    if (parsedStudents.length > 0) {
+                      const tObj = teachers.find((t) => t.name === chosen);
+                      setParsedStudents((prev) =>
+                        prev.map((s) => ({
+                          ...s,
+                          teacherName: chosen,
+                          groupName: tObj?.groupName || s.groupName,
+                          groupId: tObj?.groupId || s.groupId,
+                        }))
+                      );
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border border-indigo-300 bg-white text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-600 shadow-xs"
+                >
+                  {teachers.map((t) => (
+                    <option key={t.groupId} value={t.name}>
+                      {t.name} ({t.groupName})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Step 2: Upload Area */}

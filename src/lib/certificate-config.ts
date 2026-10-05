@@ -17,10 +17,12 @@ export interface CertificateConfig {
   signatory1Title: string;
   signatory1Name: string;
   signatory1Role: string;
+  signatory1SignatureUrl?: string; // Base64 or Image URL for signature 1
   
   signatory2Title: string;
   signatory2Name: string;
   signatory2Role: string;
+  signatory2SignatureUrl?: string; // Base64 or Image URL for signature 2
   
   // Logo settings
   showLogo: boolean;
@@ -189,9 +191,11 @@ export const DEFAULT_CERTIFICATE_CONFIG: CertificateConfig = {
   signatory1Title: 'ผู้รับผิดชอบโครงการ',
   signatory1Name: '(อาจารย์มุสลิม หะยีสะมะแอ)',
   signatory1Role: 'ประธานโครงการฮะละเกาะฮ์อัลกุรอาน',
+  signatory1SignatureUrl: '',
   signatory2Title: 'คณบดี',
   signatory2Name: '(ผศ.ดร. อับดุลฮาลิม สือแม)',
   signatory2Role: 'คณบดีคณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี',
+  signatory2SignatureUrl: '',
   showLogo: true,
   logoPosition: 'top-center',
   showStudentId: true,

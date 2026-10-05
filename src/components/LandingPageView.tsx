@@ -130,6 +130,18 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const [studentAlertList, setStudentAlertList] = useState<Announcement[]>([]);
   const [currentAlertIndex, setCurrentAlertIndex] = useState(0);
 
+  // Public Pending Attendance Report Modal (accessible via ?view=pending-report)
+  const [showPublicPendingReport, setShowPublicPendingReport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('view') === 'pending-report' || window.location.hash === '#pending-report') {
+        setShowPublicPendingReport(true);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     setAnnouncements(getAnnouncements());
   }, [portalView, selectedStudent]);
@@ -1073,75 +1085,99 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           {/* Selected Student Dashboard View */}
           {selectedStudent && studentStats && (
             <div className="space-y-5 animate-fadeIn">
-              {/* ==================== 4A. PROMINENT ANNOUNCEMENTS BANNER (เด่นๆ) ==================== */}
+              {/* ==================== 4A. CONSOLIDATED ANNOUNCEMENTS CONTAINER (กล่องเดียว รวมทุกประกาศ) ==================== */}
               {studentAnnouncements.length > 0 && (
-                <div className="space-y-3">
-                  {studentAnnouncements.map((ann) => (
-                    <div
-                      key={ann.id}
-                      className={`relative overflow-hidden rounded-3xl p-5 border-2 shadow-lg animate-fadeIn ${
-                        ann.priority === 'urgent'
-                          ? 'bg-gradient-to-br from-rose-900 via-rose-800 to-purple-950 border-rose-500 text-white shadow-rose-900/25'
-                          : ann.priority === 'warning'
-                          ? 'bg-gradient-to-br from-amber-900 via-amber-800 to-purple-950 border-amber-500 text-white shadow-amber-900/25'
-                          : 'bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-950 border-purple-500 text-white shadow-purple-900/25'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3.5">
-                        <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/25">
-                          <Megaphone className="w-5 h-5 text-white animate-bounce" />
-                        </div>
+                <div className="rounded-3xl border border-purple-200 bg-white/95 backdrop-blur-md p-4 sm:p-5 shadow-card space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-purple-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
+                        <Megaphone className="w-4 h-4 text-purple-700" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-purple-950">ประกาศและแจ้งเตือน ({studentAnnouncements.length})</h3>
+                        <p className="text-[10px] text-purple-600">ข้อความจากผู้ดูแลระบบสำหรับนักศึกษา</p>
+                      </div>
+                    </div>
+                    {studentAnnouncements.some((a) => a.priority === 'urgent') && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black animate-pulse">
+                        🚨 มีประกาศด่วน
+                      </span>
+                    )}
+                  </div>
 
-                        <div className="space-y-1 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="bg-white/25 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-white/30">
-                              {ann.priority === 'urgent'
-                                ? '🚨 ประกาศด่วนที่สุด'
-                                : ann.priority === 'warning'
-                                ? '⚠️ แจ้งเตือนสำคัญ'
-                                : '📢 ประกาศสำหรับท่าน'}
-                            </span>
-                            <span className="text-[10px] text-white/70 font-mono">
+                  <div className="space-y-2.5">
+                    {/* Sort urgent first, then warning, then normal */}
+                    {[...studentAnnouncements]
+                      .sort((a, b) => {
+                        const score = (p: string) => (p === 'urgent' ? 3 : p === 'warning' ? 2 : 1);
+                        return score(b.priority) - score(a.priority);
+                      })
+                      .map((ann) => (
+                        <div
+                          key={ann.id}
+                          className={`rounded-2xl p-3.5 border transition-all ${
+                            ann.priority === 'urgent'
+                              ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+                              : ann.priority === 'warning'
+                              ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+                              : 'bg-purple-50/60 border-purple-100 text-purple-950'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                  ann.priority === 'urgent'
+                                    ? 'bg-rose-600 text-white'
+                                    : ann.priority === 'warning'
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-purple-200 text-purple-800'
+                                }`}
+                              >
+                                {ann.priority === 'urgent'
+                                  ? '🚨 ด่วนที่สุด'
+                                  : ann.priority === 'warning'
+                                  ? '⚠️ สำคัญ'
+                                  : '📢 ทั่วไป'}
+                              </span>
+                              <h4 className="text-xs sm:text-sm font-black tracking-tight">{ann.title}</h4>
+                            </div>
+                            <span className="text-[10px] opacity-60 font-mono shrink-0">
                               {new Date(ann.createdAt).toLocaleDateString('th-TH')}
                             </span>
                           </div>
-
-                          <h3 className="text-base sm:text-lg font-black tracking-tight text-white pt-0.5">
-                            {ann.title}
-                          </h3>
-
-                          <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap font-medium pt-1">
+                          <p className="text-xs mt-1.5 opacity-90 leading-relaxed whitespace-pre-wrap font-medium">
                             {ann.content}
                           </p>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      ))}
+                  </div>
                 </div>
               )}
 
-              {/* Profile Card with Supervisor Info */}
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950 text-white p-5 sm:p-6 shadow-xl shadow-purple-900/15 border border-purple-700/60">
+              {/* Minimalist, Clean Student Profile Card (ตามรูปแนบ 3) */}
+              <div className="relative overflow-hidden rounded-3xl bg-white border border-purple-100/90 p-5 sm:p-6 shadow-card space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="bg-white/20 text-white text-xs font-mono font-black px-3 py-1 rounded-full border border-white/20">
+                  <div className="space-y-2">
+                    {/* Identification Chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="bg-purple-900 text-white text-xs font-mono font-black px-3 py-1 rounded-full shadow-2xs">
                         {selectedStudent.studentId}
                       </span>
-                      <span className="bg-purple-300/25 text-purple-200 text-[10px] font-bold px-2.5 py-1 rounded-full border border-purple-300/30">
+                      <span className="bg-purple-50 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-full border border-purple-200">
                         {selectedStudent.gender === 'ชาย' ? '👨 นศ.ชาย' : '👩 นศ.หญิง'}
                       </span>
-                      <span className="bg-purple-300/25 text-purple-200 text-[10px] font-bold px-2.5 py-1 rounded-full border border-purple-300/30">
+                      <span className="bg-purple-50 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-full border border-purple-200">
                         {selectedStudent.yearLevel}
                       </span>
-                      <span className="bg-amber-400/25 text-amber-200 text-[10px] font-bold px-2.5 py-1 rounded-full border border-amber-300/30 flex items-center gap-1">
-                        <GraduationCap className="w-3 h-3 text-amber-300" />
-                        <span>สาขาวิชา: {getStudentMajor(selectedStudent)}</span>
+                      <span className="bg-amber-50 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded-full border border-amber-200 flex items-center gap-1">
+                        <GraduationCap className="w-3.5 h-3.5 text-amber-700" />
+                        <span>สาขา: {getStudentMajor(selectedStudent)}</span>
                       </span>
 
                       {/* Group Level Badge (01 / 02 / 03) */}
-                      <span className="bg-gradient-to-r from-amber-400/30 to-yellow-500/30 text-yellow-200 text-[10px] font-black px-3 py-1 rounded-full border border-yellow-300/40 flex items-center gap-1.5 shadow-2xs">
-                        <Award className="w-3.5 h-3.5 text-yellow-300" />
+                      <span className="bg-amber-100 text-amber-900 text-[11px] font-black px-3 py-1 rounded-full border border-amber-300 flex items-center gap-1">
+                        <Award className="w-3.5 h-3.5 text-amber-700" />
                         <span>
                           {getStudentLevel(selectedStudent) === '01' && 'ระดับ 01'}
                           {getStudentLevel(selectedStudent) === '02' && 'ระดับ 02'}
@@ -1149,63 +1185,64 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                         </span>
                       </span>
 
-                      {/* Gamification Badge */}
+                      {/* Attendance Performance Badge */}
                       {studentStats.rate === 100 && (
-                        <span className="bg-emerald-500/30 text-emerald-200 text-[10px] font-black px-3 py-1 rounded-full border border-emerald-400/40 flex items-center gap-1">
-                          <span>🥇 เหรียญทอง (เข้าครบ 100%)</span>
+                        <span className="bg-emerald-50 text-emerald-800 text-[11px] font-black px-3 py-1 rounded-full border border-emerald-300">
+                          🥇 เข้าครบ 100%
                         </span>
                       )}
                       {studentStats.rate >= 90 && studentStats.rate < 100 && (
-                        <span className="bg-blue-500/30 text-blue-200 text-[10px] font-black px-3 py-1 rounded-full border border-blue-400/40 flex items-center gap-1">
-                          <span>🥈 เหรียญเงิน (ดีเยี่ยม 90%+)</span>
+                        <span className="bg-blue-50 text-blue-800 text-[11px] font-black px-3 py-1 rounded-full border border-blue-300">
+                          🥈 ดีเยี่ยม 90%+
                         </span>
                       )}
                       {studentStats.rate >= 80 && studentStats.rate < 90 && (
-                        <span className="bg-amber-500/30 text-amber-200 text-[10px] font-black px-3 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
-                          <span>🥉 เหรียญทองแดง (ผ่านเกณฑ์)</span>
+                        <span className="bg-amber-50 text-amber-800 text-[11px] font-black px-3 py-1 rounded-full border border-amber-300">
+                          🥉 ผ่านเกณฑ์
                         </span>
                       )}
                       {studentStats.rate < 80 && (
-                        <span className="bg-rose-500/30 text-rose-200 text-[10px] font-black px-3 py-1 rounded-full border border-rose-400/40 flex items-center gap-1">
-                          <span>⚠️ ระดับเฝ้าระวัง (&lt; 80%)</span>
+                        <span className="bg-rose-50 text-rose-800 text-[11px] font-black px-3 py-1 rounded-full border border-rose-300">
+                          ⚠️ เฝ้าระวัง (&lt;80%)
                         </span>
                       )}
                     </div>
 
-
-                    <div className="text-[11px] text-purple-300 font-semibold uppercase tracking-wider">
-                      ชื่อ - สกุล นักศึกษา:
+                    <div>
+                      <div className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">
+                        ชื่อ - นามสกุล นักศึกษา
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight">
+                        {selectedStudent.fullName}
+                      </h2>
                     </div>
-                    <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mt-0.5">
-                      {selectedStudent.fullName}
-                    </h2>
                   </div>
 
                   <button
                     type="button"
                     onClick={handleClearStudent}
-                    className="self-start sm:self-auto text-xs font-extrabold px-3.5 py-2 rounded-full bg-white/15 hover:bg-white/25 text-purple-100 border border-white/20 transition-all active:scale-95"
+                    className="self-start sm:self-auto text-xs font-bold px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 transition-all active:scale-95"
                   >
-                    ค้นหารหัสอื่น / ออกจากข้อมูล
+                    ค้นหารหัสอื่น
                   </button>
                 </div>
 
-                {/* Supervisor / Group Leader Section */}
-                <div className="mt-5 pt-4 border-t border-purple-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-purple-950/40 p-4 rounded-2xl border border-white/10">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-purple-700/60 border border-purple-500/40 flex items-center justify-center shrink-0 text-purple-200">
-                      <Award className="w-6 h-6 text-amber-300" />
+                {/* Supervisor / Group Leader Bar */}
+                <div className="pt-3 border-t border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-purple-200 text-purple-900 flex items-center justify-center shrink-0">
+                      <Award className="w-5 h-5 text-purple-800" />
                     </div>
                     <div>
-                      <div className="text-[11px] text-purple-300 font-semibold">
-                        หัวหน้าหะละเกาะห์ / อาจารย์ผู้ดูแลกลุ่ม:
+                      <div className="text-[10px] text-purple-700 font-bold">
+                        อาจารย์ผู้ดูแลกลุ่ม / หะละเกาะห์
                       </div>
-                      <div className="text-sm sm:text-base font-black text-white mt-0.5">
+                      <div className="text-xs sm:text-sm font-black text-purple-950">
                         {selectedStudent.teacherName}
                       </div>
                     </div>
                   </div>
-                  <span className="self-start sm:self-auto text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-white/15 text-purple-100 border border-white/20">
+                  <span className="self-start sm:self-auto text-xs font-mono font-bold px-3 py-1 rounded-xl bg-white text-purple-900 border border-purple-200 shadow-2xs">
                     {selectedStudent.groupName}
                   </span>
                 </div>
@@ -1611,6 +1648,98 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           customLogo={customLogo}
           onClose={() => setIsCertModalOpen(false)}
         />
+      )}
+
+      {/* Public Pending Attendance Report Modal (No login required) */}
+      {showPublicPendingReport && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowPublicPendingReport(false);
+            }}
+          >
+            <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-2xl border border-amber-200 shadow-2xl space-y-4 my-auto relative">
+              <div className="flex items-center justify-between border-b border-amber-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                    <span className="text-xl">📋</span>
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base sm:text-lg text-purple-950">
+                      กลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ
+                    </h3>
+                    <p className="text-xs text-amber-800">
+                      รายงานติดตามกลุ่มหะละเกาะห์ (ข้อมูลสาธารณะ ไม่ต้องเข้าสู่ระบบ)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPublicPendingReport(false)}
+                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Pending List */}
+              {(() => {
+                const recordedTeacherNames = new Set(records.map((r) => r.teacherName));
+                const pendingTeachers = allTeachers.filter((t) => !recordedTeacherNames.has(t.name));
+
+                return (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 flex items-center justify-between">
+                      <span>⚠️ พบกลุ่มที่ยังไม่มีบันทึก: {pendingTeachers.length} กลุ่ม</span>
+                      <span className="text-amber-700">จากทั้งหมด {allTeachers.length} กลุ่ม</span>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1 border border-purple-100 rounded-2xl p-2 bg-slate-50/50">
+                      {pendingTeachers.length === 0 ? (
+                        <div className="py-12 text-center text-xs font-bold text-emerald-700">
+                          🎉 บันทึกการเช็คชื่อครบทุกกลุ่มแล้ว
+                        </div>
+                      ) : (
+                        pendingTeachers.map((t, idx) => (
+                          <div
+                            key={t.groupId}
+                            className="p-3 bg-white rounded-xl border border-purple-100 shadow-2xs flex items-center justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-900 text-xs font-black flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="text-xs font-black text-purple-950 truncate">{t.name}</div>
+                                <div className="text-[10px] text-purple-700">
+                                  {t.groupName} • {t.gender} • {t.yearLevel || '-'}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
+                              ยังไม่ส่ง
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowPublicPendingReport(false)}
+                        className="px-5 py-2.5 bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm"
+                      >
+                        ปิดหน้าต่าง
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

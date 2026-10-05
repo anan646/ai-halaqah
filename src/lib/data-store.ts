@@ -285,6 +285,12 @@ export function moveStudentToTeacher(
   }
 
   const prev = students[sIdx];
+  if (prev.teacherName === targetTeacher.name) {
+    return {
+      success: false,
+      message: `${prev.fullName} อยู่ในกลุ่มอาจารย์ ${targetTeacher.name} อยู่แล้ว`,
+    };
+  }
   const updated: Student = {
     ...prev,
     teacherName: targetTeacher.name,

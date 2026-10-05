@@ -47,8 +47,9 @@ import {
   BookOpen,
   ArrowUp,
   ArrowDown,
+  Menu,
+  Share2,
   PlusCircle,
-  Menu
 } from 'lucide-react';
 import {
   AttendanceRecord,
@@ -138,6 +139,7 @@ type TabType =
   | 'editor'
   | 'announcements'
   | 'system_management'
+  | 'certificates'
   | 'export';
 
 
@@ -2030,6 +2032,87 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setTimeout(() => setSyncToast(null), 3000);
   };
 
+  const exportPendingPdf = () => {
+    const pending = allTeachersComparison.filter((t) => !t.isRecorded);
+    const todayStr = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <title>รายงานกลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ - ระบบหะละเกาะห์</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+        <style>
+          @page { size: A4 portrait; margin: 15mm; }
+          body { font-family: 'Sarabun', sans-serif; color: #1e1b4b; margin: 0; padding: 20px; font-size: 13px; line-height: 1.5; }
+          .header { text-align: center; border-bottom: 2px solid #b45309; padding-bottom: 12px; margin-bottom: 16px; }
+          .title { font-size: 20px; font-weight: 700; color: #9a3412; margin: 0; }
+          .subtitle { font-size: 13px; color: #475569; margin-top: 4px; }
+          .alert-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: center; font-weight: bold; color: #92400e; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+          th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+          th { background: #d97706; color: #ffffff; font-weight: 700; text-align: center; }
+          .center { text-align: center; }
+          .badge-pending { color: #b91c1c; background: #fee2e2; font-weight: 700; padding: 2px 8px; border-radius: 9999px; font-size: 11px; }
+          .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="title">รายงานกลุ่มและอาจารย์ที่ยังไม่มีการบันทึกการเช็คชื่อ</h1>
+          <div class="subtitle">โครงการฮะละเกาะฮ์อัลกุรอาน • วันที่พิมพ์รายงาน: ${todayStr}</div>
+        </div>
+        <div class="alert-box">
+          ⚠️ พบกลุ่มอาจารย์ที่ยังไม่ส่งบันทึกการเช็คชื่อจำนวน ${pending.length} กลุ่ม (จากทั้งหมด ${allTeachersComparison.length} กลุ่ม)
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 45px;">ลำดับ</th>
+              <th>ชื่ออาจารย์ผู้ดูแลกลุ่ม</th>
+              <th>กลุ่มหะละเกาะห์</th>
+              <th>ช่วงชั้น / เพศ</th>
+              <th style="width: 80px;">จำนวน นศ.</th>
+              <th style="width: 100px;">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pending.map((t, idx) => `
+              <tr>
+                <td class="center">${idx + 1}</td>
+                <td><strong>${t.teacher}</strong></td>
+                <td>${t.group} (${t.cohortName})</td>
+                <td class="center">${t.yearLevel || '-'}</td>
+                <td class="center"><strong>${t.studentsCount}</strong> คน</td>
+                <td class="center"><span class="badge-pending">ยังไม่บันทึก</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          ระบบบันทึกและติดตามการเข้าร่วมกลุ่มศึกษาอัลกุรอาน • เอกสารสำหรับติดตามอาจารย์ผู้ดูแล
+        </div>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
+    }
+  };
+
+  const copyPendingPublicLink = () => {
+    if (typeof window === 'undefined') return;
+    const url = `${window.location.origin}${window.location.pathname}?view=pending-report`;
+    navigator.clipboard.writeText(url);
+    alert('📋 คัดลอกลิงก์แชร์สาธารณะสำเร็จ!\n\nลิงก์: ' + url + '\n\nทุกคนสามารถคลิกเปิดดูรายชื่อกลุ่มที่ยังไม่บันทึกการเช็คชื่อได้ทันที โดยไม่ต้องเข้าสู่ระบบ');
+  };
+
   return (
     <div className="w-full min-h-screen bg-slate-50/50">
       {/* ==================== WORKSPACE CONTAINER WITH FIXED LEFT SIDEBAR ==================== */}
@@ -2247,14 +2330,25 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 {/* Certificate Studio Direct Button */}
                 <button
                   type="button"
-                  onClick={() => setIsCertStudioOpen(true)}
-                  className="w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm bg-gradient-to-r from-amber-500/15 to-purple-500/15 border border-amber-300 text-purple-950 hover:from-amber-500/25 hover:to-purple-500/25 font-bold"
+                  onClick={() => {
+                    setActiveTab('certificates');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
+                    activeTab === 'certificates'
+                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
+                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
+                  }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="text-base">🎖️</span>
-                    <span>สตูดิโอเกียรติบัตร (10 แบบ)</span>
+                    <span>สตูดิโอเกียรติบัตร</span>
                   </div>
-                  <span className="text-[10px] bg-amber-400 text-purple-950 font-black px-1.5 py-0.5 rounded-full">ใหม่</span>
+                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                    activeTab === 'certificates' ? 'bg-amber-400 text-purple-950' : 'bg-purple-100 text-purple-800'
+                  }`}>
+                    10 แบบ
+                  </span>
                 </button>
 
                 <button
@@ -2372,7 +2466,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   {/* Certificate Studio Quick Button */}
                   <button
                     type="button"
-                    onClick={() => setIsCertStudioOpen(true)}
+                    onClick={() => setActiveTab('certificates')}
                     className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-black px-3.5 py-1.5 rounded-full active:scale-95 transition-all shadow-sm"
                     title="เปิดสตูดิโอออกแบบและจัดวางเกียรติบัตร 10 แบบ"
                   >
@@ -3179,8 +3273,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </button>
               </div>
 
+              {/* Quick Teacher Dropdown Selector */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <label className="text-xs font-black text-purple-950 shrink-0">เลือกอาจารย์:</label>
+                <select
+                  value={matrixTeacherName}
+                  onChange={(e) => setMatrixTeacherName(e.target.value)}
+                  className="w-full sm:w-72 px-3 py-2 text-xs font-bold rounded-xl border border-purple-300 bg-purple-50/80 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-xs cursor-pointer"
+                >
+                  {filteredTeachersForDetails.map((t) => (
+                    <option key={t.id} value={t.teacher}>
+                      {t.teacher} ({t.group} • {t.studentsCount} คน) {t.isRecorded ? '✓ บันทึกแล้ว' : '⏳ รอส่ง'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Teacher Search */}
-              <div className="relative w-full sm:w-64">
+              <div className="relative w-full sm:w-60">
                 <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
@@ -3193,7 +3303,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
 
             {/* Quick Cards Grid for Teacher Selection */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-52 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-44 overflow-y-auto pr-1">
               {filteredTeachersForDetails.map((t) => {
                 const isSelected = matrixTeacherName === t.teacher;
                 const hasRecorded = t.isRecorded;
@@ -3421,13 +3531,32 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={exportPendingExcel}
-                className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-amber-900 font-bold text-xs flex items-center gap-2 shadow-sm transition"
+                type="button"
+                onClick={exportPendingPdf}
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-amber-950 font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
+                title="พิมพ์หรือส่งออกรายงานกลุ่มค้างส่งเป็นไฟล์ PDF"
               >
-                <FileSpreadsheet className="w-4 h-4 text-amber-700" />
-                <span>ดาวน์โหลดรายชื่อ (Excel)</span>
+                <Printer className="w-4 h-4 text-amber-700" />
+                <span>แชร์เป็นไฟล์ PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={copyPendingPublicLink}
+                className="px-4 py-2.5 rounded-xl bg-amber-900/40 hover:bg-amber-900/60 border border-white/30 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
+                title="คัดลอกลิงก์ให้ทุกคนเปิดดูได้โดยไม่ต้องเข้าสู่ระบบ"
+              >
+                <Share2 className="w-4 h-4 text-amber-200" />
+                <span>คัดลอกลิงก์แชร์สาธารณะ</span>
+              </button>
+              <button
+                type="button"
+                onClick={exportPendingExcel}
+                className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-amber-200" />
+                <span>Excel</span>
               </button>
             </div>
           </div>
@@ -3553,14 +3682,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-black">
-                  ระดับ 01
+                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-black">
+                  ระดับ 01 (ขั้นพื้นฐาน)
                 </span>
                 <span className="text-2xl">🌱</span>
               </div>
-              <h3 className="text-sm font-black text-blue-950">
-                ระดับ 01
-              </h3>
               <div className="flex items-center justify-between text-xs text-blue-800 font-semibold pt-1 border-t border-blue-100">
                 <span>
                   กลุ่มอาจารย์:{' '}
@@ -3589,14 +3715,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 text-xs font-black">
-                  ระดับ 02
+                <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-900 text-xs font-black">
+                  ระดับ 02 (ขั้นปานกลาง)
                 </span>
                 <span className="text-2xl">📖</span>
               </div>
-              <h3 className="text-sm font-black text-purple-950">
-                ระดับ 02
-              </h3>
               <div className="flex items-center justify-between text-xs text-purple-800 font-semibold pt-1 border-t border-purple-100">
                 <span>
                   กลุ่มอาจารย์:{' '}
@@ -3625,14 +3748,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black">
-                  ระดับ 03
+                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black">
+                  ระดับ 03 (ขั้นก้าวหน้า)
                 </span>
                 <span className="text-2xl">🌟</span>
               </div>
-              <h3 className="text-sm font-black text-emerald-950">
-                ระดับ 03
-              </h3>
               <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold pt-1 border-t border-emerald-100">
                 <span>
                   กลุ่มอาจารย์:{' '}
@@ -4166,6 +4286,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         onDragStart={(e) => {
                           e.dataTransfer.setData('text/plain', st.studentId);
                           setDraggedStudentId(st.studentId);
+                          // Floating ghost badge following cursor
+                          const ghost = document.createElement('div');
+                          ghost.innerText = `👤 ${st.fullName} (${st.studentId})`;
+                          ghost.style.position = 'absolute';
+                          ghost.style.top = '-9999px';
+                          ghost.style.background = '#4c1d95';
+                          ghost.style.color = '#ffffff';
+                          ghost.style.padding = '6px 12px';
+                          ghost.style.borderRadius = '9999px';
+                          ghost.style.fontSize = '12px';
+                          ghost.style.fontWeight = 'bold';
+                          ghost.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+                          ghost.style.zIndex = '99999';
+                          document.body.appendChild(ghost);
+                          e.dataTransfer.setDragImage(ghost, 20, 20);
+                          setTimeout(() => {
+                            if (document.body.contains(ghost)) document.body.removeChild(ghost);
+                          }, 100);
                         }}
                         className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing ${
                           isSelected
@@ -4327,6 +4465,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         onDragStart={(e) => {
                           e.dataTransfer.setData('text/plain', st.studentId);
                           setDraggedStudentId(st.studentId);
+                          // Floating ghost badge following cursor
+                          const ghost = document.createElement('div');
+                          ghost.innerText = `👤 ${st.fullName} (${st.studentId})`;
+                          ghost.style.position = 'absolute';
+                          ghost.style.top = '-9999px';
+                          ghost.style.background = '#3730a3';
+                          ghost.style.color = '#ffffff';
+                          ghost.style.padding = '6px 12px';
+                          ghost.style.borderRadius = '9999px';
+                          ghost.style.fontSize = '12px';
+                          ghost.style.fontWeight = 'bold';
+                          ghost.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+                          ghost.style.zIndex = '99999';
+                          document.body.appendChild(ghost);
+                          e.dataTransfer.setDragImage(ghost, 20, 20);
+                          setTimeout(() => {
+                            if (document.body.contains(ghost)) document.body.removeChild(ghost);
+                          }, 100);
                         }}
                         className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing ${
                           isSelected
@@ -4486,7 +4642,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 {editorSubTab === 'students' && (
                   <button
                     type="button"
-                    onClick={() => downloadStudentImportTemplate(teachers)}
+                    onClick={() => downloadStudentImportTemplate()}
                     className="px-3 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-300 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
                     title="ดาวน์โหลดไฟล์เทมเพลต Excel สำหรับกรอกข้อมูล นศ."
                   >
@@ -4508,21 +4664,22 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </button>
                 )}
 
-                {/* Button: Bulk Paste / Import */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBulkImportType(editorSubTab as 'students' | 'teachers');
-                    setBulkRawText('');
-                    if (teachers.length > 0 && !bulkDefaultTeacher) setBulkDefaultTeacher(teachers[0].name);
-                    setIsBulkImportModalOpen(true);
-                  }}
-                  className="px-3 py-2.5 bg-purple-100 hover:bg-purple-200 text-purple-950 border border-purple-200 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
-                  title="คัดลอกและวางข้อมูลจาก Excel / ชีต หรือข้อความ"
-                >
-                  <Upload className="w-4 h-4 text-purple-700" />
-                  <span>คัดลอก/วาง ข้อความ ({editorSubTab === 'students' ? 'นศ.' : 'อาจารย์'})</span>
-                </button>
+                {/* Button: Bulk Paste / Import (Teachers only - removed for students per user request) */}
+                {editorSubTab === 'teachers' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkImportType('teachers');
+                      setBulkRawText('');
+                      setIsBulkImportModalOpen(true);
+                    }}
+                    className="px-3 py-2.5 bg-purple-100 hover:bg-purple-200 text-purple-950 border border-purple-200 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+                    title="คัดลอกและวางข้อมูลอาจารย์จาก Excel / ชีต หรือข้อความ"
+                  >
+                    <Upload className="w-4 h-4 text-purple-700" />
+                    <span>คัดลอก/วาง ข้อความ (อาจารย์)</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -6376,6 +6533,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ==================== TAB 9: สตูดิโอเกียรติบัตร (CERTIFICATE STUDIO) ==================== */}
+      {activeTab === 'certificates' && (
+        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-4 animate-fadeIn">
+          <CertificateStudioModal
+            isOpen={true}
+            onClose={() => setActiveTab('overview')}
+            systemLogo={customLogo}
+            isEmbedded={true}
+          />
         </div>
       )}
             </main>

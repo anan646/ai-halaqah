@@ -166,8 +166,8 @@ export async function printCertificate(
         <title>${title}</title>
         <style>
           @page {
-            size: A4 landscape;
-            margin: 0;
+            size: 297mm 210mm;
+            margin: 0mm;
           }
           * {
             margin: 0;
@@ -175,8 +175,8 @@ export async function printCertificate(
             box-sizing: border-box;
           }
           html, body {
-            width: 100vw;
-            height: 100vh;
+            width: 297mm;
+            height: 210mm;
             margin: 0;
             padding: 0;
             background: #ffffff;
@@ -188,10 +188,10 @@ export async function printCertificate(
             print-color-adjust: exact !important;
           }
           img {
+            width: 297mm;
+            height: 210mm;
             max-width: 297mm;
             max-height: 210mm;
-            width: 100%;
-            height: 100%;
             object-fit: contain;
             display: block;
           }
@@ -202,8 +202,9 @@ export async function printCertificate(
         <script>
           window.onload = function() {
             setTimeout(function() {
+              window.focus();
               window.print();
-            }, 300);
+            }, 350);
             window.onafterprint = function() {
               window.close();
             };

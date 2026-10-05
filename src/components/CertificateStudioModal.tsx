@@ -31,31 +31,35 @@ import {
 import { exportCertificateToPdf, printCertificate } from '@/lib/certificate-export';
 
 interface CertificateStudioModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
   systemLogo?: string;
+  isEmbedded?: boolean;
 }
 
 export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
   systemLogo,
+  isEmbedded = false,
 }) => {
-  const [config, setConfig] = useState<CertificateConfig>(DEFAULT_CERTIFICATE_CONFIG);
+  const [config, setConfig] = useState<CertificateConfig>(() => getCertificateConfig());
   const [activeTab, setActiveTab] = useState<'template' | 'content' | 'layout'>('template');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [isExportingPdfSample, setIsExportingPdfSample] = useState(false);
   const [isPrintingSample, setIsPrintingSample] = useState(false);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const sig1FileInputRef = useRef<HTMLInputElement>(null);
+  const sig2FileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen || isEmbedded) {
       setConfig(getCertificateConfig());
     }
-  }, [isOpen]);
+  }, [isOpen, isEmbedded]);
 
-  if (!isOpen) return null;
+  if (!isEmbedded && !isOpen) return null;
 
   const currentTemplate =
     CERTIFICATE_TEMPLATES.find((t) => t.id === config.templateId) || CERTIFICATE_TEMPLATES[0];
@@ -113,6 +117,64 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const handleSig1Upload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setConfig((prev) => {
+          const next = { ...prev, signatory1SignatureUrl: dataUrl };
+          saveCertificateConfig(next);
+          return next;
+        });
+        setToastMsg('✍️ อัปโหลดภาพลายเซ็นผู้ลงนามที่ 1 เรียบร้อย');
+        setTimeout(() => setToastMsg(null), 3000);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveSig1 = () => {
+    setConfig((prev) => {
+      const next = { ...prev, signatory1SignatureUrl: '' };
+      saveCertificateConfig(next);
+      return next;
+    });
+    setToastMsg('ลบลายเซ็นผู้ลงนามที่ 1 แล้ว');
+    setTimeout(() => setToastMsg(null), 2500);
+  };
+
+  const handleSig2Upload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setConfig((prev) => {
+          const next = { ...prev, signatory2SignatureUrl: dataUrl };
+          saveCertificateConfig(next);
+          return next;
+        });
+        setToastMsg('✍️ อัปโหลดภาพลายเซ็นผู้ลงนามที่ 2 เรียบร้อย');
+        setTimeout(() => setToastMsg(null), 3000);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveSig2 = () => {
+    setConfig((prev) => {
+      const next = { ...prev, signatory2SignatureUrl: '' };
+      saveCertificateConfig(next);
+      return next;
+    });
+    setToastMsg('ลบลายเซ็นผู้ลงนามที่ 2 แล้ว');
+    setTimeout(() => setToastMsg(null), 2500);
+  };
+
   const handlePrintSample = async () => {
     setIsPrintingSample(true);
     try {
@@ -160,56 +222,63 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
       ? 'เกียรติบัตร'
       : rawTitle;
 
-  return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
-        {/* Print Styles for Certificate */}
-        <style jsx global>{`
-          @media print {
-            body * {
-              visibility: hidden !important;
-            }
-            #studio-cert-preview,
-            #studio-cert-preview * {
-              visibility: visible !important;
-            }
-            #studio-cert-preview {
-              position: fixed !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 100vw !important;
-              height: 100vh !important;
-              margin: 0 !important;
-              padding: 15mm !important;
-              border-width: 8px !important;
-              box-shadow: none !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
+  const studioContent = (
+    <>
+      {/* Print Styles for Certificate */}
+      <style jsx global>{`
+        @page {
+          size: 297mm 210mm;
+          margin: 0mm;
+        }
+        @media print {
+          html, body {
+            width: 297mm !important;
+            height: 210mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
-        `}</style>
+          body * {
+            visibility: hidden !important;
+          }
+          #studio-cert-preview,
+          #studio-cert-preview * {
+            visibility: visible !important;
+          }
+          #studio-cert-preview {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            margin: 0 !important;
+            padding: 15mm !important;
+            box-shadow: none !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
 
-        <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[96vh] flex flex-col shadow-2xl border border-purple-200 overflow-hidden my-auto">
-          {/* Top Bar */}
-          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 px-5 sm:px-7 py-3.5 text-white flex items-center justify-between shadow-md shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black shadow">
-                <Award className="w-6 h-6 text-purple-950" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-black tracking-wide flex items-center gap-2">
-                  <span>สตูดิโอออกแบบ & จัดการเกียรติบัตร (Certificate Studio)</span>
-                  <span className="text-[10px] bg-amber-400 text-purple-950 font-black px-2 py-0.5 rounded-full uppercase">
-                    10 เทมเพลต + คัสตอม
-                  </span>
-                </h2>
-                <p className="text-[11px] text-purple-200">
-                  ปรับแต่งเทมเพลต ข้อความ ตราสัญลักษณ์ และเลเอาต์เกียรติบัตรฉบับทางการของระบบ
-                </p>
-              </div>
+      <div className={`bg-white rounded-3xl w-full flex flex-col shadow-card border border-purple-200 overflow-hidden ${isEmbedded ? '' : 'max-w-6xl max-h-[96vh] my-auto'}`}>
+        {/* Top Bar */}
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 px-5 sm:px-7 py-3.5 text-white flex items-center justify-between shadow-md shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black shadow">
+              <Award className="w-6 h-6 text-purple-950" />
             </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black tracking-wide flex items-center gap-2">
+                <span>สตูดิโอออกแบบ & จัดการเกียรติบัตร (Certificate Studio)</span>
+                <span className="text-[10px] bg-amber-400 text-purple-950 font-black px-2 py-0.5 rounded-full uppercase">
+                  10 เทมเพลต + คัสตอม
+                </span>
+              </h2>
+              <p className="text-[11px] text-purple-200">
+                ปรับแต่งเทมเพลต ข้อความ ตราสัญลักษณ์ ลายเซ็น และเลเอาต์เกียรติบัตรฉบับทางการของระบบ
+              </p>
+          </div>
 
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleReset}
@@ -476,15 +545,16 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-100">
-                      <div>
-                        <label className="font-bold text-purple-950 block mb-1">ผู้ลงนามที่ 1 (ซ้าย)</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-purple-100">
+                      {/* Signatory 1 Card */}
+                      <div className="p-3 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-2">
+                        <label className="font-bold text-purple-950 block text-xs">ผู้ลงนามที่ 1 (ซ้าย)</label>
                         <input
                           type="text"
                           placeholder="ชื่อ-สกุล"
                           value={config.signatory1Name}
                           onChange={(e) => setConfig({ ...config, signatory1Name: e.target.value })}
-                          className="w-full px-2.5 py-1.5 border border-purple-200 rounded-xl bg-white font-bold mb-1"
+                          className="w-full px-2.5 py-1.5 border border-purple-200 rounded-xl bg-white font-bold"
                         />
                         <input
                           type="text"
@@ -493,16 +563,59 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                           onChange={(e) => setConfig({ ...config, signatory1Role: e.target.value })}
                           className="w-full px-2.5 py-1.5 border border-purple-200 rounded-xl bg-white text-[11px]"
                         />
+
+                        {/* Signature 1 Upload Box */}
+                        <div className="pt-1.5 border-t border-purple-100">
+                          <label className="font-semibold text-purple-900 block text-[11px] mb-1">
+                            รูปลายเซ็นผู้ลงนามที่ 1 (PNG/โปร่งใส):
+                          </label>
+                          <input
+                            ref={sig1FileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleSig1Upload}
+                            className="hidden"
+                          />
+                          {config.signatory1SignatureUrl ? (
+                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-purple-200">
+                              <img
+                                src={config.signatory1SignatureUrl}
+                                alt="ลายเซ็น 1"
+                                className="h-8 max-w-[100px] object-contain border border-purple-100 rounded bg-white px-1"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[10px] text-emerald-700 font-bold block truncate">✓ ลายเซ็นพร้อมใช้</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleRemoveSig1}
+                                className="text-[10px] text-rose-600 hover:text-rose-800 font-bold px-2 py-1 bg-rose-50 rounded-lg"
+                              >
+                                ลบ
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => sig1FileInputRef.current?.click()}
+                              className="w-full py-1.5 px-2 bg-white hover:bg-purple-100/70 border border-dashed border-purple-300 rounded-xl text-[11px] font-bold text-purple-800 flex items-center justify-center gap-1.5 transition"
+                            >
+                              <Upload className="w-3.5 h-3.5 text-purple-600" />
+                              <span>อัปโหลดรูปลายเซ็นที่ 1</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="font-bold text-purple-950 block mb-1">ผู้ลงนามที่ 2 (ขวา)</label>
+                      {/* Signatory 2 Card */}
+                      <div className="p-3 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-2">
+                        <label className="font-bold text-purple-950 block text-xs">ผู้ลงนามที่ 2 (ขวา)</label>
                         <input
                           type="text"
                           placeholder="ชื่อ-สกุล"
                           value={config.signatory2Name}
                           onChange={(e) => setConfig({ ...config, signatory2Name: e.target.value })}
-                          className="w-full px-2.5 py-1.5 border border-purple-200 rounded-xl bg-white font-bold mb-1"
+                          className="w-full px-2.5 py-1.5 border border-purple-200 rounded-xl bg-white font-bold"
                         />
                         <input
                           type="text"
@@ -511,6 +624,48 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                           onChange={(e) => setConfig({ ...config, signatory2Role: e.target.value })}
                           className="w-full px-2.5 py-1.5 border border-purple-200 rounded-xl bg-white text-[11px]"
                         />
+
+                        {/* Signature 2 Upload Box */}
+                        <div className="pt-1.5 border-t border-purple-100">
+                          <label className="font-semibold text-purple-900 block text-[11px] mb-1">
+                            รูปลายเซ็นผู้ลงนามที่ 2 (PNG/โปร่งใส):
+                          </label>
+                          <input
+                            ref={sig2FileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleSig2Upload}
+                            className="hidden"
+                          />
+                          {config.signatory2SignatureUrl ? (
+                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-purple-200">
+                              <img
+                                src={config.signatory2SignatureUrl}
+                                alt="ลายเซ็น 2"
+                                className="h-8 max-w-[100px] object-contain border border-purple-100 rounded bg-white px-1"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[10px] text-emerald-700 font-bold block truncate">✓ ลายเซ็นพร้อมใช้</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleRemoveSig2}
+                                className="text-[10px] text-rose-600 hover:text-rose-800 font-bold px-2 py-1 bg-rose-50 rounded-lg"
+                              >
+                                ลบ
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => sig2FileInputRef.current?.click()}
+                              className="w-full py-1.5 px-2 bg-white hover:bg-purple-100/70 border border-dashed border-purple-300 rounded-xl text-[11px] font-bold text-purple-800 flex items-center justify-center gap-1.5 transition"
+                            >
+                              <Upload className="w-3.5 h-3.5 text-purple-600" />
+                              <span>อัปโหลดรูปลายเซ็นที่ 2</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -946,11 +1101,19 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                   {/* Footer: Signatures & Verification (No line cutting through middle seal) */}
                   <div className="relative z-10 pt-2 flex items-end justify-between text-center text-[10px] sm:text-xs pb-0.5">
                     {/* Signatory 1 */}
-                    <div className="space-y-0.5 w-36 sm:w-44">
-                      <div className="border-b border-slate-400 w-28 mx-auto mb-1 h-6 flex items-end justify-center">
-                        <span className="font-serif italic text-slate-400 text-[11px]">
-                          {config.signatory1Title}
-                        </span>
+                    <div className="space-y-0.5 w-36 sm:w-44 text-center">
+                      <div className="border-b border-slate-400 w-28 mx-auto mb-1 min-h-7 flex items-end justify-center pb-0.5">
+                        {config.signatory1SignatureUrl ? (
+                          <img
+                            src={config.signatory1SignatureUrl}
+                            alt="ลายเซ็น"
+                            className="max-h-7 max-w-full object-contain"
+                          />
+                        ) : (
+                          <span className="font-serif italic text-slate-400 text-[11px]">
+                            {config.signatory1Title}
+                          </span>
+                        )}
                       </div>
                       <p className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight">
                         {config.signatory1Name}
@@ -982,11 +1145,19 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                     </div>
 
                     {/* Signatory 2 */}
-                    <div className="space-y-0.5 w-36 sm:w-44">
-                      <div className="border-b border-slate-400 w-28 mx-auto mb-1 h-6 flex items-end justify-center">
-                        <span className="font-serif italic text-slate-400 text-[11px]">
-                          {config.signatory2Title}
-                        </span>
+                    <div className="space-y-0.5 w-36 sm:w-44 text-center">
+                      <div className="border-b border-slate-400 w-28 mx-auto mb-1 min-h-7 flex items-end justify-center pb-0.5">
+                        {config.signatory2SignatureUrl ? (
+                          <img
+                            src={config.signatory2SignatureUrl}
+                            alt="ลายเซ็น"
+                            className="max-h-7 max-w-full object-contain"
+                          />
+                        ) : (
+                          <span className="font-serif italic text-slate-400 text-[11px]">
+                            {config.signatory2Title}
+                          </span>
+                        )}
                       </div>
                       <p className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight">
                         {config.signatory2Name}
@@ -1003,6 +1174,22 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
             </div>
           </div>
         </div>
+      </div>
+    </>
+  );
+
+  if (isEmbedded) {
+    return (
+      <div className="space-y-4 animate-fadeIn">
+        {studioContent}
+      </div>
+    );
+  }
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
+        {studioContent}
       </div>
     </ModalPortal>
   );

@@ -458,11 +458,19 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             {/* Signatures & Footer (No line cutting through middle seal) */}
             <div className="pt-2 flex items-end justify-between text-center text-[10px] sm:text-xs relative z-10 pb-0.5">
               {/* Signatory 1 */}
-              <div className="space-y-0.5 w-36 sm:w-44">
-                <div className="border-b border-stone-400 w-28 mx-auto mb-1 h-6 flex items-end justify-center">
-                  <span className="font-serif italic text-stone-400 text-[11px]">
-                    {config.signatory1Title}
-                  </span>
+              <div className="space-y-0.5 w-36 sm:w-44 text-center">
+                <div className="border-b border-stone-400 w-28 mx-auto mb-1 min-h-7 flex items-end justify-center pb-0.5">
+                  {config.signatory1SignatureUrl ? (
+                    <img
+                      src={config.signatory1SignatureUrl}
+                      alt="ลายเซ็น"
+                      className="max-h-7 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="font-serif italic text-stone-400 text-[11px]">
+                      {config.signatory1Title}
+                    </span>
+                  )}
                 </div>
                 <p className="font-bold text-stone-800 text-[10px] sm:text-[11px]">
                   {config.signatory1Name}
@@ -494,11 +502,19 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </div>
 
               {/* Signatory 2 */}
-              <div className="space-y-0.5 w-36 sm:w-44">
-                <div className="border-b border-stone-400 w-28 mx-auto mb-1 h-6 flex items-end justify-center">
-                  <span className="font-serif italic text-stone-400 text-[11px]">
-                    {config.signatory2Title}
-                  </span>
+              <div className="space-y-0.5 w-36 sm:w-44 text-center">
+                <div className="border-b border-stone-400 w-28 mx-auto mb-1 min-h-7 flex items-end justify-center pb-0.5">
+                  {config.signatory2SignatureUrl ? (
+                    <img
+                      src={config.signatory2SignatureUrl}
+                      alt="ลายเซ็น"
+                      className="max-h-7 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="font-serif italic text-stone-400 text-[11px]">
+                      {config.signatory2Title}
+                    </span>
+                  )}
                 </div>
                 <p className="font-bold text-stone-800 text-[10px] sm:text-[11px]">
                   {config.signatory2Name}
