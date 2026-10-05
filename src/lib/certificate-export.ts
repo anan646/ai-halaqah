@@ -40,9 +40,19 @@ export async function exportCertificateToPdf(
         const id = typeof elementIdOrElement === 'string' ? elementIdOrElement : element.id;
         const clonedEl = id ? clonedDoc.getElementById(id) : null;
         if (clonedEl) {
-          // Remove modal-specific border-radius & box-shadow so the exported certificate is full-bleed A4 sheet
+          // Master A4 Landscape calibrated dimensions (ratio 1.4142)
+          const targetWidth = 842;
+          const targetHeight = 595;
+          clonedEl.style.width = `${targetWidth}px`;
+          clonedEl.style.height = `${targetHeight}px`;
+          clonedEl.style.maxWidth = `${targetWidth}px`;
+          clonedEl.style.maxHeight = `${targetHeight}px`;
+          clonedEl.style.minWidth = `${targetWidth}px`;
+          clonedEl.style.minHeight = `${targetHeight}px`;
           clonedEl.style.borderRadius = '0px';
           clonedEl.style.boxShadow = 'none';
+          clonedEl.style.boxSizing = 'border-box';
+          clonedEl.style.margin = '0 auto';
         }
         // Ensure images don't block canvas exporting
         const imgs = clonedDoc.getElementsByTagName('img');
@@ -63,8 +73,28 @@ export async function exportCertificateToPdf(
       compress: true,
     });
 
-    // Fill entire A4 landscape page with exact proportions (0, 0, 297mm, 210mm)
-    pdf.addImage(imgData, format, 0, 0, 297, 210, undefined, 'FAST');
+    const canvasRatio = canvas.width / canvas.height;
+    const a4Ratio = 297 / 210;
+
+    let pdfWidth = 297;
+    let pdfHeight = 210;
+    let pdfX = 0;
+    let pdfY = 0;
+
+    // Preserve exact proportions without stretching
+    if (Math.abs(canvasRatio - a4Ratio) > 0.01) {
+      if (canvasRatio > a4Ratio) {
+        pdfWidth = 297;
+        pdfHeight = 297 / canvasRatio;
+        pdfY = (210 - pdfHeight) / 2;
+      } else {
+        pdfHeight = 210;
+        pdfWidth = 210 * canvasRatio;
+        pdfX = (297 - pdfWidth) / 2;
+      }
+    }
+
+    pdf.addImage(imgData, format, pdfX, pdfY, pdfWidth, pdfHeight, undefined, 'FAST');
 
     const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
     pdf.save(cleanFilename);
@@ -106,8 +136,18 @@ export async function printCertificate(
         const id = typeof elementIdOrElement === 'string' ? elementIdOrElement : element.id;
         const clonedEl = id ? clonedDoc.getElementById(id) : null;
         if (clonedEl) {
+          const targetWidth = 842;
+          const targetHeight = 595;
+          clonedEl.style.width = `${targetWidth}px`;
+          clonedEl.style.height = `${targetHeight}px`;
+          clonedEl.style.maxWidth = `${targetWidth}px`;
+          clonedEl.style.maxHeight = `${targetHeight}px`;
+          clonedEl.style.minWidth = `${targetWidth}px`;
+          clonedEl.style.minHeight = `${targetHeight}px`;
           clonedEl.style.borderRadius = '0px';
           clonedEl.style.boxShadow = 'none';
+          clonedEl.style.boxSizing = 'border-box';
+          clonedEl.style.margin = '0 auto';
         }
         const imgs = clonedDoc.getElementsByTagName('img');
         for (let i = 0; i < imgs.length; i++) {
@@ -135,8 +175,8 @@ export async function printCertificate(
             box-sizing: border-box;
           }
           html, body {
-            width: 297mm;
-            height: 210mm;
+            width: 100vw;
+            height: 100vh;
             margin: 0;
             padding: 0;
             background: #ffffff;
@@ -148,9 +188,11 @@ export async function printCertificate(
             print-color-adjust: exact !important;
           }
           img {
-            width: 297mm;
-            height: 210mm;
-            object-fit: fill;
+            max-width: 297mm;
+            max-height: 210mm;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             display: block;
           }
         </style>

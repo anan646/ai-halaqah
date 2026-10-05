@@ -223,10 +223,13 @@ export function getCertificateConfig(): CertificateConfig {
   }
 }
 
+export const CERT_CONFIG_UPDATED_EVENT = 'halaqah_certificate_config_updated';
+
 export function saveCertificateConfig(config: CertificateConfig): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(CERT_STORAGE_KEY, JSON.stringify(config));
+    window.dispatchEvent(new CustomEvent(CERT_CONFIG_UPDATED_EVENT, { detail: config }));
   } catch (err) {
     console.error('Failed to save certificate config:', err);
   }

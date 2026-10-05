@@ -1,6 +1,7 @@
 import { AttendanceRecord, Student, Teacher } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 import { getActiveStudents, getActiveTeachers } from './data-store';
+import { getCertificateConfig } from './certificate-config';
 
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 const STORAGE_KEY_SCRIPT_URL = 'halaqah_apps_script_url';
@@ -222,7 +223,8 @@ export async function backupAllToGoogleSheet(): Promise<{
         students: getActiveStudents(),
         teachers: getActiveTeachers(),
         attendance: attendance,
-        logoUrl: logoUrl
+        logoUrl: logoUrl,
+        certificateConfig: getCertificateConfig(),
       })
     });
 

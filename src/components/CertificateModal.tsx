@@ -8,6 +8,7 @@ import {
   CertificateConfig,
   CERTIFICATE_TEMPLATES,
   getCertificateConfig,
+  CERT_CONFIG_UPDATED_EVENT,
 } from '@/lib/certificate-config';
 import { exportCertificateToPdf, printCertificate } from '@/lib/certificate-export';
 
@@ -32,13 +33,23 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const semester = getSemesterSettings();
   const major = getStudentMajor(student);
   const level = getStudentLevel(student);
-  const [config, setConfig] = useState<CertificateConfig>(getCertificateConfig());
+  const [config, setConfig] = useState<CertificateConfig>(() => getCertificateConfig());
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   useEffect(() => {
-    setConfig(getCertificateConfig());
+    const handleUpdate = () => {
+      setConfig(getCertificateConfig());
+    };
+    handleUpdate();
+
+    window.addEventListener(CERT_CONFIG_UPDATED_EVENT, handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener(CERT_CONFIG_UPDATED_EVENT, handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
   const currentTemplate =

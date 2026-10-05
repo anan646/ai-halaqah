@@ -362,13 +362,17 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                             <button
                               key={tpl.id}
                               type="button"
-                              onClick={() =>
-                                setConfig({
+                              onClick={() => {
+                                const updated = {
                                   ...config,
                                   templateId: tpl.id,
                                   useCustomBackground: false,
-                                })
-                              }
+                                };
+                                setConfig(updated);
+                                saveCertificateConfig(updated);
+                                setToastMsg(`✨ เลือกและอัปเดต "${tpl.name}" เป็นเทมเพลตใช้งานแล้ว`);
+                                setTimeout(() => setToastMsg(null), 2500);
+                              }}
                               className={`p-3 rounded-2xl border text-left transition relative flex flex-col justify-between ${
                                 isSelected
                                   ? 'bg-purple-900 text-white border-purple-950 shadow-md ring-2 ring-purple-600'

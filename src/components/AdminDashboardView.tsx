@@ -306,7 +306,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   // ==================== EDIT MODAL STATE ====================
   const [editorSubTab, setEditorSubTab] = useState<'students' | 'teachers' | 'majors'>('students');
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [originalStudentId, setOriginalStudentId] = useState<string>('');
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
+  const [originalTeacherName, setOriginalTeacherName] = useState<string>('');
   const [editorMsg, setEditorMsg] = useState<{ text: string; success: boolean } | null>(null);
   const [editorSearch, setEditorSearch] = useState('');
 
@@ -663,11 +665,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const handleSaveStudentEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
-    const res = updateStudentInfo(editingStudent.studentId, editingStudent);
+    const lookupId = originalStudentId || editingStudent.studentId;
+    const res = updateStudentInfo(lookupId, editingStudent);
     setEditorMsg({ text: res.message, success: res.success });
     if (res.success) {
       reloadDataStore();
       setEditingStudent(null);
+      setOriginalStudentId('');
     }
   };
 
@@ -675,7 +679,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const handleSaveTeacherEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTeacher) return;
-    const res = updateTeacherInfo(editingTeacher.name, {
+    const lookupName = originalTeacherName || editingTeacher.name;
+    const res = updateTeacherInfo(lookupName, {
       name: editingTeacher.name,
       groupName: editingTeacher.groupName,
       yearLevel: editingTeacher.yearLevel,
@@ -685,6 +690,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (res.success) {
       reloadDataStore();
       setEditingTeacher(null);
+      setOriginalTeacherName('');
     }
   };
 
@@ -1063,11 +1069,51 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     },
   ];
 
+  // ==================== ACADEMIC YEAR & SEMESTER FILTER ====================
+  const [yearFilter, setYearFilter] = useState<string>('all');
+  const [semesterFilter, setSemesterFilter] = useState<string>('all');
+
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    if (semesterSettings.academicYear) yearsSet.add(semesterSettings.academicYear);
+    ['2569', '2568', '2567'].forEach((y) => yearsSet.add(y));
+    records.forEach((r) => {
+      if (r.date) {
+        const ceYear = parseInt(r.date.substring(0, 4));
+        if (!isNaN(ceYear)) {
+          yearsSet.add(String(ceYear + 543));
+        }
+      }
+    });
+    return Array.from(yearsSet).sort().reverse();
+  }, [records, semesterSettings]);
+
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      if (yearFilter !== 'all') {
+        const ceYear = parseInt(r.date.substring(0, 4));
+        const beYear = String(ceYear + 543);
+        if (beYear !== yearFilter) return false;
+      }
+      if (semesterFilter !== 'all') {
+        if (r.date) {
+          const parts = r.date.split('-');
+          if (parts.length >= 2) {
+            const month = parseInt(parts[1]);
+            if (semesterFilter === 'ภาคเรียนที่ 1' && (month < 5 || month > 10)) return false;
+            if (semesterFilter === 'ภาคเรียนที่ 2' && (month >= 5 && month <= 10)) return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [records, yearFilter, semesterFilter]);
+
   // ==================== 40 TEACHERS COMPARISON & DETAILED STATS ====================
   const allTeachersComparison = useMemo(() => {
     return teachers.map((t, index) => {
       const groupStudents = students.filter((s) => s.teacherName === t.name);
-      const teacherRecords = records.filter((r) => r.teacherName === t.name);
+      const teacherRecords = filteredRecords.filter((r) => r.teacherName === t.name);
       const dates = Array.from(new Set(teacherRecords.map((r) => r.date))).sort();
 
       let cohort: 'male' | 'female2' | 'female3' = 'male';
@@ -2497,6 +2543,71 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           {/* ==================== TAB 1: ภาพรวมทั้งหมด (OVERVIEW & MATRIX COMPARISON) ==================== */}
           {(activeTab === 'overview' || activeTab === 'analytics') && (
         <div className="space-y-6 animate-fadeIn">
+          {/* Academic Year & Semester Selector Banner (ดูข้อมูลย้อนหลัง & สลับปีการศึกษา) */}
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-purple-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-amber-300 shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wider text-purple-200 font-bold">ข้อมูลปีการศึกษา & ภาคเรียน</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black border border-emerald-400/30">
+                    ดูย้อนหลังได้ทุกปี
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-white mt-0.5">
+                  {semesterFilter === 'all' ? 'ทุกภาคเรียน' : semesterFilter} ปีการศึกษา {yearFilter === 'all' ? 'ทุกปี' : yearFilter}
+                </h3>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {/* Year Filter */}
+              <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl border border-white/15">
+                <span className="text-purple-200 font-semibold">ปีการศึกษา:</span>
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="all" className="text-slate-900">ทั้งหมด (ทุกปี)</option>
+                  {availableYears.map((y) => (
+                    <option key={y} value={y} className="text-slate-900">ปีการศึกษา {y}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Semester Filter */}
+              <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl border border-white/15">
+                <span className="text-purple-200 font-semibold">ภาคเรียน:</span>
+                <select
+                  value={semesterFilter}
+                  onChange={(e) => setSemesterFilter(e.target.value)}
+                  className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="all" className="text-slate-900">ทั้งหมด (ทุกภาคเรียน)</option>
+                  <option value="ภาคเรียนที่ 1" className="text-slate-900">ภาคเรียนที่ 1</option>
+                  <option value="ภาคเรียนที่ 2" className="text-slate-900">ภาคเรียนที่ 2</option>
+                </select>
+              </div>
+
+              {(yearFilter !== 'all' || semesterFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setYearFilter('all');
+                    setSemesterFilter('all');
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-800 hover:bg-purple-700 text-purple-200 hover:text-white font-bold transition flex items-center gap-1 text-[11px]"
+                >
+                  <X className="w-3 h-3" />
+                  <span>ล้างตัวกรอง</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Top 4 KPI Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-3xl border border-purple-100 p-5 shadow-card relative overflow-hidden group hover:shadow-card-hover transition">
@@ -4466,7 +4577,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setEditingStudent(st)}
+                              onClick={() => {
+                                setOriginalStudentId(st.studentId);
+                                setEditingStudent(st);
+                              }}
                               className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
                             >
                               <Edit3 className="w-3 h-3" />
@@ -4530,7 +4644,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => setEditingTeacher(t)}
+                                onClick={() => {
+                                  setOriginalTeacherName(t.name);
+                                  setEditingTeacher(t);
+                                }}
                                 className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
                               >
                                 <Edit3 className="w-3 h-3" />

@@ -1,5 +1,6 @@
 import { Student, Teacher, Announcement, GroupLevel, SessionMetadata, SemesterSettings } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
+import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
 
 const STORAGE_KEY_STUDENTS = 'halaqah_active_students_v5';
 const STORAGE_KEY_TEACHERS = 'halaqah_active_teachers_v4';
@@ -8,6 +9,24 @@ const STORAGE_KEY_ANNOUNCEMENTS = 'halaqah_announcements_v1';
 const STORAGE_KEY_MAJORS = 'halaqah_active_majors_v2';
 const STORAGE_KEY_SESSIONS = 'halaqah_sessions_metadata_v1';
 const STORAGE_KEY_SEMESTER = 'halaqah_semester_settings_v1';
+const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
+
+function getLocalAttendance(): any[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ATTENDANCE);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalAttendance(records: any[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(records));
+  } catch {}
+}
 
 
 // รหัสสาขาวิชาจากรหัสนักศึกษาคณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี (หลักที่ 4-6 เช่น 681441001 -> 441)
@@ -287,23 +306,63 @@ export function moveStudentToTeacher(
 
 // 2. แก้ไขข้อมูลนักศึกษา (รหัส, ชื่อ, กลุ่ม, ชั้นปี, เพศ, อาจารย์)
 export function updateStudentInfo(
-  studentId: string,
+  studentIdOrOriginalId: string,
   newData: Partial<Student>
 ): { success: boolean; message: string; updatedStudent?: Student } {
   const students = getActiveStudents();
-  const sIdx = students.findIndex((s) => s.studentId === studentId);
+  // Find by original ID first, or fallback to newData.studentId
+  let sIdx = students.findIndex((s) => s.studentId === studentIdOrOriginalId);
+  if (sIdx === -1 && newData.studentId) {
+    sIdx = students.findIndex((s) => s.studentId === newData.studentId);
+  }
 
   if (sIdx === -1) {
-    return { success: false, message: 'ไม่พบรหัสนักศึกษาที่จะแก้ไข' };
+    return { success: false, message: 'ไม่พบรหัสนักศึกษาที่จะแก้ไขในระบบ' };
+  }
+
+  const targetOldId = students[sIdx].studentId;
+  const newId = newData.studentId?.trim() || targetOldId;
+
+  // Check duplicate ID if ID changed
+  if (newId !== targetOldId) {
+    const isDup = students.some((s, idx) => idx !== sIdx && s.studentId === newId);
+    if (isDup) {
+      return { success: false, message: `รหัสนักศึกษา "${newId}" ซ้ำกับนักศึกษาท่านอื่นในระบบ` };
+    }
   }
 
   const updated: Student = {
     ...students[sIdx],
     ...newData,
+    studentId: newId,
   };
 
   students[sIdx] = updated;
   saveActiveStudents(students);
+
+  // Cascade changed ID and name to local attendance records if needed
+  if (newId !== targetOldId || updated.fullName !== students[sIdx].fullName) {
+    try {
+      const records = getLocalAttendance();
+      let hasUpdate = false;
+      const updatedRecords = records.map((r) => {
+        if (r.studentId === targetOldId) {
+          hasUpdate = true;
+          return {
+            ...r,
+            studentId: newId,
+            studentName: updated.fullName,
+            groupName: updated.groupName || r.groupName,
+            teacherName: updated.teacherName || r.teacherName,
+          };
+        }
+        return r;
+      });
+      if (hasUpdate) {
+        saveLocalAttendance(updatedRecords);
+      }
+    } catch {}
+  }
 
   return {
     success: true,
@@ -318,15 +377,29 @@ export function updateTeacherInfo(
   newData: { name: string; groupName: string; yearLevel: string; gender: 'ชาย' | 'หญิง' }
 ): { success: boolean; message: string } {
   const teachers = getActiveTeachers();
-  const tIdx = teachers.findIndex((t) => t.name === oldTeacherName);
+  let tIdx = teachers.findIndex((t) => t.name === oldTeacherName);
+  if (tIdx === -1 && newData.name) {
+    tIdx = teachers.findIndex((t) => t.name === newData.name.trim());
+  }
 
   if (tIdx === -1) {
-    return { success: false, message: 'ไม่พบอาจารย์ที่จะแก้ไข' };
+    return { success: false, message: 'ไม่พบอาจารย์ที่จะแก้ไขในระบบ' };
+  }
+
+  const targetOldTeacherName = teachers[tIdx].name;
+  const newTeacherName = newData.name.trim();
+
+  // If name changed, check duplicate
+  if (newTeacherName !== targetOldTeacherName) {
+    const isDup = teachers.some((t, idx) => idx !== tIdx && t.name === newTeacherName);
+    if (isDup) {
+      return { success: false, message: `ชื่ออาจารย์ "${newTeacherName}" มีอยู่ในระบบแล้ว` };
+    }
   }
 
   const updatedTeacher: Teacher = {
     ...teachers[tIdx],
-    name: newData.name.trim(),
+    name: newTeacherName,
     groupName: newData.groupName.trim(),
     yearLevel: newData.yearLevel.trim(),
     gender: newData.gender,
@@ -339,7 +412,7 @@ export function updateTeacherInfo(
   const students = getActiveStudents();
   let affectedStudentsCount = 0;
   const updatedStudents = students.map((s) => {
-    if (s.teacherName === oldTeacherName) {
+    if (s.teacherName === targetOldTeacherName) {
       affectedStudentsCount++;
       return {
         ...s,
@@ -353,6 +426,26 @@ export function updateTeacherInfo(
   });
 
   saveActiveStudents(updatedStudents);
+
+  // Cascade to attendance records
+  try {
+    const records = getLocalAttendance();
+    let hasUpdate = false;
+    const updatedRecords = records.map((r) => {
+      if (r.teacherName === targetOldTeacherName) {
+        hasUpdate = true;
+        return {
+          ...r,
+          teacherName: updatedTeacher.name,
+          groupName: updatedTeacher.groupName,
+        };
+      }
+      return r;
+    });
+    if (hasUpdate) {
+      saveLocalAttendance(updatedRecords);
+    }
+  } catch {}
 
   return {
     success: true,
@@ -853,6 +946,7 @@ export function exportFullDatabaseJson(): string {
     announcements: getAnnouncements(),
     sessions: getAllSessionMetadata(),
     semester: getSemesterSettings(),
+    certificateConfig: getCertificateConfig(),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -881,6 +975,9 @@ export function importFullDatabaseJson(jsonStr: string): { success: boolean; mes
     }
     if (parsed.semester) {
       saveSemesterSettings(parsed.semester);
+    }
+    if (parsed.certificateConfig) {
+      saveCertificateConfig(parsed.certificateConfig);
     }
 
     return {
