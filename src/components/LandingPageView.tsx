@@ -72,9 +72,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   // 'student' = Dedicated Student Window
   // 'faculty' = Dedicated Faculty/Teacher Window
   const [portalView, setPortalView] = useState<'select' | 'student' | 'faculty'>('select');
-  // อ่านภาคการศึกษาหลังโหลดในเบราว์เซอร์ (ค่าอยู่ใน localStorage) เพื่อไม่ให้ hydration ไม่ตรง
-  const [termText, setTermText] = useState('');
-  useEffect(() => setTermText(formatTermLabel()), []);
 
   // Notify parent component of current portal view
   useEffect(() => {
@@ -280,7 +277,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     >
       {/* 1. TOP PROMINENT OFFICIAL LOGO (ORIGINAL LOGO WITH REALISTIC LIGHT SWEEP EFFECT) - SHOWN ON PORTAL SELECTION */}
       {portalView === 'select' && (
-        <div className="relative flex flex-col items-center justify-center text-center space-y-3 pt-2 sm:pt-4 pb-1">
+        <div className="relative flex flex-col items-center justify-center text-center space-y-1 pt-2 sm:pt-4 pb-1">
           {/* Main Logo with Light Sweep across the logo body */}
           <div className="relative w-full max-w-[360px] sm:max-w-lg md:max-w-xl lg:max-w-2xl flex items-center justify-center py-2 sm:py-3 group select-none">
             {/* Base Logo Image */}
@@ -347,24 +344,20 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           </div>
 
           {/* ชื่อระบบ */}
-          <div className="text-center space-y-3 pt-1">
+          <div className="text-center flex flex-col items-center -mt-1">
             <div className="text-[11px] sm:text-xs font-bold tracking-[0.25em] text-purple-500 uppercase">
               Halaqah Al-Quran
             </div>
-            {/* ใช้ฟอนต์ Prompt ที่ออกแบบสระ/วรรณยุกต์ไทยไว้ดี และเว้นช่องบน-ล่างให้สระบน/ล่างไม่ถูกตัดตอนไล่สี */}
-            <h1 className="text-[2rem] sm:text-5xl md:text-6xl font-extrabold" style={{ fontFamily: "'Prompt', 'IBM Plex Sans Thai', sans-serif" }}>
+            {/* ฟอนต์ Prompt วางสระไทยได้ดี; ช่องว่างบน-ล่างอยู่ใน span (ให้สระไม่ถูกตัดตอนไล่สี) แล้วดึงระยะกลับด้วย margin ติดลบ */}
+            <h1 className="text-[2rem] sm:text-5xl md:text-6xl font-extrabold -my-1.5 sm:-my-2" style={{ fontFamily: "'Prompt', 'IBM Plex Sans Thai', sans-serif" }}>
               <span
-                className="inline-block px-1 py-3 leading-[1.5] bg-gradient-to-r from-[#5b21b6] via-[#c026d3] to-[#f59e0b] bg-clip-text text-transparent drop-shadow-[0_6px_18px_rgba(147,51,234,0.25)] animate-gradient-x"
+                className="inline-block px-1 py-2 leading-[1.45] bg-gradient-to-r from-[#5b21b6] via-[#c026d3] to-[#f59e0b] bg-clip-text text-transparent drop-shadow-[0_6px_18px_rgba(147,51,234,0.25)] animate-gradient-x"
                 style={{ backgroundSize: '200% auto' }}
               >
                 กลุ่มศึกษาอัลกุรอาน
               </span>
             </h1>
             <p className="text-sm sm:text-base text-purple-800/70 font-medium">ระบบบันทึกและติดตามการเข้าร่วม</p>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-100/80 text-purple-800 text-xs font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {termText || '\u00a0'}
-            </div>
           </div>
         </div>
       )}
