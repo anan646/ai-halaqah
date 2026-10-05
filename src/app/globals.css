@@ -138,3 +138,15 @@
     display: block !important;
   }
 }
+
+/* ไล่สีเลื่อนช้า ๆ สำหรับหัวข้อหน้าแรก */
+@keyframes gradientX {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.animate-gradient-x {
+  animation: gradientX 8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient-x { animation: none; }
+}

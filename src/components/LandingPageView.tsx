@@ -351,8 +351,12 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             <div className="text-[11px] sm:text-xs font-bold tracking-[0.25em] text-purple-500 uppercase">
               Halaqah Al-Quran
             </div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.25]">
-              <span className="inline-block pt-2 -mt-2 pb-1 bg-gradient-to-r from-purple-800 via-fuchsia-700 to-indigo-800 bg-clip-text text-transparent">
+            {/* ใช้ฟอนต์ Prompt ที่ออกแบบสระ/วรรณยุกต์ไทยไว้ดี และเว้นช่องบน-ล่างให้สระบน/ล่างไม่ถูกตัดตอนไล่สี */}
+            <h1 className="text-[2rem] sm:text-5xl md:text-6xl font-extrabold" style={{ fontFamily: "'Prompt', 'IBM Plex Sans Thai', sans-serif" }}>
+              <span
+                className="inline-block px-1 py-3 leading-[1.5] bg-gradient-to-r from-[#5b21b6] via-[#c026d3] to-[#f59e0b] bg-clip-text text-transparent drop-shadow-[0_6px_18px_rgba(147,51,234,0.25)] animate-gradient-x"
+                style={{ backgroundSize: '200% auto' }}
+              >
                 กลุ่มศึกษาอัลกุรอาน
               </span>
             </h1>
