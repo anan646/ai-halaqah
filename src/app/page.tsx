@@ -13,6 +13,7 @@ import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllT
 import { getAdminSession, setAdminSession } from '@/lib/admin-auth';
 import { getActiveStudents } from '@/lib/data-store';
 import { PublicPendingReportPage } from '@/components/PendingReport';
+import { PwaInstallPrompt, usePwaRegister } from '@/components/PwaInstall';
 import { decodeSnapshot, PendingSnapshot } from '@/lib/pending-report';
 
 const TUTORIAL_DISMISSED_KEY = 'halaqah_tutorial_never_show_v1';
@@ -21,6 +22,7 @@ export default function HomePage() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'teacher' | 'admin'>('landing');
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [dataVersion, setDataVersion] = useState(0);
+  usePwaRegister();
   const idleRef = useRef(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -296,6 +298,9 @@ export default function HomePage() {
         onClose={() => setIsTutorialOpen(false)}
         onDismissForever={handleDismissTutorialForever}
       />
+
+      {/* ชวนติดตั้งแอป (แสดงที่หน้าแรกเท่านั้น) */}
+      {currentTab === 'landing' && landingPortalView === 'select' && <PwaInstallPrompt />}
 
       {/* Clean Footer */}
       <footer className="border-t border-purple-100 bg-white py-4 mt-auto text-center text-xs text-purple-800/60 print:hidden hidden md:block">
