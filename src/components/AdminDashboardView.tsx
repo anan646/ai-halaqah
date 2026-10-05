@@ -115,7 +115,7 @@ import {
   exportGroupDetailedExcel,
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
-import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
+import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
 import { setSavedLogo, pushAnnouncements, pushSemester, restoreFromGoogleSheet } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { AdminManualModal } from './AdminManualModal';
@@ -993,6 +993,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setSubAdminsList(getSubAdmins());
       setSubAdminMsg({ text: res.message, success: true });
       setIsAddSubAdminModalOpen(false);
+      if (res.admin) {
+        pushSubAdminAdd(res.admin).then((r) => {
+          setSyncToast(r.message);
+          setTimeout(() => setSyncToast(null), 4000);
+        });
+      }
     } else {
       setSubAdminMsg({ text: res.message, success: false });
     }
@@ -1002,6 +1008,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบสิทธิ์แอดมินรองนี้?')) {
       deleteSubAdmin(id);
       setSubAdminsList(getSubAdmins());
+      pushSubAdminDelete(id).then((r) => {
+        setSyncToast(r.message);
+        setTimeout(() => setSyncToast(null), 4000);
+      });
     }
   };
 
@@ -2466,6 +2476,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             setSemesterSettings(getSemesterSettings());
                             setTermHistory(getTermHistory());
                             setAnnouncementsList(getAnnouncements());
+                            setSubAdminsList(getSubAdmins());
                             setSyncToast(r.message);
                             setTimeout(() => setSyncToast(null), 5000);
                             if (r.success) handleManualSync(true);
@@ -5022,7 +5033,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <div key={sub.id} className="p-3 flex items-center justify-between text-xs hover:bg-purple-50/30">
                       <div>
                         <div className="font-bold text-purple-950">{sub.name}</div>
-                        <div className="text-[11px] text-purple-700/70 font-mono">เพิ่มเมื่อ: {sub.createdAt}</div>
+                        <div className="text-[11px] text-purple-700/70 font-mono">เพิ่มเมื่อ: {isNaN(Date.parse(sub.createdAt)) ? sub.createdAt : new Date(sub.createdAt).toLocaleDateString('th-TH')}</div>
                       </div>
                       <button
                         onClick={() => handleDeleteSubAdmin(sub.id)}

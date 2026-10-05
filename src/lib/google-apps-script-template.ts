@@ -3,8 +3,8 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  *
  * วิธีติดตั้ง / อัปเดต
  * 1) Google Sheet > ส่วนขยาย > Apps Script > วางโค้ดนี้ทับทั้งหมด > บันทึก
- * 2) ตั้งรหัสแอดมิน: ไอคอนเฟือง (Project Settings) > Script Properties > เพิ่ม
- *      ADMIN_KEY = รหัสแอดมินหลักเดียวกับที่ใช้ล็อกอินในเว็บ
+ * 2) (ไม่บังคับ) เปลี่ยนรหัสแอดมิน: ไอคอนเฟือง (Project Settings) > Script Properties > เพิ่ม
+ *      ADMIN_KEY = รหัสแอดมินหลักเดียวกับที่ใช้ล็อกอินในเว็บ (ถ้าไม่ตั้ง ใช้รหัสตั้งต้นของระบบ)
  * 3) เลือกฟังก์ชัน "setupAllSheets" แล้วกด Run  → สร้างทุกชีตพร้อมหัวตาราง และใส่ค่าเริ่มต้น
  *    (ถ้าต้องการใส่รายชื่อนักศึกษา 514 คน/อาจารย์ 40 ท่านชุดตั้งต้นด้วย ให้ Run "setupInitialDatabase")
  * 4) Deploy > Manage deployments > แก้ไข > Version: New version > Deploy
@@ -20,6 +20,7 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  *   Announcements  ประกาศถึงนักศึกษา
  *   Sessions       หัวข้อ/บันทึกประจำคาบ
  *   Settings       ค่าตั้งระบบ (เป้าหมายภาคเรียน วันกิจกรรม เกียรติบัตร ฯลฯ)
+ *   SubAdmins      แอดมินรอง (เก็บรหัสผ่านแบบเข้ารหัส SHA-256 ไม่เก็บรหัสจริง)
  */
 
 const SHEET_ATTENDANCE = 'Attendance';
@@ -30,6 +31,10 @@ const SHEET_MAJORS = 'Majors';
 const SHEET_TERMS = 'Terms';
 const SHEET_ANNOUNCEMENTS = 'Announcements';
 const SHEET_SESSIONS = 'Sessions';
+const SHEET_SUBADMINS = 'SubAdmins';
+
+// SHA-256 ของรหัสแอดมินหลักตั้งต้น (ใช้เมื่อไม่ได้ตั้ง Script Property ADMIN_KEY)
+const DEFAULT_ADMIN_KEY_SHA256 = '7cedcfc143f7c3a15869169ed87af666741d557df898b0c0d7d956444e54d0ec';
 
 const HEADERS = {};
 HEADERS[SHEET_ATTENDANCE] = [
@@ -44,6 +49,7 @@ HEADERS[SHEET_TERMS] = ['รหัสภาค', 'ปีการศึกษา
 HEADERS[SHEET_ANNOUNCEMENTS] = ['ID', 'หัวข้อ', 'ข้อความ', 'ความเร่งด่วน', 'ส่งถึง', 'รหัสนักศึกษาที่ได้รับ', 'สร้างเมื่อ', 'ผู้ประกาศ', 'หมดอายุ'];
 HEADERS[SHEET_SESSIONS] = ['วันที่', 'อาจารย์', 'หัวข้อ/ซูเราะฮ์', 'บันทึกเพิ่มเติม'];
 HEADERS[SHEET_SETTINGS] = ['Key', 'Value'];
+HEADERS[SHEET_SUBADMINS] = ['ID', 'ชื่อแอดมินรอง', 'รหัสผ่าน (SHA-256)', 'สร้างเมื่อ'];
 
 const DEFAULT_MAJORS = [
   'อิสลามศึกษา', 'การสอนอิสลามศึกษา', 'ภาษาอาหรับ', 'การสอนภาษาอาหรับ', 'วิทยาศาสตร์ทั่วไป',
@@ -164,6 +170,14 @@ function doPost(e) {
       return jsonResponse({ success: true, message: 'บันทึกการเช็คชื่อลง Google Sheet สำเร็จ', inserted: res.inserted, updated: res.updated });
     }
 
+    // ตรวจรหัสแอดมินรอง (ใช้ตอนล็อกอินจากเครื่องอื่น) — ตอบแค่ใช่/ไม่ใช่ ไม่ส่งรหัสออกไป
+    if (action === 'verifySubAdmin') {
+      const h = sha256Hex(String(body.passcode || '').trim());
+      const hit = bodyRows(ss.getSheetByName(SHEET_SUBADMINS)).filter(function (r) { return r[0] && String(r[2]) === h; })[0];
+      if (!hit) { Utilities.sleep(500); return jsonResponse({ success: true, valid: false }); }
+      return jsonResponse({ success: true, valid: true, id: String(hit[0]), name: String(hit[1]) });
+    }
+
     // ---------- ด้านล่างต้องเป็นแอดมิน ----------
     if (!isAdminKeyValid(body.adminKey)) {
       return jsonResponse({ success: false, message: 'ไม่ได้รับอนุญาต: ตั้งค่า ADMIN_KEY ใน Script Properties ให้ตรงกับรหัสแอดมินก่อน' });
@@ -171,6 +185,26 @@ function doPost(e) {
 
     if (action === 'saveAnnouncements') {
       writeAnnouncements(ss, body.announcements || []);
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'addSubAdmin') {
+      const a = body.subAdmin || {};
+      if (!a.id || !a.name || !a.passcode) return jsonResponse({ success: false, message: 'ข้อมูลแอดมินรองไม่ครบ' });
+      const h = sha256Hex(String(a.passcode).trim());
+      const sheet = ss.getSheetByName(SHEET_SUBADMINS);
+      const dup = bodyRows(sheet).some(function (r) { return String(r[2]) === h; });
+      if (dup || h === getAdminKeyHash()) return jsonResponse({ success: false, message: 'รหัสผ่านนี้ถูกใช้แล้ว' });
+      sheet.appendRow([a.id, a.name, h, a.createdAt || new Date().toISOString()]);
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'deleteSubAdmin') {
+      const sheet = ss.getSheetByName(SHEET_SUBADMINS);
+      const data = sheet.getDataRange().getValues();
+      for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][0]) === String(body.id)) sheet.deleteRow(i + 1);
+      }
       return jsonResponse({ success: true });
     }
 
@@ -222,6 +256,9 @@ function doPost(e) {
         sessions: readSessions(ss),
         semester: settings.semester ? JSON.parse(settings.semester) : null,
         certificateConfig: settings.certificateConfig ? JSON.parse(settings.certificateConfig) : null,
+        subAdmins: bodyRows(ss.getSheetByName(SHEET_SUBADMINS)).filter(function (r) { return r[0]; }).map(function (r) {
+          return { id: String(r[0]), name: String(r[1]), createdAt: toIso(r[3]), role: 'subadmin' };
+        }),
         attendance: readAttendance(ss)
       });
     }
@@ -425,9 +462,20 @@ function writeRows(sheet, rows, replace) {
   sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
 }
 
+function getAdminKeyHash() {
+  const prop = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+  return prop ? sha256Hex(prop.trim()) : DEFAULT_ADMIN_KEY_SHA256;
+}
+
 function isAdminKeyValid(key) {
-  const expected = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
-  return !!expected && String(key || '') === expected;
+  const k = String(key || '').trim();
+  return !!k && sha256Hex(k) === getAdminKeyHash();
+}
+
+function sha256Hex(s) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8)
+    .map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); })
+    .join('');
 }
 
 function toIso(v) {

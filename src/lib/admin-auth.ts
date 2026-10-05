@@ -4,6 +4,46 @@ const ADMIN_KEY_STORAGE = 'halaqah_admin_key';
 const STORAGE_KEY_SUB_ADMINS = 'halaqah_sub_admins_v1';
 const STORAGE_KEY_ADMIN_SESSION = 'halaqah_active_admin_session';
 
+// อ่าน URL ของ Apps Script ตรงนี้ (ไม่ import จาก api-client เพื่อเลี่ยงการ import วนกัน)
+function scriptUrl(): string {
+  if (typeof window === 'undefined') return '';
+  return (localStorage.getItem('halaqah_apps_script_url') || process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || '').trim();
+}
+
+async function postScript(payload: Record<string, unknown>): Promise<any> {
+  const url = scriptUrl();
+  if (!url) return { success: false, message: 'ยังไม่ได้ตั้งค่า Web App URL' };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+/** บันทึกแอดมินรองลง Google Sheet (ชีต SubAdmins เก็บรหัสแบบ SHA-256 ไม่เก็บรหัสจริง) */
+export async function pushSubAdminAdd(admin: SubAdmin): Promise<{ success: boolean; message: string }> {
+  try {
+    const d = await postScript({ action: 'addSubAdmin', adminKey: getAdminKey(), subAdmin: admin });
+    return d?.success
+      ? { success: true, message: `บันทึกแอดมินรอง "${admin.name}" ลง Google Sheet แล้ว` }
+      : { success: false, message: `บันทึกในเครื่องแล้ว แต่ส่งขึ้นชีตไม่สำเร็จ: ${d?.message || ''}` };
+  } catch (err: any) {
+    return { success: false, message: `บันทึกในเครื่องแล้ว แต่ส่งขึ้นชีตไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
+export async function pushSubAdminDelete(id: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const d = await postScript({ action: 'deleteSubAdmin', adminKey: getAdminKey(), id });
+    return d?.success
+      ? { success: true, message: 'ลบแอดมินรองออกจาก Google Sheet แล้ว' }
+      : { success: false, message: d?.message || 'ลบจากชีตไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ลบจากชีตไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
 export function getSubAdmins(): SubAdmin[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -35,7 +75,7 @@ const current = getSubAdmins();
     id: `sub_${Date.now()}`,
     name: trimmedName,
     passcode: trimmedPass,
-    createdAt: new Date().toLocaleDateString('th-TH'),
+    createdAt: new Date().toISOString(),
     role: 'subadmin',
   };
 
@@ -85,6 +125,14 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
   } catch {
     return { valid: false, message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่' };
   }
+
+  // แอดมินรองที่สร้างจากเครื่องอื่น: ตรวจกับชีต SubAdmins
+  try {
+    const d = await postScript({ action: 'verifySubAdmin', passcode: trimmed });
+    if (d?.valid) {
+      return { valid: true, user: { id: String(d.id), name: `${d.name} (แอดมินรอง)`, role: 'subadmin' } };
+    }
+  } catch {}
   return { valid: false };
 }
 

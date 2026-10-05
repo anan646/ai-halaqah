@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * ตรวจรหัสแอดมินหลักฝั่งเซิร์ฟเวอร์ — รหัสอยู่ใน Environment Variable ชื่อ ADMIN_PASSCODE
- * (Vercel → Settings → Environment Variables) ไม่อยู่ในโค้ดที่ส่งไปที่เบราว์เซอร์
+ * ค่า SHA-256 ของรหัสแอดมินหลักที่ใช้เมื่อไม่ได้ตั้ง ADMIN_PASSCODE
+ * (ถ้าตั้ง ADMIN_PASSCODE ใน Vercel → Environment Variables จะใช้ค่านั้นแทน)
  */
-export async function POST(req: Request) {
-  const expected = process.env.ADMIN_PASSCODE;
-  if (!expected) {
-    return NextResponse.json(
-      { valid: false, configured: false, message: 'ยังไม่ได้ตั้งค่า ADMIN_PASSCODE บนเซิร์ฟเวอร์' },
-      { status: 503 }
-    );
-  }
+const DEFAULT_PASSCODE_SHA256 = '7cedcfc143f7c3a15869169ed87af666741d557df898b0c0d7d956444e54d0ec';
 
+const sha256 = (s: string) => createHash('sha256').update(s).digest();
+
+/** ตรวจรหัสแอดมินหลักฝั่งเซิร์ฟเวอร์ — รหัสไม่ถูกส่งไปที่เบราว์เซอร์ */
+export async function POST(req: Request) {
   let passcode = '';
   try {
     const body = await req.json();
@@ -24,9 +21,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ valid: false }, { status: 400 });
   }
 
-  const a = Buffer.from(passcode);
-  const b = Buffer.from(expected.trim());
-  const valid = a.length === b.length && timingSafeEqual(a, b);
+  const envPass = process.env.ADMIN_PASSCODE?.trim();
+  const expected = envPass ? sha256(envPass) : Buffer.from(DEFAULT_PASSCODE_SHA256, 'hex');
+  const valid = !!passcode && timingSafeEqual(sha256(passcode), expected);
 
   // หน่วงเล็กน้อยเพื่อลดการเดารหัสถี่ ๆ
   if (!valid) await new Promise((r) => setTimeout(r, 600));

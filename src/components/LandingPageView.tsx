@@ -352,10 +352,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               Halaqah Al-Quran
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.25]">
-              <span className="text-purple-950">กลุ่มศึกษาอัลกุรอาน</span>
-              <br />
-              <span className="inline-block pt-2 -mt-2 pb-1 bg-gradient-to-r from-purple-700 via-fuchsia-600 to-indigo-700 bg-clip-text text-transparent">
-                หะละเกาะห์
+              <span className="inline-block pt-2 -mt-2 pb-1 bg-gradient-to-r from-purple-800 via-fuchsia-700 to-indigo-800 bg-clip-text text-transparent">
+                กลุ่มศึกษาอัลกุรอาน
               </span>
             </h1>
             <p className="text-sm sm:text-base text-purple-800/70 font-medium">ระบบบันทึกและติดตามการเข้าร่วม</p>

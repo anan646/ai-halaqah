@@ -1,4 +1,4 @@
-import { AttendanceRecord, Student, Teacher, SemesterSettings } from './types';
+import { AttendanceRecord, Student, Teacher, SemesterSettings, SubAdmin } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 import {
   getActiveStudents,
@@ -252,6 +252,10 @@ export async function backupAllToGoogleSheet(): Promise<{
 
     const result = await res.json();
     if (result && result.success) {
+      // แอดมินรองที่มีในเครื่อง (ชีตจะข้ามรายที่มีอยู่แล้วให้เอง)
+      for (const a of getSubAdmins().filter((x) => x.passcode)) {
+        await pushSubAdminAdd(a).catch(() => null);
+      }
       const nowStr = new Date().toLocaleString('th-TH');
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_LAST_BACKUP, nowStr);
@@ -287,6 +291,11 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     if (Array.isArray(d.terms) && d.terms.length) saveTermHistory(d.terms);
     if (d.semester) saveSemesterSettings({ ...getSemesterSettings(), ...d.semester });
     if (d.certificateConfig) saveCertificateConfig({ ...getCertificateConfig(), ...d.certificateConfig });
+    if (Array.isArray(d.subAdmins)) {
+      // ชีตไม่เก็บรหัสจริง: คงรหัสในเครื่องไว้ถ้ามี ที่เหลือจะตรวจกับชีตตอนล็อกอิน
+      const local = new Map(getSubAdmins().map((a) => [a.id, a]));
+      saveSubAdmins(d.subAdmins.map((a: SubAdmin) => ({ ...a, passcode: local.get(a.id)?.passcode || '' })));
+    }
     if (Array.isArray(d.attendance) && d.attendance.length) {
       const map = new Map<string, AttendanceRecord>();
       getLocalAttendanceRecords().forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
@@ -350,7 +359,7 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
 // ข้อมูลสาธารณะที่ต้องถึงอุปกรณ์อื่น (ประกาศ + รายชื่อนักศึกษาสำหรับค้นหารหัส)
 // ---------------------------------------------------------------------------
 import type { Announcement } from './types';
-import { getAdminKey } from './admin-auth';
+import { getAdminKey, getSubAdmins, saveSubAdmins, pushSubAdminAdd } from './admin-auth';
 
 export interface PublicRosterStudent {
   studentId: string;
