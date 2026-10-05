@@ -259,15 +259,15 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
         }
       `}</style>
 
-      <div className={`bg-white rounded-3xl w-full flex flex-col shadow-card border border-purple-200 overflow-hidden ${isEmbedded ? '' : 'max-w-6xl max-h-[96vh] my-auto'}`}>
+      <div className={`bg-white rounded-3xl w-full flex flex-col shadow-card border border-purple-200 overflow-hidden ${isEmbedded ? 'min-h-[850px]' : 'max-w-6xl max-h-[96vh] my-auto'}`}>
         {/* Top Bar */}
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 px-5 sm:px-7 py-3.5 text-white flex items-center justify-between shadow-md shrink-0">
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 px-4 sm:px-6 py-3.5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black shadow">
+            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black shadow shrink-0">
               <Award className="w-6 h-6 text-purple-950" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black tracking-wide flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-black tracking-wide flex items-center gap-2 flex-wrap">
                 <span>สตูดิโอออกแบบ & จัดการเกียรติบัตร (Certificate Studio)</span>
                 <span className="text-[10px] bg-amber-400 text-purple-950 font-black px-2 py-0.5 rounded-full uppercase">
                   10 เทมเพลต + คัสตอม
@@ -276,50 +276,52 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
               <p className="text-[11px] text-purple-200">
                 ปรับแต่งเทมเพลต ข้อความ ตราสัญลักษณ์ ลายเซ็น และเลเอาต์เกียรติบัตรฉบับทางการของระบบ
               </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-purple-200 hover:text-white text-xs font-bold transition flex items-center gap-1.5"
-                title="รีเซ็ตค่าเริ่มต้น"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">รีเซ็ต</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-95 text-purple-950 text-xs font-black transition shadow flex items-center gap-1.5"
-              >
-                <Save className="w-4 h-4" />
-                <span>บันทึกการตั้งค่า</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
           </div>
 
-          {/* Toast Notification */}
-          {toastMsg && (
-            <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 text-center flex items-center justify-center gap-2 animate-fadeIn shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{toastMsg}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-purple-200 hover:text-white text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
+              title="รีเซ็ตค่าเริ่มต้น"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">รีเซ็ต</span>
+            </button>
 
-          {/* Main Studio Body: Controls on left, Real-time Preview on right */}
-          <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-0">
-            {/* Left Column: Control Tabs (5 cols) */}
-            <div className="lg:col-span-5 border-r border-purple-100 flex flex-col bg-purple-50/30 overflow-hidden">
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-95 text-purple-950 text-xs font-black transition shadow flex items-center gap-1.5"
+            >
+              <Save className="w-4 h-4" />
+              <span>บันทึกการตั้งค่า</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition active:scale-95"
+              title="ปิดสตูดิโอ"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Toast Notification */}
+        {toastMsg && (
+          <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 text-center flex items-center justify-center gap-2 animate-fadeIn shrink-0">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{toastMsg}</span>
+          </div>
+        )}
+
+        {/* Main Studio Body: Controls on left, Real-time Preview on right */}
+        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-0">
+          {/* Left Column: Control Tabs (5 cols) */}
+          <div className="lg:col-span-5 border-r border-purple-100 flex flex-col bg-purple-50/30 overflow-hidden max-h-[800px] lg:max-h-none">
               {/* Tab Selector Buttons */}
               <div className="p-3 bg-white border-b border-purple-100 flex items-center gap-1.5 shrink-0">
                 <button
@@ -1174,7 +1176,6 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
     </>
   );
 

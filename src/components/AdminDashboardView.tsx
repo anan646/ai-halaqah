@@ -5712,7 +5712,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => setIsCertStudioOpen(true)}
+              onClick={() => setActiveTab('certificates')}
               className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2"
             >
               <span>✨</span>
@@ -6551,13 +6551,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
       </div>
-
-      {/* CERTIFICATE STUDIO MODAL (10 แบบ + อัปโหลดพื้นหลัง + จัดวางเลเอาต์ + โลโก้) */}
-      <CertificateStudioModal
-        isOpen={isCertStudioOpen}
-        onClose={() => setIsCertStudioOpen(false)}
-        systemLogo={customLogo}
-      />
 
       {/* STUDENT DETAIL MODAL */}
       {selectedStudentForModal && (
