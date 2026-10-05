@@ -18,16 +18,20 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const res = verifyAdminPasscode(passcode);
+    setBusy(true);
+    const res = await verifyAdminPasscode(passcode);
+    setBusy(false);
     if (res.valid && res.user) {
       setAdminSession(res.user);
       onLoginSuccess(res.user);
     } else {
-      setError('รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+      setError(res.message || 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
     }
   };
 

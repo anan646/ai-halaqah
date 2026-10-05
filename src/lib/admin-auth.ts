@@ -1,6 +1,6 @@
 import { SubAdmin } from './types';
 
-export const MASTER_ADMIN_PASSCODE = '71300807';
+const ADMIN_KEY_STORAGE = 'halaqah_admin_key';
 const STORAGE_KEY_SUB_ADMINS = 'halaqah_sub_admins_v1';
 const STORAGE_KEY_ADMIN_SESSION = 'halaqah_active_admin_session';
 
@@ -26,11 +26,7 @@ export function addSubAdmin(name: string, passcode: string): { success: boolean;
 
   if (!trimmedName) return { success: false, message: 'กรุณากรอกชื่อแอดมิน' };
   if (!trimmedPass) return { success: false, message: 'กรุณากรอกรหัสผ่าน' };
-  if (trimmedPass === MASTER_ADMIN_PASSCODE) {
-    return { success: false, message: 'ไม่สามารถใช้รหัสผ่านนี้ได้ (ตรงกับรหัสแอดมินหลัก)' };
-  }
-
-  const current = getSubAdmins();
+const current = getSubAdmins();
   if (current.some((a) => a.passcode === trimmedPass)) {
     return { success: false, message: 'รหัสผ่านนี้ถูกใช้งานแล้ว กรุณากำหนดรหัสใหม่' };
   }
@@ -54,30 +50,53 @@ export function deleteSubAdmin(id: string): void {
   saveSubAdmins(filtered);
 }
 
-export function verifyAdminPasscode(passcode: string): {
+export type AdminUser = { id: string; name: string; role: 'admin' | 'subadmin' };
+
+/** ตรวจรหัส: แอดมินหลักตรวจที่เซิร์ฟเวอร์ ส่วนแอดมินรองตรวจจากรายการในเครื่อง */
+export async function verifyAdminPasscode(passcode: string): Promise<{
   valid: boolean;
-  user?: { id: string; name: string; role: 'admin' | 'subadmin' };
-} {
+  user?: AdminUser;
+  message?: string;
+}> {
   const trimmed = passcode.trim();
-  if (trimmed === MASTER_ADMIN_PASSCODE) {
-    return {
-      valid: true,
-      user: { id: 'master', name: 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)', role: 'admin' },
-    };
-  }
+  if (!trimmed) return { valid: false };
 
-  const subAdmins = getSubAdmins();
-  const matched = subAdmins.find((a) => a.passcode === trimmed);
+  const matched = getSubAdmins().find((a) => a.passcode === trimmed);
   if (matched) {
-    return {
-      valid: true,
-      user: { id: matched.id, name: `${matched.name} (แอดมินรอง)`, role: 'subadmin' },
-    };
+    return { valid: true, user: { id: matched.id, name: matched.name + ' (แอดมินรอง)', role: 'subadmin' } };
   }
 
+  try {
+    const res = await fetch('/api/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode: trimmed }),
+    });
+    if (res.status === 503) {
+      return { valid: false, message: 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่ารหัสแอดมิน (ADMIN_PASSCODE) กรุณาติดต่อผู้ดูแลระบบ' };
+    }
+    const data = await res.json().catch(() => ({}));
+    if (data?.valid) {
+      try {
+        sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+      } catch {}
+      return { valid: true, user: { id: 'master', name: 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)', role: 'admin' } };
+    }
+  } catch {
+    return { valid: false, message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่' };
+  }
   return { valid: false };
 }
 
+/** รหัสที่แอดมินกรอกตอนล็อกอิน ใช้ยืนยันตัวตนเวลาบันทึกประกาศไปยัง Google Sheet */
+export function getAdminKey(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return sessionStorage.getItem(ADMIN_KEY_STORAGE) || '';
+  } catch {
+    return '';
+  }
+}
 export function getAdminSession(): { id: string; name: string; role: 'admin' | 'subadmin' } | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -93,6 +112,7 @@ export function setAdminSession(user: { id: string; name: string; role: 'admin' 
   if (typeof window === 'undefined') return;
   if (!user) {
     sessionStorage.removeItem(STORAGE_KEY_ADMIN_SESSION);
+    sessionStorage.removeItem(ADMIN_KEY_STORAGE);
   } else {
     sessionStorage.setItem(STORAGE_KEY_ADMIN_SESSION, JSON.stringify(user));
   }

@@ -49,6 +49,7 @@ export interface AttendanceRecord {
   leaveReason?: string; // เหตุผลการลา
   sessionTopic?: string; // หัวข้อการเรียนรู้ / ซูเราะฮ์ที่อ่าน
   notes?: string; // บันทึกเพิ่มเติม
+  term?: string; // ภาคการศึกษาที่บันทึก เช่น '2568/1'
 }
 
 export interface DailySummary {
@@ -122,6 +123,7 @@ export interface Announcement {
   targetStudentIds: string[];
   createdAt: string;
   authorName: string;
+  expiresAt?: string; // ISO — หมดอายุแล้วจะไม่แสดงให้นักศึกษา
 }
 
 export interface SessionMetadata {
@@ -140,6 +142,15 @@ export interface SemesterSettings {
   startDate?: string; // วันเริ่มต้นภาคเรียน (YYYY-MM-DD)
   endDate?: string; // วันสิ้นสุดภาคเรียน (YYYY-MM-DD)
   activityDay?: string; // วันจัดกิจกรรม เช่น 'ทุกวันพุธ'
+}
+
+export interface TermInfo {
+  key: string; // '2568/1'
+  academicYear: string;
+  semesterName: string;
+  startDate?: string;
+  endDate?: string;
+  activatedAt: string;
 }
 
 

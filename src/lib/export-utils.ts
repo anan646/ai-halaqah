@@ -511,30 +511,78 @@ export function printReport() {
 }
 
 // ======================== EXCEL IMPORT TEMPLATE ========================
-export function downloadStudentImportTemplate() {
-  const wb = XLSX.utils.book_new();
+/**
+ * เทมเพลตนำเข้านักศึกษา — มีแค่หัวคอลัมน์ให้กรอก
+ * เพศ / ชั้นปี / สาขาวิชา / อาจารย์ผู้ดูแล / ระดับ เป็นดรอปดาวน์ (ระดับเริ่มต้น 01)
+ * รายการตัวเลือกอยู่ในชีตที่ซ่อนไว้ ผู้กรอกไม่เห็น
+ */
+export async function downloadStudentImportTemplate(
+  opts: { majors?: string[]; teachers?: string[]; rows?: number } = {}
+) {
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('รายชื่อนักศึกษา', { views: [{ state: 'frozen', ySplit: 1 }] });
+  const lists = wb.addWorksheet('ตัวเลือก', { state: 'veryHidden' });
 
-  // Template with only the requested clean header columns (รูปแนบ 2)
-  // รหัสนักศึกษา	ชื่อ-นามสกุล	เพศ	ชั้นปี	สาขาวิชา	อาจารย์ผู้ดูแล	ระดับ
-  const headers = [
-    ['รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'เพศ', 'ชั้นปี', 'สาขาวิชา', 'อาจารย์ผู้ดูแล', 'ระดับ']
+  const headers = ['รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'เพศ', 'ชั้นปี', 'สาขาวิชา', 'อาจารย์ผู้ดูแล', 'ระดับ'];
+  ws.columns = [
+    { width: 18 },
+    { width: 32 },
+    { width: 10 },
+    { width: 12 },
+    { width: 34 },
+    { width: 36 },
+    { width: 10 },
   ];
+  const head = ws.addRow(headers);
+  head.height = 26;
+  head.eachCell((c) => {
+    c.font = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Sarabun', size: 12 };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B21A8' } };
+    c.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
 
-  const ws = XLSX.utils.aoa_to_sheet(headers);
-  ws['!cols'] = [
-    { wch: 18 }, // รหัสนักศึกษา
-    { wch: 28 }, // ชื่อ-นามสกุล
-    { wch: 12 }, // เพศ
-    { wch: 12 }, // ชั้นปี
-    { wch: 26 }, // สาขาวิชา
-    { wch: 28 }, // อาจารย์ผู้ดูแล
-    { wch: 12 }, // ระดับ
+  const genders = ['ชาย', 'หญิง'];
+  const years = ['ปี 1', 'ปี 2', 'ปี 3', 'ปี 4'];
+  const majors = (opts.majors || []).filter(Boolean);
+  const teachers = (opts.teachers || []).filter(Boolean);
+  const levels = ['01', '02', '03'];
+  const cols: [string, string[]][] = [
+    ['A', genders],
+    ['B', years],
+    ['C', majors.length ? majors : ['-']],
+    ['D', teachers.length ? teachers : ['-']],
+    ['E', levels],
   ];
+  cols.forEach(([col, values]) => values.forEach((v, i) => (lists.getCell(`${col}${i + 1}`).value = v)));
+  const ref = (col: string, n: number) => `'ตัวเลือก'!$${col}$1:$${col}$${Math.max(1, n)}`;
 
-  XLSX.utils.book_append_sheet(wb, ws, 'รายชื่อนักศึกษา');
+  const total = (opts.rows || 600) + 1;
+  for (let r = 2; r <= total; r++) {
+    ws.getCell(`A${r}`).numFmt = '@'; // รหัสเป็นข้อความ เลข 0 นำหน้าไม่หาย
+    const dv = (cell: string, formula: string, title: string) => {
+      ws.getCell(cell).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [formula],
+        showErrorMessage: true,
+        errorTitle: title,
+        error: 'กรุณาเลือกจากรายการ',
+      };
+    };
+    dv(`C${r}`, ref('A', genders.length), 'เพศ');
+    dv(`D${r}`, ref('B', years.length), 'ชั้นปี');
+    dv(`E${r}`, ref('C', majors.length), 'สาขาวิชา');
+    dv(`F${r}`, ref('D', teachers.length), 'อาจารย์ผู้ดูแล');
+    dv(`G${r}`, ref('E', levels.length), 'ระดับ');
+    ws.getCell(`G${r}`).value = '01'; // ค่าเริ่มต้นระดับ 01
+    ws.getCell(`G${r}`).alignment = { horizontal: 'center' };
+  }
 
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  saveAs(blob, 'เทมเพลตนำเข้านักศึกษา_หะละเกาะห์.xlsx');
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(
+    new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    'เทมเพลตนำเข้านักศึกษา_หะละเกาะห์.xlsx'
+  );
 }
 

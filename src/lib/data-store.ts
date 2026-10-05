@@ -1,4 +1,4 @@
-import { Student, Teacher, Announcement, GroupLevel, SessionMetadata, SemesterSettings } from './types';
+import { Student, Teacher, Announcement, GroupLevel, SessionMetadata, SemesterSettings, TermInfo, AttendanceRecord } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
 
@@ -100,6 +100,10 @@ export function inferMajorFromStudentId(studentId: string, yearLevel?: string): 
  * ดึงสาขาวิชาของนักศึกษา โดยตรวจสอบความสอดคล้องกับรหัสและชั้นปี
  */
 export function getStudentMajor(student?: Partial<Student> | null): string {
+  return applyMajorRename(resolveStudentMajor(student));
+}
+
+function resolveStudentMajor(student?: Partial<Student> | null): string {
   if (!student) return 'ไม่ระบุสาขา';
   if (student.studentId) {
     const inferred = inferMajorFromStudentId(student.studentId, student.yearLevel);
@@ -132,7 +136,7 @@ export function getActiveMajors(): string[] {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      const merged = Array.from(new Set([...DEFAULT_MAJORS, ...parsed.map((s: string) => String(s).trim())])).filter(Boolean);
+      const merged = Array.from(new Set(parsed.map((s: string) => String(s).trim()))).filter(Boolean) as string[];
       return merged;
     }
     return DEFAULT_MAJORS;
@@ -171,8 +175,13 @@ export function addNewMajor(majorName: string): { success: boolean; message: str
  */
 export function deleteCustomMajor(majorName: string): { success: boolean; message: string; majors: string[] } {
   const clean = majorName.trim();
-  if (DEFAULT_MAJORS.includes(clean)) {
-    return { success: false, message: `ไม่สามารถลบสาขาวิชาหลักเริ่มต้นของระบบได้`, majors: getActiveMajors() };
+  const inUse = getActiveStudents().filter((s) => getStudentMajor(s) === clean).length;
+  if (inUse > 0) {
+    return {
+      success: false,
+      message: `ยังมีนักศึกษา ${inUse} คนอยู่ในสาขา "${clean}" กรุณาเปลี่ยนชื่อสาขาหรือย้ายนักศึกษาก่อน`,
+      majors: getActiveMajors(),
+    };
   }
   const current = getActiveMajors();
   const updated = current.filter((m) => m !== clean);
@@ -215,7 +224,7 @@ export function getActiveStudents(): Student[] {
       return initHydrated;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length < INITIAL_STUDENTS.length) {
+    if (!Array.isArray(parsed) || parsed.length === 0) {
       const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
       return initHydrated;
@@ -337,6 +346,7 @@ export function updateStudentInfo(
     }
   }
 
+  const previousName = students[sIdx].fullName;
   const updated: Student = {
     ...students[sIdx],
     ...newData,
@@ -347,7 +357,7 @@ export function updateStudentInfo(
   saveActiveStudents(students);
 
   // Cascade changed ID and name to local attendance records if needed
-  if (newId !== targetOldId || updated.fullName !== students[sIdx].fullName) {
+  if (newId !== targetOldId || updated.fullName !== previousName) {
     try {
       const records = getLocalAttendance();
       let hasUpdate = false;
@@ -917,8 +927,6 @@ export const DEFAULT_SEMESTER_SETTINGS: SemesterSettings = {
   targetSessions: 12,
   semesterName: 'ภาคเรียนที่ 1',
   academicYear: '2567',
-  startDate: '2024-06-01',
-  endDate: '2024-10-31',
   activityDay: 'ทุกวันพุธ',
 };
 
@@ -927,7 +935,13 @@ export function getSemesterSettings(): SemesterSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SEMESTER);
     if (!raw) return DEFAULT_SEMESTER_SETTINGS;
-    return { ...DEFAULT_SEMESTER_SETTINGS, ...JSON.parse(raw) };
+    const s = { ...DEFAULT_SEMESTER_SETTINGS, ...JSON.parse(raw) };
+    // ค่าวันที่ตั้งต้นของเวอร์ชันเก่า ไม่ได้ตั้งโดยแอดมินจริง จึงไม่ใช้กรองข้อมูล
+    if (s.startDate === '2024-06-01' && s.endDate === '2024-10-31') {
+      delete s.startDate;
+      delete s.endDate;
+    }
+    return s;
   } catch {
     return DEFAULT_SEMESTER_SETTINGS;
   }
@@ -996,3 +1010,161 @@ export function importFullDatabaseJson(jsonStr: string): { success: boolean; mes
 }
 
 
+
+// ----------------------------------------------------
+// 16. เปลี่ยนชื่อสาขาวิชา (มีผลกับนักศึกษาทุกคนในสาขานั้น)
+// ----------------------------------------------------
+const STORAGE_KEY_MAJOR_RENAMES = 'halaqah_major_renames_v1';
+
+function getMajorRenames(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY_MAJOR_RENAMES) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function applyMajorRename(name: string): string {
+  const map = getMajorRenames();
+  let cur = name;
+  for (let i = 0; i < 5 && map[cur]; i++) cur = map[cur];
+  return cur;
+}
+
+export function renameMajor(oldName: string, newName: string): { success: boolean; message: string; majors: string[] } {
+  const from = oldName.trim();
+  const to = newName.trim();
+  const current = getActiveMajors();
+  if (!to) return { success: false, message: 'กรุณาระบุชื่อสาขาใหม่', majors: current };
+  if (from === to) return { success: true, message: 'ไม่มีการเปลี่ยนแปลง', majors: current };
+  if (current.some((m) => m === to)) {
+    return { success: false, message: `มีสาขา "${to}" อยู่แล้ว`, majors: current };
+  }
+  const updated = current.map((m) => (m === from ? to : m));
+  saveActiveMajors(updated);
+
+  // ให้สาขาที่ระบบเดาจากรหัสนักศึกษาเปลี่ยนชื่อตามด้วย
+  const map = getMajorRenames();
+  Object.keys(map).forEach((k) => {
+    if (map[k] === from) map[k] = to;
+  });
+  map[from] = to;
+  delete map[to];
+  localStorage.setItem(STORAGE_KEY_MAJOR_RENAMES, JSON.stringify(map));
+
+  const students = getActiveStudents();
+  let n = 0;
+  const changed = students.map((s) => {
+    if (s.major === from) {
+      n++;
+      return { ...s, major: to };
+    }
+    return s;
+  });
+  saveActiveStudents(changed);
+  return { success: true, message: `เปลี่ยนชื่อสาขา "${from}" เป็น "${to}" แล้ว (นักศึกษา ${n} คน)`, majors: updated };
+}
+
+// ----------------------------------------------------
+// 17. ปี/ภาคการศึกษาปัจจุบัน (Term)
+// ----------------------------------------------------
+const STORAGE_KEY_TERMS = 'halaqah_terms_history_v1';
+
+export function semesterNo(semesterName: string): string {
+  const m = (semesterName || '').match(/\d/);
+  if (m) return m[0];
+  return /ฤดูร้อน|summer/i.test(semesterName || '') ? '3' : '1';
+}
+
+export function getTermKey(s: SemesterSettings = getSemesterSettings()): string {
+  return `${s.academicYear}/${semesterNo(s.semesterName)}`;
+}
+
+export function formatTermLabel(s: SemesterSettings = getSemesterSettings()): string {
+  return `${s.semesterName} ปีการศึกษา ${s.academicYear}`;
+}
+
+export function getTermHistory(): TermInfo[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY_TERMS) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveTermHistory(list: TermInfo[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_TERMS, JSON.stringify(list));
+}
+
+/** ตั้งภาคการศึกษาปัจจุบัน — ทุกหน้าในระบบจะใช้ช่วงเวลานี้ และจดจำไว้ในประวัติ */
+export function setCurrentTerm(settings: SemesterSettings): TermInfo {
+  saveSemesterSettings(settings);
+  const info: TermInfo = {
+    key: getTermKey(settings),
+    academicYear: settings.academicYear,
+    semesterName: settings.semesterName,
+    startDate: settings.startDate,
+    endDate: settings.endDate,
+    activatedAt: new Date().toISOString(),
+  };
+  const list = getTermHistory().filter((t) => t.key !== info.key);
+  saveTermHistory([info, ...list]);
+  return info;
+}
+
+/** บันทึกนี้อยู่ในภาคการศึกษาที่กำหนดหรือไม่ (บันทึกเก่าที่ไม่มี term จะเทียบจากช่วงวันที่) */
+export function isRecordInTerm(r: AttendanceRecord, s: SemesterSettings = getSemesterSettings()): boolean {
+  if (r.term) return r.term === getTermKey(s);
+  // ยังไม่เคยตั้งภาคการศึกษาด้วยระบบใหม่ = แสดงบันทึกเก่าทั้งหมดเหมือนเดิม
+  if (getTermHistory().length === 0) return true;
+  if (s.startDate && r.date < s.startDate) return false;
+  if (s.endDate && r.date > s.endDate) return false;
+  return true;
+}
+
+// ----------------------------------------------------
+// 18. เลื่อนชั้นปีแบบเลือกได้ (นักศึกษาที่ไม่ผ่าน = ซ้ำชั้น)
+// ----------------------------------------------------
+export const YEAR_LEVELS = ['ปี 1', 'ปี 2', 'ปี 3', 'ปี 4', 'สำเร็จการศึกษา'];
+
+export function nextYearLevel(y: string): string {
+  const m = (y || '').match(/\d/);
+  if (!m) return y;
+  const n = parseInt(m[0], 10);
+  return n >= 4 ? 'สำเร็จการศึกษา' : `ปี ${n + 1}`;
+}
+
+export function promoteSelectedStudents(ids: string[]): { promoted: number; graduated: number; kept: number } {
+  const set = new Set(ids);
+  let promoted = 0;
+  let graduated = 0;
+  let kept = 0;
+  const updated = getActiveStudents().map((s) => {
+    if (s.yearLevel === 'สำเร็จการศึกษา') return s;
+    if (!set.has(s.studentId)) {
+      kept++;
+      return s;
+    }
+    const next = nextYearLevel(s.yearLevel);
+    if (next === 'สำเร็จการศึกษา') graduated++;
+    else promoted++;
+    const cur = (s.yearLevel.match(/\d/) || [''])[0];
+    const nxt = (next.match(/\d/) || [''])[0];
+    return {
+      ...s,
+      yearLevel: next,
+      groupName: cur && nxt ? s.groupName.replace(`ปีที่ ${cur}`, `ปีที่ ${nxt}`).replace(`ปี ${cur}`, `ปี ${nxt}`) : s.groupName,
+      major: next === 'ปี 4' && !s.major ? inferMajorFromStudentId(s.studentId, 'ปี 4') : s.major,
+    };
+  });
+  saveActiveStudents(updated);
+  return { promoted, graduated, kept };
+}
+
+export function setStudentYearLevel(studentId: string, yearLevel: string): void {
+  saveActiveStudents(getActiveStudents().map((s) => (s.studentId === studentId ? { ...s, yearLevel } : s)));
+}

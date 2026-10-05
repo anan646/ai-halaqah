@@ -1,16 +1,12 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
-import { Award, Printer, X, Sparkles, Download, CheckCircle2, Loader2 } from 'lucide-react';
-import { Student, GroupLevel } from '@/lib/types';
+import React, { useEffect, useState } from 'react';
+import { Award, Printer, X, Download, CheckCircle2, Loader2 } from 'lucide-react';
+import { Student } from '@/lib/types';
 import { getStudentMajor, getStudentLevel, getSemesterSettings } from '@/lib/data-store';
-import {
-  CertificateConfig,
-  CERTIFICATE_TEMPLATES,
-  getCertificateConfig,
-  CERT_CONFIG_UPDATED_EVENT,
-} from '@/lib/certificate-config';
-import { exportCertificateToPdf, printCertificate } from '@/lib/certificate-export';
+import { CertificateConfig, getCertificateConfig, CERT_CONFIG_UPDATED_EVENT } from '@/lib/certificate-config';
+import { saveCertificatePdf, printCertificate } from '@/lib/certificate-export';
+import { CertificateCanvas, CertificatePreview, CertificateStudentData } from './CertificateCanvas';
 
 interface CertificateModalProps {
   student: Student;
@@ -29,21 +25,14 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   customLogo,
   onClose,
 }) => {
-  const printRef = useRef<HTMLDivElement>(null);
   const semester = getSemesterSettings();
-  const major = getStudentMajor(student);
-  const level = getStudentLevel(student);
   const [config, setConfig] = useState<CertificateConfig>(() => getCertificateConfig());
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [busy, setBusy] = useState<'print' | 'pdf' | null>(null);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const handleUpdate = () => {
-      setConfig(getCertificateConfig());
-    };
+    const handleUpdate = () => setConfig(getCertificateConfig());
     handleUpdate();
-
     window.addEventListener(CERT_CONFIG_UPDATED_EVENT, handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
@@ -52,489 +41,130 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     };
   }, []);
 
-  const currentTemplate =
-    CERTIFICATE_TEMPLATES.find((t) => t.id === config.templateId) || CERTIFICATE_TEMPLATES[0];
-
-  const getLevelLabel = (lvl: GroupLevel) => {
-    switch (lvl) {
-      case '01':
-        return 'ระดับ 01';
-      case '02':
-        return 'ระดับ 02';
-      case '03':
-        return 'ระดับ 03';
-      default:
-        return 'ระดับ 01';
-    }
+  const data: CertificateStudentData = {
+    fullName: student.fullName,
+    studentId: student.studentId,
+    major: getStudentMajor(student),
+    yearLevel: student.yearLevel,
+    groupName: student.groupName,
+    rate: attendanceRate,
+    present: totalPresent,
+    total: totalSessions,
+    levelLabel: `ระดับ ${getStudentLevel(student)}`,
   };
+  const semesterLabel = `${semester.semesterName} ปีการศึกษา ${semester.academicYear}`;
+  const isHonor = attendanceRate >= 90;
 
-  // 1. Dedicated Print Handler (Rendered via high-res canvas image so backgrounds/colors are not stripped)
+  const canvasEl = (
+    <CertificateCanvas
+      config={config}
+      student={data}
+      logo={customLogo}
+      semesterLabel={semesterLabel}
+      isHonor={isHonor}
+    />
+  );
+
   const handlePrint = async () => {
-    setIsPrinting(true);
+    setBusy('print');
     try {
-      await printCertificate('printable-certificate', `พิมพ์เกียรติบัตร_${student.studentId}_${student.fullName}`);
+      await printCertificate(canvasEl, `เกียรติบัตร_${student.studentId}`);
     } catch (err) {
       console.error('Print failed:', err);
-      window.print();
+      alert('ไม่สามารถเตรียมพิมพ์ได้ กรุณาลองใหม่อีกครั้ง หรือใช้ปุ่ม "บันทึกเป็น PDF"');
     } finally {
-      setIsPrinting(false);
+      setBusy(null);
     }
   };
 
-  // 2. Dedicated Save PDF Handler (100% exact replica A4 Landscape PDF via html2canvas & jsPDF)
   const handleSavePdf = async () => {
-    setIsExportingPdf(true);
+    setBusy('pdf');
     try {
-      const safeId = student.studentId || 'std';
       const cleanName = (student.fullName || 'นักศึกษา').replace(/[/\\?%*:|"<>]/g, '_');
-      const filename = `เกียรติบัตร_${safeId}_${cleanName}.pdf`;
-
-      await exportCertificateToPdf('printable-certificate', filename, { scale: 3 });
-      
-      setDownloadSuccess(true);
-      setTimeout(() => setDownloadSuccess(false), 3000);
+      await saveCertificatePdf(canvasEl, `เกียรติบัตร_${student.studentId}_${cleanName}.pdf`);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Save PDF failed:', err);
       alert('เกิดข้อผิดพลาดในการสร้างไฟล์ PDF กรุณาลองใหม่อีกครั้ง');
     } finally {
-      setIsExportingPdf(false);
+      setBusy(null);
     }
   };
 
-  const activeLogo = config.customLogoUrl || customLogo;
-  const isHighDistinction = attendanceRate >= 90;
-  const rawTitle = (config.awardTitle || 'เกียรติบัตร').trim();
-  const cleanAwardTitle =
-    rawTitle.includes('มอบให้ไว้') || rawTitle.includes('เพื่อแสดงว่า')
-      ? 'เกียรติบัตร'
-      : rawTitle;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      {/* Print styles for full A4 Landscape */}
-      <style jsx global>{`
-        @media print {
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 297mm !important;
-            height: 210mm !important;
-            overflow: hidden !important;
-            background: #ffffff !important;
-          }
-          body * {
-            visibility: hidden !important;
-          }
-          #printable-certificate,
-          #printable-certificate * {
-            visibility: visible !important;
-          }
-          #printable-certificate {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 297mm !important;
-            height: 210mm !important;
-            box-sizing: border-box !important;
-            margin: 0 !important;
-            padding: 12mm !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-        @page {
-          size: A4 landscape;
-          margin: 0;
-        }
-      `}</style>
-
-      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-amber-200 overflow-hidden flex flex-col my-auto max-h-[96vh]">
-        {/* Top Control Bar (Hidden on print) */}
-        <div className="no-print bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 px-5 sm:px-7 py-3 text-white flex items-center justify-between shadow-md shrink-0">
-          <div className="flex items-center gap-2.5">
-            <Award className="w-6 h-6 text-yellow-200 animate-pulse" />
-            <div>
-              <h3 className="font-black text-sm sm:text-base tracking-wide flex items-center gap-2">
-                <span>วุฒิบัตรอิเล็กทรอนิกส์ (E-Certificate)</span>
-                {isHighDistinction && (
-                  <span className="text-[10px] bg-yellow-300 text-amber-950 font-black px-2 py-0.5 rounded-full">
-                    เกียรตินิยม A+
-                  </span>
-                )}
-              </h3>
-              <p className="text-[11px] text-amber-100 font-medium">
-                ผ่านเกณฑ์กิจกรรมฮะละเกาะฮ์อัลกุรอาน (สถิติ {attendanceRate.toFixed(1)}%)
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-5 bg-purple-950/70 backdrop-blur-sm animate-fadeIn overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[96vh]">
+        <div className="bg-gradient-to-r from-purple-800 via-purple-900 to-indigo-950 px-4 sm:px-6 py-3 text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+              <Award className="w-5 h-5 text-amber-300" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-sm sm:text-base truncate">เกียรติบัตรของท่าน</h3>
+              <p className="text-[11px] text-purple-200 truncate">
+                เข้าร่วม {attendanceRate.toFixed(1)}%{isHonor ? ' • เกียรตินิยม A+' : ''}
               </p>
             </div>
           </div>
 
-          {/* Action buttons: Print & Save PDF separated clearly */}
-          <div className="flex items-center gap-2">
-            {/* Button 1: PRINT */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handlePrint}
-              disabled={isPrinting || isExportingPdf}
-              className="px-3.5 py-1.5 bg-white text-amber-950 hover:bg-amber-50 disabled:opacity-60 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
-              title="สั่งพิมพ์ออกทางเครื่องพิมพ์"
+              disabled={!!busy}
+              className="px-3 py-2 bg-white text-purple-900 hover:bg-purple-50 disabled:opacity-60 rounded-xl font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
             >
-              {isPrinting ? (
-                <Loader2 className="w-3.5 h-3.5 text-amber-700 animate-spin" />
-              ) : (
-                <Printer className="w-3.5 h-3.5 text-amber-700" />
-              )}
-              <span>{isPrinting ? 'กำลังเตรียมพิมพ์...' : 'พิมพ์เกียรติบัตร'}</span>
+              {busy === 'print' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
+              <span>{busy === 'print' ? 'กำลังเตรียม...' : 'พิมพ์'}</span>
             </button>
-
-            {/* Button 2: SAVE AS PDF */}
             <button
               type="button"
               onClick={handleSavePdf}
-              disabled={isExportingPdf || isPrinting}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-60 ${
-                downloadSuccess
-                  ? 'bg-emerald-800 text-emerald-100'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              disabled={!!busy}
+              className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition active:scale-95 disabled:opacity-60 ${
+                saved ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-purple-950 hover:bg-amber-300'
               }`}
-              title="บันทึกไฟล์เป็น PDF คุณภาพสูง ขนาด A4 แนวนอน (100% ตรงกับบนเว็บ)"
             >
-              {isExportingPdf ? (
+              {busy === 'pdf' ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : downloadSuccess ? (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+              ) : saved ? (
+                <CheckCircle2 className="w-3.5 h-3.5" />
               ) : (
                 <Download className="w-3.5 h-3.5" />
               )}
-              <span>
-                {isExportingPdf
-                  ? 'กำลังสร้าง PDF...'
-                  : downloadSuccess
-                  ? 'ดาวน์โหลดแล้ว!'
-                  : 'บันทึกเป็น PDF'}
-              </span>
+              <span>{busy === 'pdf' ? 'กำลังสร้าง...' : saved ? 'บันทึกแล้ว' : 'บันทึก PDF'}</span>
             </button>
-
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer"
-              title="ปิด"
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition"
+              aria-label="ปิด"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Certificate Viewable & Printable Container */}
-        <div className="p-3 sm:p-6 overflow-y-auto flex items-center justify-center bg-stone-100/70">
-          <div
-            id="printable-certificate"
-            ref={printRef}
-            className="w-full max-w-3xl aspect-[1.414/1] bg-white rounded-2xl p-6 sm:p-8 shadow-xl relative flex flex-col justify-between text-stone-800 font-sans select-none overflow-hidden"
-            style={{
-              backgroundColor: '#ffffff',
-              backgroundImage: config.useCustomBackground && config.customBackgroundImage
-                ? `url(${config.customBackgroundImage})`
-                : currentTemplate.bgGradient,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              border: config.useCustomBackground
-                ? 'none'
-                : `4px solid ${currentTemplate.borderColor}`,
-            }}
-          >
-            {/* Harmonious Dual Frame & Corner Filigrees (if not custom bg) */}
-            {!config.useCustomBackground && (
-              <>
-                {/* Inner delicate border */}
-                <div
-                  className="absolute inset-3 sm:inset-3.5 border pointer-events-none rounded-sm"
-                  style={{ borderColor: currentTemplate.innerBorderColor }}
-                />
-
-                {/* 4 Corner Classical Accents (Pure CSS for 100% canvas alignment & symmetry) */}
-                {/* Top-Left */}
-                <div
-                  className="absolute top-2.5 left-2.5 w-6 h-6 pointer-events-none border-t-2 border-l-2"
-                  style={{ borderColor: currentTemplate.borderColor }}
-                >
-                  <div
-                    className="w-3.5 h-3.5 border-t border-l m-0.5"
-                    style={{ borderColor: currentTemplate.innerBorderColor }}
-                  />
-                  <div
-                    className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: currentTemplate.borderColor }}
-                  />
-                </div>
-
-                {/* Top-Right */}
-                <div
-                  className="absolute top-2.5 right-2.5 w-6 h-6 pointer-events-none border-t-2 border-r-2"
-                  style={{ borderColor: currentTemplate.borderColor }}
-                >
-                  <div
-                    className="w-3.5 h-3.5 border-t border-r m-0.5 float-right"
-                    style={{ borderColor: currentTemplate.innerBorderColor }}
-                  />
-                  <div
-                    className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: currentTemplate.borderColor }}
-                  />
-                </div>
-
-                {/* Bottom-Left */}
-                <div
-                  className="absolute bottom-2.5 left-2.5 w-6 h-6 pointer-events-none border-b-2 border-l-2"
-                  style={{ borderColor: currentTemplate.borderColor }}
-                >
-                  <div
-                    className="w-3.5 h-3.5 border-b border-l m-0.5"
-                    style={{ borderColor: currentTemplate.innerBorderColor }}
-                  />
-                  <div
-                    className="absolute bottom-1.5 left-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: currentTemplate.borderColor }}
-                  />
-                </div>
-
-                {/* Bottom-Right */}
-                <div
-                  className="absolute bottom-2.5 right-2.5 w-6 h-6 pointer-events-none border-b-2 border-r-2"
-                  style={{ borderColor: currentTemplate.borderColor }}
-                >
-                  <div
-                    className="w-3.5 h-3.5 border-b border-r m-0.5 float-right"
-                    style={{ borderColor: currentTemplate.innerBorderColor }}
-                  />
-                  <div
-                    className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: currentTemplate.borderColor }}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Header: University & Faculty */}
-            <div
-              className={`text-center space-y-0.5 relative z-10 pt-0.5 flex flex-col ${
-                config.logoPosition === 'top-left'
-                  ? 'items-start text-left pl-3'
-                  : config.logoPosition === 'top-right'
-                  ? 'items-end text-right pr-3'
-                  : 'items-center text-center'
-              }`}
-            >
-              {config.showLogo && (
-                <div className="mb-1 flex items-center justify-center">
-                  {activeLogo ? (
-                    <img
-                      src={activeLogo}
-                      alt="Logo"
-                      className="h-11 sm:h-13 md:h-14 w-auto max-w-[200px] object-contain drop-shadow-xs"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 to-yellow-500 flex items-center justify-center text-white shadow-md">
-                      <Award className="w-6 h-6 text-white" />
-                    </div>
-                  )}
-                </div>
-              )}
-              <h4
-                className="text-xs sm:text-sm font-extrabold tracking-widest uppercase"
-                style={{ color: currentTemplate.titleColor }}
-              >
-                {config.institutionName}
-              </h4>
-              <p className="text-[9px] sm:text-[10px] text-stone-500 font-semibold tracking-wider uppercase">
-                {config.institutionSubName}
-              </p>
-
-              {/* Prestigious Certificate Title with Wing Lines */}
-              <div className="flex items-center justify-center gap-2.5 pt-1">
-                <div
-                  className="h-px w-8 sm:w-14"
-                  style={{
-                    background: `linear-gradient(to right, transparent, ${currentTemplate.borderColor})`,
-                  }}
-                />
-                <span
-                  className="text-xs sm:text-sm font-black tracking-widest uppercase px-3 py-0.5 rounded-full border shadow-2xs"
-                  style={{
-                    backgroundColor: currentTemplate.accentBadgeBg,
-                    color: currentTemplate.accentTextColor,
-                    borderColor: currentTemplate.innerBorderColor,
-                  }}
-                >
-                  {cleanAwardTitle}
-                </span>
-                <div
-                  className="h-px w-8 sm:w-14"
-                  style={{
-                    background: `linear-gradient(to left, transparent, ${currentTemplate.borderColor})`,
-                  }}
-                />
-              </div>
-              <p className="text-[9px] sm:text-[10px] text-stone-600 font-medium tracking-wide pt-0.5">
-                ขอมอบเกียรติบัตรฉบับนี้ให้ไว้เพื่อแสดงว่า
-              </p>
-            </div>
-
-            {/* Recipient Details & Statement */}
-            <div className="text-center space-y-1 my-auto py-1 relative z-10">
-              <h1
-                className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight"
-                style={{ color: currentTemplate.titleColor }}
-              >
-                {student.fullName}
-              </h1>
-
-              <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] sm:text-xs font-semibold text-stone-600">
-                {config.showStudentId && (
-                  <span>รหัสนักศึกษา: <strong className="text-stone-900 font-mono">{student.studentId}</strong></span>
-                )}
-                {config.showMajor && (
-                  <>
-                    <span className="text-stone-300">•</span>
-                    <span>สาขาวิชา: <strong className="text-stone-900">{major}</strong></span>
-                  </>
-                )}
-                {config.showYearLevel && (
-                  <>
-                    <span className="text-stone-300">•</span>
-                    <span>ชั้นปี: <strong className="text-stone-900">{student.yearLevel}</strong></span>
-                  </>
-                )}
-              </div>
-
-              <p className="text-[10px] sm:text-xs text-stone-700 max-w-lg mx-auto pt-1 leading-relaxed font-medium">
-                {config.bodyText}{' '}
-                <strong className="font-bold" style={{ color: currentTemplate.titleColor }}>
-                  {config.activityTitle}
-                </strong>{' '}
-                {semester.semesterName} ปีการศึกษา {semester.academicYear}
-              </p>
-
-              {/* Stats & Prominent Honor Seal A+ (Harmoniously Proportioned) */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                {config.showAttendanceStats && (
-                  <div
-                    className="inline-flex items-center gap-2 px-3 py-1 rounded-xl text-[10px] sm:text-xs font-bold border"
-                    style={{
-                      backgroundColor: currentTemplate.accentBadgeBg,
-                      borderColor: currentTemplate.innerBorderColor,
-                      color: currentTemplate.accentTextColor,
-                    }}
-                  >
-                    <span>สถิติการเข้าร่วม: <strong className="text-emerald-700">{attendanceRate.toFixed(1)}%</strong> ({totalPresent}/{totalSessions} ครั้ง)</span>
-                    {config.showLevelLabel && (
-                      <>
-                        <span className="opacity-40">|</span>
-                        <span>{getLevelLabel(level)}</span>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Grade A+ Seal */}
-                {config.showHonorBadgeA && isHighDistinction && (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-[10px] sm:text-xs font-black shadow-md border border-yellow-300">
-                    <Award className="w-3.5 h-3.5 text-yellow-100" />
-                    <span>เกียรตินิยม A+ (ผลการประเมินดีเยี่ยม)</span>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-[9px] sm:text-[10px] text-stone-500 italic pt-0.5">
-                “{config.blessingText}”
-              </p>
-            </div>
-
-            {/* Signatures & Footer (No line cutting through middle seal) */}
-            <div className="pt-2 flex items-end justify-between text-center text-[10px] sm:text-xs relative z-10 pb-0.5">
-              {/* Signatory 1 */}
-              <div className="space-y-0.5 w-36 sm:w-44 text-center">
-                <div className="border-b border-stone-400 w-28 mx-auto mb-1 min-h-7 flex items-end justify-center pb-0.5">
-                  {config.signatory1SignatureUrl ? (
-                    <img
-                      src={config.signatory1SignatureUrl}
-                      alt="ลายเซ็น"
-                      className="max-h-7 max-w-full object-contain"
-                    />
-                  ) : (
-                    <span className="font-serif italic text-stone-400 text-[11px]">
-                      {config.signatory1Title}
-                    </span>
-                  )}
-                </div>
-                <p className="font-bold text-stone-800 text-[10px] sm:text-[11px]">
-                  {config.signatory1Name}
-                </p>
-                <p className="text-[9px] text-stone-500">{config.signatory1Role}</p>
-              </div>
-
-              {/* Middle Seal & Date */}
-              <div className="text-center px-1">
-                <div
-                  className="w-9 h-9 rounded-full border-2 border-double mx-auto flex items-center justify-center mb-0.5 shadow-2xs"
-                  style={{
-                    borderColor: currentTemplate.borderColor,
-                    backgroundColor: currentTemplate.accentBadgeBg,
-                  }}
-                >
-                  <Sparkles className="w-4 h-4" style={{ color: currentTemplate.borderColor }} />
-                </div>
-                {config.showDocRef && (
-                  <span className="text-[8px] sm:text-[9px] text-stone-400 block font-mono font-semibold">
-                    EDU-HALAQAH-{student.studentId}
-                  </span>
-                )}
-                {config.showDate && (
-                  <span className="text-[8px] sm:text-[9px] text-stone-500 block font-medium">
-                    ออก ณ วันที่ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </span>
-                )}
-              </div>
-
-              {/* Signatory 2 */}
-              <div className="space-y-0.5 w-36 sm:w-44 text-center">
-                <div className="border-b border-stone-400 w-28 mx-auto mb-1 min-h-7 flex items-end justify-center pb-0.5">
-                  {config.signatory2SignatureUrl ? (
-                    <img
-                      src={config.signatory2SignatureUrl}
-                      alt="ลายเซ็น"
-                      className="max-h-7 max-w-full object-contain"
-                    />
-                  ) : (
-                    <span className="font-serif italic text-stone-400 text-[11px]">
-                      {config.signatory2Title}
-                    </span>
-                  )}
-                </div>
-                <p className="font-bold text-stone-800 text-[10px] sm:text-[11px]">
-                  {config.signatory2Name}
-                </p>
-                <p className="text-[9px] text-stone-500">{config.signatory2Role}</p>
-              </div>
-            </div>
+        <div className="p-3 sm:p-6 overflow-y-auto bg-purple-50/60">
+          <div className="mx-auto max-w-[960px] rounded-lg shadow-xl overflow-hidden ring-1 ring-purple-200">
+            <CertificatePreview
+              config={config}
+              student={data}
+              logo={customLogo}
+              semesterLabel={semesterLabel}
+              isHonor={isHonor}
+            />
           </div>
         </div>
 
-        {/* Footer info in dialog */}
-        <div className="no-print bg-stone-50 px-5 sm:px-7 py-2.5 border-t border-stone-200 flex items-center justify-between text-xs text-stone-500">
-          <span>💡 สามารถเลือก <strong>พิมพ์เกียรติบัตร</strong> หรือ <strong>บันทึกเป็น PDF</strong> ในรูปแบบ A4 แนวนอน</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-xl border border-stone-300 hover:bg-stone-200 text-stone-700 font-semibold transition cursor-pointer"
-          >
-            ปิดหน้าต่าง
-          </button>
+        <div className="px-5 py-2.5 border-t border-purple-100 text-[11px] text-purple-700/80 text-center shrink-0">
+          ไฟล์ที่พิมพ์และบันทึกเป็นกระดาษ A4 แนวนอน ตรงกับตัวอย่างที่เห็นด้านบน
         </div>
       </div>
     </div>

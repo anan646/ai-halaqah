@@ -39,6 +39,10 @@ import {
   demoteGroupLevel,
   getSessionMetadata,
   saveSessionMetadata,
+  getTermKey,
+  isRecordInTerm,
+  getSemesterSettings,
+  formatTermLabel,
 } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
 
@@ -53,7 +57,7 @@ interface TeacherAttendanceViewProps {
 }
 
 export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
-  records,
+  records: allRecords,
   onAttendanceSaved,
   activeTeacherName,
   onTeacherChanged,
@@ -61,6 +65,10 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   onOpenTutorial,
 }) => {
   const teachers = useMemo(() => getActiveTeachers(), []);
+  // เฉพาะการเช็คชื่อของภาคการศึกษาปัจจุบัน (แอดมินตั้งไว้)
+  const semester = useMemo(() => getSemesterSettings(), []);
+  const termLabel = formatTermLabel(semester);
+  const termRecords = useMemo(() => allRecords.filter((r) => isRecordInTerm(r, semester)), [allRecords, semester]);
   const allStudents = useMemo(() => getActiveStudents(), []);
 
   // 1. Teacher selection
@@ -221,7 +229,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     const nowTimeStr = new Date().toLocaleTimeString('th-TH', { hour12: false });
 
     groupStudents.forEach((st) => {
-      const existing = records.find(
+      const existing = allRecords.find(
         (r) => r.date === selectedDate && r.studentId === st.studentId
       );
       if (existing) {
@@ -243,27 +251,27 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     setAttendanceMap(newMap);
     setLeaveReasonMap(newReasons);
     setSaveMessage(null);
-  }, [currentTeacher, selectedDate, records, groupStudents]);
+  }, [currentTeacher, selectedDate, allRecords, groupStudents]);
 
   const isDateAlreadySaved = useMemo(() => {
     if (!currentTeacher || groupStudents.length === 0) return false;
     return groupStudents.some((st) =>
-      records.some((r) => r.date === selectedDate && r.studentId === st.studentId)
+      allRecords.some((r) => r.date === selectedDate && r.studentId === st.studentId)
     );
-  }, [currentTeacher, groupStudents, records, selectedDate]);
+  }, [currentTeacher, groupStudents, allRecords, selectedDate]);
 
   // List of all dates where this teacher has existing attendance records
   const pastRecordedDates = useMemo(() => {
     if (!currentTeacher) return [];
     const dates = Array.from(
       new Set(
-        records
+        termRecords
           .filter((r) => r.teacherName === currentTeacher.name)
           .map((r) => r.date)
       )
     ).filter(Boolean);
     return dates.sort((a, b) => b.localeCompare(a));
-  }, [records, currentTeacher]);
+  }, [termRecords, currentTeacher]);
 
   // Change single status with realtime timestamp
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
@@ -318,7 +326,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     if (!currentTeacher) return [];
     const dateMap = new Map<string, { present: number; absent: number; leave: number; total: number }>();
     
-    records
+    termRecords
       .filter((r) => r.teacherName === currentTeacher.name)
       .forEach((r) => {
         if (!dateMap.has(r.date)) {
@@ -338,7 +346,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         rate: stats.total > 0 ? (stats.present / stats.total) * 100 : 0,
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [records, currentTeacher]);
+  }, [termRecords, currentTeacher]);
 
   // Save
   const handleSaveAttendance = async () => {
@@ -366,6 +374,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         leaveReason: item.status === 'ลา' ? (leaveReasonMap[st.studentId] || 'ลากิจ') : undefined,
         sessionTopic: sessionTopic.trim() || undefined,
         notes: sessionNotes.trim() || undefined,
+        term: getTermKey(semester),
       };
     });
 
@@ -464,289 +473,153 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         </div>
       </div>
 
-      {/* 2. TEACHER BANNER WITH DOUBLE-BEZEL & DEPTH */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950 text-white p-5 sm:p-7 shadow-xl shadow-purple-900/15 border border-purple-700/60">
-        {/* Ambient Glow Orb */}
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="bg-white/15 backdrop-blur-md text-purple-100 text-[10px] font-mono font-extrabold px-3 py-0.5 rounded-full border border-white/20">
-                {currentTeacher?.gender === 'ชาย' ? '👨‍💼 กลุ่มชาย' : '👩‍💼 กลุ่มหญิง'}
-              </span>
-              <span className="bg-purple-300/25 backdrop-blur-md text-purple-200 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-purple-300/30">
-                {currentTeacher?.yearLevel}
-              </span>
+      {/* 2. หัวกลุ่ม + เลือกวันที่ (รวมไว้ในการ์ดเดียว) */}
+      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white shadow-xl shadow-purple-900/20">
+        <div className="absolute -top-16 -right-16 w-56 h-56 bg-fuchsia-400/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative p-5 sm:p-7 space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/15">{currentTeacher?.gender === 'ชาย' ? 'กลุ่มชาย' : 'กลุ่มหญิง'}</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-white/15">{currentTeacher?.yearLevel}</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-white/15">{termLabel}</span>
+              </div>
+              <h1 className="text-xl sm:text-3xl font-black tracking-tight leading-snug">{currentTeacher?.name}</h1>
+              <p className="text-sm text-purple-200 flex items-center gap-1.5">
+                <Users className="w-4 h-4" /> {currentTeacher?.groupName} • {groupStudents.length} คน
+              </p>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-balance">
-              {currentTeacher?.name}
-            </h1>
-            <p className="text-xs text-purple-200/90 font-medium flex items-center gap-1.5 pt-0.5">
-              <Users className="w-3.5 h-3.5 text-purple-300" />
-              <span>{currentTeacher?.groupName} • นักศึกษาในกลุ่ม {groupStudents.length} คน</span>
-            </p>
-          </div>
 
-          {/* Right badge: Group Info & Level (01, 02, 03) */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Group Level Badge & Stepper */}
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 px-3.5 py-1.5 rounded-2xl flex items-center gap-2.5">
+            <div className="flex items-center gap-2 bg-white/10 rounded-2xl px-3 py-2 self-start">
               <Award className="w-4 h-4 text-amber-300" />
-              <div className="text-left">
-                <span className="text-[10px] text-purple-200 block font-medium">ระดับของกลุ่ม</span>
-                <span className="text-xs font-black text-amber-300">
-                  {currentGroupLevel === '01' && 'ระดับ 01'}
-                  {currentGroupLevel === '02' && 'ระดับ 02'}
-                  {currentGroupLevel === '03' && 'ระดับ 03'}
-                </span>
-              </div>
-              <div className="flex flex-col gap-0.5 ml-1">
-                <button
-                  type="button"
-                  onClick={handlePromoteGroup}
-                  title="เลื่อนระดับกลุ่ม (01 -> 02 -> 03)"
-                  className="w-5 h-5 rounded-md bg-white/20 hover:bg-emerald-500 text-white flex items-center justify-center transition active:scale-90 cursor-pointer"
-                >
-                  <ArrowUp className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDemoteGroup}
-                  title="ลดระดับกลุ่ม (03 -> 02 -> 01)"
-                  className="w-5 h-5 rounded-md bg-white/20 hover:bg-rose-500 text-white flex items-center justify-center transition active:scale-90 cursor-pointer"
-                >
-                  <ArrowDown className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-2 rounded-2xl">
-              <Users className="w-4 h-4 text-purple-200" />
-              <span className="text-xs font-bold text-purple-100">
-                {groupStudents.length} คน
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. DATE SELECTOR & STATUS CARDS (เลือกวันเดือนปีย้อนหลังได้ครบวงจร) */}
-      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-4">
-        {/* Date Navigation & Selector Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs sm:text-base font-black text-purple-950">
-                  {formatThaiDate(selectedDate)}
-                </span>
-                {selectedDate === getTodayString() ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    วันนี้
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-200">
-                    ย้อนหลัง
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] text-purple-700/80 font-medium mt-0.5">
-                {isDateAlreadySaved ? (
-                  <span className="text-emerald-700 font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    บันทึกแล้ว (สามารถแก้ไขและบันทึกซ้ำได้)
-                  </span>
-                ) : (
-                  <span className="text-purple-600/90 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 inline-block" />
-                    {selectedDate === getTodayString()
-                      ? 'ยังไม่มีบันทึกของวันนี้'
-                      : 'ยังไม่มีบันทึกของวันที่นี้ (สามารถบันทึกย้อนหลังได้)'}
-                  </span>
-                )}
-              </div>
+              <span className="text-xs text-purple-200">ระดับกลุ่ม</span>
+              <span className="text-sm font-black text-amber-300">{currentGroupLevel}</span>
+              <button type="button" onClick={handlePromoteGroup} title="เลื่อนระดับกลุ่ม" className="w-7 h-7 rounded-lg bg-white/15 hover:bg-emerald-500 flex items-center justify-center transition">
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" onClick={handleDemoteGroup} title="ลดระดับกลุ่ม" className="w-7 h-7 rounded-lg bg-white/15 hover:bg-rose-500 flex items-center justify-center transition">
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
-          {/* Minimalist Tactile Date Picker & Navigator */}
-          <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
-            {/* Quick Today Button (if viewing a past or future date) */}
+          {/* ตัวเลือกวัน */}
+          <div className="rounded-2xl bg-white text-purple-950 p-3 sm:p-4 flex flex-col md:flex-row md:items-center gap-3 shadow-lg">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <button type="button" onClick={() => changeDay(-1)} title="วันก่อนหน้า" className="w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenCalendar}
+                className="flex-1 min-w-0 text-left px-3 py-1.5 rounded-xl hover:bg-purple-50 transition"
+                title="เลือกวันจากปฏิทิน"
+              >
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-purple-600 shrink-0" />
+                  <span className="text-lg sm:text-xl font-black truncate">{formatThaiDate(selectedDate)}</span>
+                  {selectedDate === getTodayString() ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">วันนี้</span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800">ย้อนหลัง</span>
+                  )}
+                </div>
+                <div className={`text-xs font-semibold mt-0.5 ${isDateAlreadySaved ? 'text-emerald-600' : 'text-purple-500'}`}>
+                  {isDateAlreadySaved ? '● บันทึกแล้ว แก้ไขและบันทึกซ้ำได้' : '○ ยังไม่ได้บันทึกวันนี้'}
+                </div>
+              </button>
+              <button type="button" onClick={() => changeDay(1)} title="วันถัดไป" className="w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
             {selectedDate !== getTodayString() && (
               <button
                 type="button"
                 onClick={() => setSelectedDate(getTodayString())}
-                className="text-xs font-bold px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200/80 transition-all active:scale-95"
+                className="px-4 py-2.5 rounded-xl bg-purple-800 hover:bg-purple-900 text-white text-sm font-bold shrink-0"
               >
-                กลับสู่วันนี้
+                กลับวันนี้
               </button>
             )}
-
-            {/* Stepper Pill with Date Trigger (From user screenshot) */}
-            <div className="inline-flex items-center bg-purple-50/90 border border-purple-200/80 rounded-full p-0.5 shadow-sm">
-              <button
-                type="button"
-                onClick={() => changeDay(-1)}
-                title="วันก่อนหน้า (ย้อนหลัง 1 วัน)"
-                className="w-7 h-7 rounded-full flex items-center justify-center text-purple-800 hover:bg-white transition-all active:scale-90"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {/* Minimalist Date Trigger */}
-              <button
-                type="button"
-                onClick={handleOpenCalendar}
-                title="คลิกเพื่อเลือกวันเดือนปีจากปฏิทิน"
-                className="px-3 py-1 flex items-center gap-1.5 text-xs font-extrabold text-purple-950 bg-white hover:bg-purple-100/60 rounded-full transition-all cursor-pointer shadow-xs active:scale-95"
-              >
-                <Calendar className="w-3.5 h-3.5 text-purple-700" />
-                <span className="select-none">{formatThaiDate(selectedDate)}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => changeDay(1)}
-                title="วันถัดไป"
-                className="w-7 h-7 rounded-full flex items-center justify-center text-purple-800 hover:bg-white transition-all active:scale-90"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Explicit Calendar Button */}
-            <button
-              type="button"
-              onClick={handleOpenCalendar}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 shadow-xs transition-all active:scale-95"
-              title="เปิดปฏิทินเลือกวันเดือนปีย้อนหลัง"
-            >
-              <CalendarDays className="w-3.5 h-3.5 text-purple-700" />
-              <span>เลือกวันย้อนหลัง</span>
-            </button>
-
-
-            {/* Native date input invoked by showPicker */}
             <input
               ref={dateInputRef}
               type="date"
               value={selectedDate}
-              onChange={(e) => {
-                if (e.target.value) setSelectedDate(e.target.value);
-              }}
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
               className="sr-only"
               tabIndex={-1}
               aria-hidden="true"
             />
           </div>
-        </div>
 
-        {/* Quick Past-Record History Selector Row */}
-        {pastRecordedDates.length > 0 && (
-          <div className="pt-2 border-t border-purple-50 flex flex-wrap items-center justify-between gap-2 bg-purple-50/40 p-2.5 rounded-2xl border border-purple-100/80">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-              <History className="w-3.5 h-3.5 text-purple-700" />
-              <span>ประวัติวันที่มีการเช็คชื่อย้อนหลัง ({pastRecordedDates.length} วัน):</span>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-3 py-1 text-xs font-bold font-mono rounded-xl bg-white border border-purple-200 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-xs cursor-pointer"
-              >
-                <option value={selectedDate} disabled>
-                  -- เลือกจากประวัติวันที่บันทึกแล้ว --
-                </option>
-                {pastRecordedDates.map((d) => (
-                  <option key={d} value={d}>
-                    {formatThaiDate(d)} {d === getTodayString() ? '(วันนี้)' : '(ย้อนหลัง)'}
-                  </option>
-                ))}
-              </select>
-
-              {/* Quick Jump to last 3 dates */}
-              <div className="hidden sm:flex items-center gap-1">
-                {pastRecordedDates.slice(0, 3).map((d) => (
+          {/* วันที่เคยบันทึกในภาคนี้ */}
+          {groupHistory.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5" /> บันทึกแล้วในภาคนี้ {groupHistory.length} ครั้ง
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {groupHistory.map((h) => (
                   <button
-                    key={d}
+                    key={h.date}
                     type="button"
-                    onClick={() => setSelectedDate(d)}
-                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
-                      selectedDate === d
-                        ? 'bg-purple-800 text-white shadow-xs'
-                        : 'bg-white hover:bg-purple-100 text-purple-900 border border-purple-200'
+                    onClick={() => setSelectedDate(h.date)}
+                    className={`shrink-0 px-3 py-2 rounded-xl text-left transition ${
+                      selectedDate === h.date ? 'bg-amber-400 text-purple-950' : 'bg-white/10 hover:bg-white/20 text-white'
                     }`}
                   >
-                    {formatThaiDate(d)}
+                    <div className="text-xs font-black whitespace-nowrap">{formatThaiDate(h.date)}</div>
+                    <div className={`text-[10px] font-semibold ${selectedDate === h.date ? 'text-purple-900' : 'text-purple-200'}`}>
+                      มา {h.present}/{h.total}
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Session Topic & Notes (หัวข้อบทเรียน/ซูเราะฮ์) */}
-        <div className="pt-2 border-t border-purple-50 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-purple-50/40 p-3 rounded-2xl border border-purple-100/70">
-          <div className="space-y-1">
-            <label className="text-[11px] font-extrabold text-purple-950 flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-purple-700" />
-              <span>หัวข้อบทเรียน / ซูเราะฮ์ที่อ่านประจำคาบ:</span>
-            </label>
-            <input
-              type="text"
-              placeholder="เช่น ซูเราะฮ์ อัล-มุลก์ 1-15, ตัฟซีรเรื่องคุณธรรม..."
-              value={sessionTopic}
-              onChange={(e) => setSessionTopic(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-xl border border-purple-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[11px] font-extrabold text-purple-950 flex items-center gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
-              <span>บันทึกผลการสอน / พฤติกรรมเพิ่มเติม:</span>
-            </label>
-            <input
-              type="text"
-              placeholder="บันทึกย่อประจำคาบ (ไม่บังคับ)..."
-              value={sessionNotes}
-              onChange={(e) => setSessionNotes(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-xl border border-purple-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
-            />
+          {/* สรุปสด */}
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              { label: 'มา', v: counts.present, cls: 'bg-emerald-400/20 text-emerald-100' },
+              { label: 'ขาด', v: counts.absent, cls: 'bg-rose-400/20 text-rose-100' },
+              { label: 'ลา', v: counts.leave, cls: 'bg-amber-400/20 text-amber-100' },
+            ].map((c) => (
+              <div key={c.label} className={`rounded-2xl px-4 py-2.5 ${c.cls}`}>
+                <div className="text-[11px] font-bold opacity-90">{c.label}</div>
+                <div className="text-2xl font-black tabular-nums leading-tight">{c.v}</div>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
 
-
-        {/* Live Counts Cards (Tactile 3-Card Bento) */}
-        <div className="grid grid-cols-3 gap-2.5 text-center pt-3 border-t border-purple-50">
-          <div className="p-2.5 sm:p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 transition-transform duration-200 hover:scale-[1.01]">
-            <div className="text-lg sm:text-2xl font-black text-emerald-800 tabular-nums">{counts.present}</div>
-            <div className="text-[11px] font-bold text-emerald-700 flex items-center justify-center gap-1">
-              <Check className="w-3 h-3" />
-              <span>มา</span>
-            </div>
-          </div>
-
-          <div className="p-2.5 sm:p-3 rounded-2xl bg-rose-50/70 border border-rose-200/80 transition-transform duration-200 hover:scale-[1.01]">
-            <div className="text-lg sm:text-2xl font-black text-rose-800 tabular-nums">{counts.absent}</div>
-            <div className="text-[11px] font-bold text-rose-700 flex items-center justify-center gap-1">
-              <UserX className="w-3 h-3" />
-              <span>ขาด</span>
-            </div>
-          </div>
-
-          <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 transition-transform duration-200 hover:scale-[1.01]">
-            <div className="text-lg sm:text-2xl font-black text-amber-800 tabular-nums">{counts.leave}</div>
-            <div className="text-[11px] font-bold text-amber-700 flex items-center justify-center gap-1">
-              <FileText className="w-3 h-3" />
-              <span>ลา</span>
-            </div>
-          </div>
-        </div>
+      {/* 3. หัวข้อคาบเรียน */}
+      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-card grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-xs font-bold text-purple-800 flex items-center gap-1.5 mb-1.5">
+            <BookOpen className="w-4 h-4 text-purple-500" /> หัวข้อ / ซูเราะฮ์ที่อ่าน
+          </span>
+          <input
+            type="text"
+            placeholder="เช่น ซูเราะฮ์อัลมุลก์ 1-15"
+            value={sessionTopic}
+            onChange={(e) => setSessionTopic(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-bold text-purple-800 flex items-center gap-1.5 mb-1.5">
+            <MessageSquare className="w-4 h-4 text-purple-500" /> บันทึกเพิ่มเติม (ไม่บังคับ)
+          </span>
+          <input
+            type="text"
+            placeholder="ผลการสอน / พฤติกรรม"
+            value={sessionNotes}
+            onChange={(e) => setSessionNotes(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </label>
       </div>
 
       {/* Save Alert */}
@@ -917,37 +790,6 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         })}
       </div>
 
-      {/* 6. PAST DATES HISTORY */}
-      {groupHistory.length > 0 && (
-        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 space-y-3 shadow-card">
-          <div className="flex items-center justify-between text-xs font-bold text-purple-950">
-            <span className="flex items-center gap-1.5">
-              <History className="w-4 h-4 text-purple-700" />
-              <span>ประวัติการเช็คชื่อย้อนหลัง ({groupHistory.length} วัน)</span>
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {groupHistory.map((item) => (
-              <button
-                key={item.date}
-                type="button"
-                onClick={() => setSelectedDate(item.date)}
-                className={`p-3 rounded-2xl border text-left text-xs transition-all duration-200 active:scale-95 ${
-                  selectedDate === item.date
-                    ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-600/20 font-bold'
-                    : 'border-purple-100 hover:bg-purple-50/50'
-                }`}
-              >
-                <div className="font-bold text-purple-950 font-mono">{item.date}</div>
-                <div className="text-[10px] text-purple-700 mt-1 font-semibold">
-                  มา {item.present} • ขาด {item.absent}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 7. FLOATING ISLAND SAVE ACTION BAR (Mobile-First Thumb-Friendly) */}
       <div className="fixed bottom-20 sm:bottom-4 left-0 right-0 px-3 sm:px-4 z-30 pointer-events-none">

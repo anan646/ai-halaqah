@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { LandingPageView } from '@/components/LandingPageView';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
@@ -9,16 +9,19 @@ import { AdminLoginView } from '@/components/AdminLoginView';
 import { SettingsModal } from '@/components/SettingsModal';
 import { OnboardingTutorialModal } from '@/components/OnboardingTutorialModal';
 import { AttendanceRecord } from '@/lib/types';
-import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllToGoogleSheet } from '@/lib/api-client';
+import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllToGoogleSheet, applyPublicDataToLocal } from '@/lib/api-client';
 import { getAdminSession, setAdminSession } from '@/lib/admin-auth';
 import { getActiveStudents } from '@/lib/data-store';
-import { HelpCircle } from 'lucide-react';
+import { PublicPendingReportPage } from '@/components/PendingReport';
+import { decodeSnapshot, PendingSnapshot } from '@/lib/pending-report';
 
 const TUTORIAL_DISMISSED_KEY = 'halaqah_tutorial_never_show_v1';
 
 export default function HomePage() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'teacher' | 'admin'>('landing');
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [dataVersion, setDataVersion] = useState(0);
+  const idleRef = useRef(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -26,6 +29,8 @@ export default function HomePage() {
   const [activeTeacherName, setActiveTeacherName] = useState<string>('');
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [tutorialRole, setTutorialRole] = useState<'student' | 'faculty'>('student');
+  // ลิงก์รายงานสาธารณะ (?view=pending-report&d=...) เปิดได้โดยไม่ต้องล็อกอิน
+  const [publicReport, setPublicReport] = useState<{ snap: PendingSnapshot | null } | null>(null);
   const [landingPortalView, setLandingPortalView] = useState<'select' | 'student' | 'faculty'>('select');
 
   // Tutorial buttons are only active and visible when user is in student view or faculty/teacher view
@@ -62,6 +67,14 @@ export default function HomePage() {
     setCustomLogo(getSavedLogo());
     setAdminUser(getAdminSession());
 
+    // เครื่องอาจารย์/นักศึกษา: ใช้รายชื่อ ภาคการศึกษา และประกาศล่าสุดจาก Google Sheet
+    if (!getAdminSession()) {
+      // รีเฟรชหน้าจอเฉพาะตอนผู้ใช้ยังอยู่หน้าเลือกประเภทผู้ใช้ เพื่อไม่ให้สิ่งที่กำลังกรอกหายไป
+      applyPublicDataToLocal().then((ok) => {
+        if (ok && idleRef.current) setDataVersion((v) => v + 1);
+      });
+    }
+
     try {
       const res = await fetchAllAttendance();
       setRecords(res.records);
@@ -75,6 +88,18 @@ export default function HomePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'pending-report') {
+      const d = params.get('d');
+      setPublicReport({ snap: d ? decodeSnapshot(d) : null });
+    }
+  }, []);
+
+  useEffect(() => {
+    idleRef.current = currentTab === 'landing' && landingPortalView === 'select';
+  }, [currentTab, landingPortalView]);
 
   // Synchronize with Browser History & Mobile Back/Forward button
   useEffect(() => {
@@ -159,6 +184,17 @@ export default function HomePage() {
     handleGoToLandingHome();
   };
 
+  if (publicReport) {
+    return (
+      <PublicPendingReportPage
+        snap={publicReport.snap}
+        onGoHome={() => {
+          window.location.href = window.location.pathname;
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#fcfbfe] text-purple-950 font-sans overflow-x-hidden">
       {/* Navigation (Hidden in Admin Dashboard view to prevent overlapping with Admin Sidebar & Header) */}
@@ -188,6 +224,7 @@ export default function HomePage() {
       >
         {currentTab === 'landing' && (
           <LandingPageView
+            key={`landing-${dataVersion}`}
             records={records}
             landingResetSignal={landingResetSignal}
             onSelectTeacher={handleSelectTeacher}
@@ -202,6 +239,7 @@ export default function HomePage() {
 
         {currentTab === 'teacher' && (
           <TeacherAttendanceView
+            key={`teacher-${dataVersion}`}
             records={records}
             onAttendanceSaved={loadData}
             activeTeacherName={activeTeacherName}

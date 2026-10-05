@@ -98,6 +98,13 @@ import {
   saveSemesterSettings,
   exportFullDatabaseJson,
   importFullDatabaseJson,
+  renameMajor,
+  setCurrentTerm,
+  getTermKey,
+  isRecordInTerm,
+  getTermHistory,
+  promoteSelectedStudents,
+  setStudentYearLevel,
 } from '@/lib/data-store';
 import {
   exportToExcel,
@@ -109,11 +116,18 @@ import {
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin } from '@/lib/admin-auth';
-import { setSavedLogo } from '@/lib/api-client';
+import { setSavedLogo, pushAnnouncements, pushSemester, restoreFromGoogleSheet } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { AdminManualModal } from './AdminManualModal';
 import { ExcelImportModal } from './ExcelImportModal';
 import { CertificateStudioModal } from './CertificateStudioModal';
+import { TeacherDetailPanel } from './admin/TeacherDetailPanel';
+import { TransferPanel } from './admin/TransferPanel';
+import { AnnouncementsPanel } from './admin/AnnouncementsPanel';
+import { MajorsPanel } from './admin/MajorsPanel';
+import { TermManager } from './admin/TermManager';
+import { savePendingReportPdf } from './PendingReport';
+import { buildPendingShareUrl, PendingSnapshot } from '@/lib/pending-report';
 
 interface AdminDashboardViewProps {
   records: AttendanceRecord[];
@@ -279,11 +293,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [matrixTeacherName, setMatrixTeacherName] = useState<string>('');
   const [selectedStudentForModal, setSelectedStudentForModal] = useState<Student | null>(null);
 
-  useEffect(() => {
-    if (teachers.length > 0 && !matrixTeacherName) {
-      setMatrixTeacherName(teachers[0].name);
-    }
-  }, [teachers, matrixTeacherName]);
 
   // ==================== PERIODIC FILTER STATE (วัน/เดือน/ปี ที่บันทึกจริง) ====================
   const [periodType, setPeriodType] = useState<'day' | 'month' | 'year'>('day');
@@ -378,10 +387,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setTimeout(() => setAnnToast(null), 4000);
   };
 
+  const syncAnnouncements = async () => {
+    const res = await pushAnnouncements(getAnnouncements());
+    setSyncToast(res.message);
+    setTimeout(() => setSyncToast(null), 5000);
+  };
+
+  const handleCreateAnnouncementData = (data: Omit<Announcement, 'id' | 'createdAt'>) => {
+    addAnnouncement(data);
+    setAnnouncementsList(getAnnouncements());
+    syncAnnouncements();
+  };
+
   const handleDeleteAnnouncement = (id: string) => {
     if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบประกาศนี้?')) {
       deleteAnnouncement(id);
       setAnnouncementsList(getAnnouncements());
+      syncAnnouncements();
     }
   };
 
@@ -1071,51 +1093,49 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     },
   ];
 
-  // ==================== ACADEMIC YEAR & SEMESTER FILTER ====================
-  const [yearFilter, setYearFilter] = useState<string>('all');
-  const [semesterFilter, setSemesterFilter] = useState<string>('all');
+  // ==================== ภาคการศึกษาที่กำลังดู (ค่าเริ่มต้น = ภาคปัจจุบันที่แอดมินตั้งไว้) ====================
+  const [termFilter, setTermFilter] = useState<string>('current');
+  const [termHistory, setTermHistory] = useState(() => getTermHistory());
+  const [isTermManagerOpen, setIsTermManagerOpen] = useState(false);
 
-  const availableYears = useMemo(() => {
-    const yearsSet = new Set<string>();
-    if (semesterSettings.academicYear) yearsSet.add(semesterSettings.academicYear);
-    ['2569', '2568', '2567'].forEach((y) => yearsSet.add(y));
-    records.forEach((r) => {
-      if (r.date) {
-        const ceYear = parseInt(r.date.substring(0, 4));
-        if (!isNaN(ceYear)) {
-          yearsSet.add(String(ceYear + 543));
-        }
-      }
-    });
-    return Array.from(yearsSet).sort().reverse();
-  }, [records, semesterSettings]);
+  const termOptions = useMemo(() => {
+    const currentKey = getTermKey(semesterSettings);
+    return termHistory.filter((t) => t.key !== currentKey);
+  }, [termHistory, semesterSettings]);
 
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
-      if (yearFilter !== 'all') {
-        const ceYear = parseInt(r.date.substring(0, 4));
-        const beYear = String(ceYear + 543);
-        if (beYear !== yearFilter) return false;
-      }
-      if (semesterFilter !== 'all') {
-        if (r.date) {
-          const parts = r.date.split('-');
-          if (parts.length >= 2) {
-            const month = parseInt(parts[1]);
-            if (semesterFilter === 'ภาคเรียนที่ 1' && (month < 5 || month > 10)) return false;
-            if (semesterFilter === 'ภาคเรียนที่ 2' && (month >= 5 && month <= 10)) return false;
-          }
-        }
-      }
-      return true;
-    });
-  }, [records, yearFilter, semesterFilter]);
+    if (termFilter === 'all') return records;
+    if (termFilter === 'current') return records.filter((r) => isRecordInTerm(r, semesterSettings));
+    const info = termHistory.find((t) => t.key === termFilter);
+    if (!info) return records;
+    return records.filter((r) =>
+      isRecordInTerm(r, {
+        ...semesterSettings,
+        academicYear: info.academicYear,
+        semesterName: info.semesterName,
+        startDate: info.startDate,
+        endDate: info.endDate,
+      })
+    );
+  }, [records, termFilter, termHistory, semesterSettings]);
+
+  const termFilterLabel =
+    termFilter === 'all'
+      ? 'ทุกภาคการศึกษา'
+      : termFilter === 'current'
+      ? `${semesterSettings.semesterName} ปีการศึกษา ${semesterSettings.academicYear}`
+      : (() => {
+          const t = termHistory.find((x) => x.key === termFilter);
+          return t ? `${t.semesterName} ปีการศึกษา ${t.academicYear}` : termFilter;
+        })();
 
   // ==================== 40 TEACHERS COMPARISON & DETAILED STATS ====================
   const allTeachersComparison = useMemo(() => {
     return teachers.map((t, index) => {
       const groupStudents = students.filter((s) => s.teacherName === t.name);
-      const teacherRecords = filteredRecords.filter((r) => r.teacherName === t.name);
+      // นับตามนักศึกษาในกลุ่มด้วย เพื่อให้นักศึกษาที่ถูกย้ายกลุ่มยังนับเป็นการเช็คชื่อของกลุ่มปัจจุบัน
+      const memberIds = new Set(groupStudents.map((s) => s.studentId));
+      const teacherRecords = filteredRecords.filter((r) => r.teacherName === t.name || memberIds.has(r.studentId));
       const dates = Array.from(new Set(teacherRecords.map((r) => r.date))).sort();
 
       let cohort: 'male' | 'female2' | 'female3' = 'male';
@@ -2032,86 +2052,153 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setTimeout(() => setSyncToast(null), 3000);
   };
 
-  const exportPendingPdf = () => {
-    const pending = allTeachersComparison.filter((t) => !t.isRecorded);
-    const todayStr = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
-    const printHtml = `
-      <!DOCTYPE html>
-      <html lang="th">
-      <head>
-        <meta charset="UTF-8">
-        <title>รายงานกลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ - ระบบหะละเกาะห์</title>
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
-        <style>
-          @page { size: A4 portrait; margin: 15mm; }
-          body { font-family: 'Sarabun', sans-serif; color: #1e1b4b; margin: 0; padding: 20px; font-size: 13px; line-height: 1.5; }
-          .header { text-align: center; border-bottom: 2px solid #b45309; padding-bottom: 12px; margin-bottom: 16px; }
-          .title { font-size: 20px; font-weight: 700; color: #9a3412; margin: 0; }
-          .subtitle { font-size: 13px; color: #475569; margin-top: 4px; }
-          .alert-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: center; font-weight: bold; color: #92400e; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-          th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
-          th { background: #d97706; color: #ffffff; font-weight: 700; text-align: center; }
-          .center { text-align: center; }
-          .badge-pending { color: #b91c1c; background: #fee2e2; font-weight: 700; padding: 2px 8px; border-radius: 9999px; font-size: 11px; }
-          .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1 class="title">รายงานกลุ่มและอาจารย์ที่ยังไม่มีการบันทึกการเช็คชื่อ</h1>
-          <div class="subtitle">โครงการฮะละเกาะฮ์อัลกุรอาน • วันที่พิมพ์รายงาน: ${todayStr}</div>
-        </div>
-        <div class="alert-box">
-          ⚠️ พบกลุ่มอาจารย์ที่ยังไม่ส่งบันทึกการเช็คชื่อจำนวน ${pending.length} กลุ่ม (จากทั้งหมด ${allTeachersComparison.length} กลุ่ม)
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 45px;">ลำดับ</th>
-              <th>ชื่ออาจารย์ผู้ดูแลกลุ่ม</th>
-              <th>กลุ่มหะละเกาะห์</th>
-              <th>ช่วงชั้น / เพศ</th>
-              <th style="width: 80px;">จำนวน นศ.</th>
-              <th style="width: 100px;">สถานะ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${pending.map((t, idx) => `
-              <tr>
-                <td class="center">${idx + 1}</td>
-                <td><strong>${t.teacher}</strong></td>
-                <td>${t.group} (${t.cohortName})</td>
-                <td class="center">${t.yearLevel || '-'}</td>
-                <td class="center"><strong>${t.studentsCount}</strong> คน</td>
-                <td class="center"><span class="badge-pending">ยังไม่บันทึก</span></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <div class="footer">
-          ระบบบันทึกและติดตามการเข้าร่วมกลุ่มศึกษาอัลกุรอาน • เอกสารสำหรับติดตามอาจารย์ผู้ดูแล
-        </div>
-        <script>
-          window.onload = function() { window.print(); };
-        </script>
-      </body>
-      </html>
-    `;
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.open();
-      printWindow.document.write(printHtml);
-      printWindow.document.close();
+  // ==================== รายงานกลุ่มที่ยังไม่บันทึก: PDF / ลิงก์สาธารณะ ====================
+  const pendingRows = allTeachersComparison.filter((t) => !t.isRecorded);
+  const [pendingBusy, setPendingBusy] = useState(false);
+
+  const buildPendingSnapshot = (): PendingSnapshot => ({
+    v: 1,
+    t: new Date().toISOString(),
+    label: `${semesterSettings.semesterName} ปีการศึกษา ${semesterSettings.academicYear}`,
+    total: allTeachersComparison.length,
+    rows: pendingRows.map((t) => ({
+      teacher: t.teacher,
+      group: t.group,
+      year: t.yearLevel || '-',
+      gender: t.gender,
+      students: t.studentsCount,
+    })),
+  });
+
+  const handleSharePdf = async () => {
+    setPendingBusy(true);
+    try {
+      await savePendingReportPdf(buildPendingSnapshot());
+      setSyncToast('บันทึกไฟล์ PDF รายงานเรียบร้อย');
+    } catch (err) {
+      console.error(err);
+      setSyncToast('สร้างไฟล์ PDF ไม่สำเร็จ');
+    } finally {
+      setPendingBusy(false);
+      setTimeout(() => setSyncToast(null), 3000);
     }
   };
 
-  const copyPendingPublicLink = () => {
-    if (typeof window === 'undefined') return;
-    const url = `${window.location.origin}${window.location.pathname}?view=pending-report`;
-    navigator.clipboard.writeText(url);
-    alert('📋 คัดลอกลิงก์แชร์สาธารณะสำเร็จ!\n\nลิงก์: ' + url + '\n\nทุกคนสามารถคลิกเปิดดูรายชื่อกลุ่มที่ยังไม่บันทึกการเช็คชื่อได้ทันที โดยไม่ต้องเข้าสู่ระบบ');
+  const handleCopyPendingLink = async () => {
+    const url = buildPendingShareUrl(buildPendingSnapshot());
+    try {
+      await navigator.clipboard.writeText(url);
+      setSyncToast('คัดลอกลิงก์แล้ว ทุกคนเปิดดูได้โดยไม่ต้องล็อกอิน');
+    } catch {
+      window.prompt('คัดลอกลิงก์นี้ไปแชร์', url);
+    }
+    setTimeout(() => setSyncToast(null), 3500);
   };
+
+  const handleOpenPendingLink = () => {
+    window.open(buildPendingShareUrl(buildPendingSnapshot()), '_blank');
+  };
+
+  // ==================== เมนูนำทาง (รวมหัวข้อที่เกี่ยวข้องกันไว้ด้วยกัน) ====================
+  const goTab = (t: TabType) => {
+    setActiveTab(t);
+    setIsMobileSidebarOpen(false);
+  };
+
+  const PAGE_TITLES: Partial<Record<TabType, string>> = {
+    overview: 'ภาพรวม',
+    analytics: 'ภาพรวม',
+    periodic: 'สรุปตามวัน/เดือน/ปี',
+    teachers: 'รายอาจารย์',
+    matrix: 'รายอาจารย์',
+    pending: 'กลุ่มที่ยังไม่บันทึก',
+    levels: 'ระดับกลุ่ม',
+    editor: 'จัดการข้อมูล นักศึกษา/อาจารย์',
+    transfer: 'โยกย้ายกลุ่ม',
+    announcements: 'ส่งประกาศ',
+    certificates: 'สตูดิโอเกียรติบัตร',
+    export: 'ส่งออกไฟล์',
+    system_management: 'ตั้งค่าระบบ',
+  };
+
+  const NAV_GROUPS: {
+    title: string;
+    items: {
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+      ids: TabType[];
+      badge?: () => number;
+      badgeTone?: 'alert';
+    }[];
+  }[] = [
+    {
+      title: 'รายงาน',
+      items: [
+        { label: 'ภาพรวม', icon: BarChart3, ids: ['overview', 'analytics', 'periodic'] },
+        {
+          label: 'กลุ่มอาจารย์',
+          icon: UserCheck,
+          ids: ['teachers', 'matrix', 'pending', 'levels'],
+          badge: () => overviewKpi.pendingCount,
+          badgeTone: 'alert',
+        },
+      ],
+    },
+    {
+      title: 'จัดการ',
+      items: [
+        { label: 'ข้อมูล นศ./อาจารย์', icon: DatabaseIcon, ids: ['editor'] },
+        { label: 'โยกย้ายกลุ่ม', icon: ArrowRightLeft, ids: ['transfer'] },
+        { label: 'ส่งประกาศ', icon: Megaphone, ids: ['announcements'], badge: () => announcementsList.length },
+      ],
+    },
+    {
+      title: 'ระบบ',
+      items: [
+        { label: 'เกียรติบัตร', icon: Award, ids: ['certificates'] },
+        { label: 'ส่งออกไฟล์', icon: Download, ids: ['export'] },
+        { label: 'ตั้งค่า & สำรองข้อมูล', icon: Settings, ids: ['system_management'] },
+      ],
+    },
+  ];
+
+  const reportTabs = () =>
+    renderSubTabs([
+      { ids: ['overview', 'analytics'], label: 'ภาพรวม' },
+      { ids: ['periodic'], label: 'รายวัน/เดือน/ปี' },
+    ]);
+  const groupTabs = () =>
+    renderSubTabs([
+      { ids: ['teachers', 'matrix'], label: 'รายอาจารย์' },
+      { ids: ['pending'], label: 'ยังไม่บันทึก', badge: overviewKpi.pendingCount },
+      { ids: ['levels'], label: 'ระดับกลุ่ม' },
+    ]);
+
+  /** แถบแท็บย่อยสำหรับหน้าที่รวมหลายหัวข้อ */
+  const renderSubTabs = (
+    items: { ids: TabType[]; label: string; badge?: number }[]
+  ) => (
+    <div className="inline-flex flex-wrap gap-1 p-1 rounded-2xl bg-purple-100/70 print:hidden">
+      {items.map((it) => {
+        const active = it.ids.includes(activeTab);
+        return (
+          <button
+            key={it.label}
+            type="button"
+            onClick={() => setActiveTab(it.ids[0])}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
+              active ? 'bg-white text-purple-900 shadow-sm' : 'text-purple-700 hover:text-purple-950'
+            }`}
+          >
+            <span>{it.label}</span>
+            {!!it.badge && it.badge > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black">{it.badge}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="w-full min-h-screen bg-slate-50/50">
@@ -2119,284 +2206,84 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       <div className="w-full flex">
         {/* LEFT SIDEBAR NAVIGATION - FIXED TO FAR LEFT */}
         <aside
-          className={`fixed left-0 top-0 bottom-0 w-64 lg:w-72 h-screen z-40 bg-white/95 backdrop-blur-md border-r border-purple-200/80 p-3.5 shadow-lg flex flex-col justify-between overflow-y-auto transition-transform duration-300 print:hidden ${
+          className={`fixed left-0 top-0 bottom-0 w-64 lg:w-72 h-screen z-40 bg-white border-r border-purple-100 p-4 shadow-lg flex flex-col justify-between overflow-y-auto transition-transform duration-300 print:hidden ${
             isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
         >
-          <div className="space-y-4">
-            {/* Sidebar Brand Header */}
-            <div className="pb-3 border-b border-purple-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
                 {customLogo ? (
-                  <img
-                    src={customLogo}
-                    alt="Logo"
-                    className="h-9 w-auto max-w-[50px] object-contain drop-shadow-xs"
-                  />
+                  <img src={customLogo} alt="Logo" className="h-9 w-auto max-w-[56px] object-contain" />
                 ) : (
-                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-800 to-indigo-900 text-white flex items-center justify-center font-black shadow-md shadow-purple-900/20 text-xs">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-900 text-white flex items-center justify-center font-black text-xs">
                     HQ
                   </div>
                 )}
-                <div>
-                  <div className="text-xs font-black text-purple-950 tracking-tight leading-tight">ระบบแอดมินหะละเกาะห์</div>
-                  <div className="text-[10px] text-purple-700 font-semibold leading-tight">{semesterSettings.semesterName} {semesterSettings.academicYear}</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-purple-950 leading-tight">หะละเกาะห์</div>
+                  <div className="text-[11px] text-purple-600 font-semibold leading-tight truncate">
+                    ระบบแอดมิน
+                  </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(false)}
-                className="lg:hidden p-1.5 rounded-xl text-purple-600 hover:bg-purple-100"
+                className="lg:hidden p-1.5 rounded-lg text-purple-600 hover:bg-purple-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Group 1: แดชบอร์ด & รายงาน */}
-            <div>
-              <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
-                <span>📊</span>
-                <span>แดชบอร์ด & รายงาน</span>
+            {NAV_GROUPS.map((group) => (
+              <div key={group.title}>
+                <div className="px-3 pb-1.5 text-[11px] font-bold text-purple-400 tracking-wider">{group.title}</div>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = item.ids.includes(activeTab);
+                    const Icon = item.icon;
+                    const badge = item.badge ? item.badge() : 0;
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => goTab(item.ids[0])}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl transition flex items-center justify-between text-sm ${
+                          active
+                            ? 'bg-gradient-to-r from-purple-700 to-purple-900 text-white font-bold shadow-md shadow-purple-900/20'
+                            : 'text-purple-900/80 hover:bg-purple-50 font-semibold'
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <Icon className={`w-[18px] h-[18px] ${active ? 'text-amber-300' : 'text-purple-500'}`} />
+                          <span>{item.label}</span>
+                        </span>
+                        {badge > 0 && (
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              active ? 'bg-amber-400 text-purple-950' : item.badgeTone === 'alert' ? 'bg-rose-100 text-rose-700' : 'bg-purple-100 text-purple-800'
+                            }`}
+                          >
+                            {badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="mt-1 space-y-1">
-                <button
-                  onClick={() => {
-                    setActiveTab('overview');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'overview' || activeTab === 'analytics'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">📊</span>
-                    <span>ภาพรวมทั้งหมด (Overview)</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('teachers');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'teachers' || activeTab === 'matrix'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">👨‍🏫</span>
-                    <span>ข้อมูลรายอาจารย์ (Teacher)</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('pending');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'pending'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">⏳</span>
-                    <span>กลุ่มที่ยังไม่บันทึก</span>
-                  </div>
-                  {overviewKpi.pendingCount > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      activeTab === 'pending' ? 'bg-amber-400 text-purple-950' : 'bg-rose-100 text-rose-700'
-                    }`}>
-                      {overviewKpi.pendingCount}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('levels');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'levels'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">🏷️</span>
-                    <span>ระดับกลุ่ม (01 / 02 / 03)</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('periodic');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'periodic'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">📅</span>
-                    <span>สรุปตามวัน/เดือน/ปี</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Group 2: จัดการข้อมูล & นักศึกษา */}
-            <div className="pt-2 border-t border-purple-100/80">
-              <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
-                <span>👥</span>
-                <span>จัดการข้อมูล & นักศึกษา</span>
-              </div>
-              <div className="mt-1 space-y-1">
-                <button
-                  onClick={() => {
-                    setActiveTab('editor');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'editor'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">✏️</span>
-                    <span>จัดการข้อมูล (นศ./อาจารย์)</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('transfer');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'transfer'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">🔄</span>
-                    <span>โยกย้ายกลุ่ม (2 ฝั่ง ซ้าย-ขวา)</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('announcements');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'announcements'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">📢</span>
-                    <span>ส่งประกาศนักศึกษา</span>
-                  </div>
-                  {announcementsList.length > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      activeTab === 'announcements' ? 'bg-amber-400 text-purple-950' : 'bg-purple-200 text-purple-900'
-                    }`}>
-                      {announcementsList.length}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Group 3: ระบบ & การส่งออก */}
-            <div className="pt-2 border-t border-purple-100/80">
-              <div className="px-3 py-1 text-[11px] font-black text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
-                <span>⚙️</span>
-                <span>ระบบ & เกียรติบัตร</span>
-              </div>
-              <div className="mt-1 space-y-1">
-                {/* Certificate Studio Direct Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('certificates');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'certificates'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">🎖️</span>
-                    <span>สตูดิโอเกียรติบัตร</span>
-                  </div>
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                    activeTab === 'certificates' ? 'bg-amber-400 text-purple-950' : 'bg-purple-100 text-purple-800'
-                  }`}>
-                    10 แบบ
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('export');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'export'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">📤</span>
-                    <span>ศูนย์ส่งออกไฟล์ & วุฒิบัตร</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('system_management');
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition flex items-center justify-between text-xs sm:text-sm ${
-                    activeTab === 'system_management'
-                      ? 'bg-purple-900 text-white shadow-md shadow-purple-950/20 font-bold'
-                      : 'text-purple-900/80 hover:text-purple-950 hover:bg-purple-100/70 font-semibold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">⚙️</span>
-                    <span>ตั้งค่าระบบ & สำรองข้อมูล</span>
-                  </div>
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Sidebar Footer */}
-          <div className="pt-3 border-t border-purple-100/80 space-y-2">
+          <div className="pt-4">
             <button
               type="button"
               onClick={() => setIsManualModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold transition border border-purple-200/70"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold transition"
             >
-              <BookOpen className="w-3.5 h-3.5 text-purple-700" />
-              <span>คู่มือการใช้งานระบบ</span>
+              <BookOpen className="w-4 h-4 text-purple-700" />
+              <span>คู่มือการใช้งาน</span>
             </button>
           </div>
         </aside>
@@ -2413,89 +2300,57 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <div className="flex-1 w-full lg:pl-72 min-w-0 flex flex-col">
           <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 animate-fadeIn">
             {/* ==================== REFINED EXECUTIVE HEADER ==================== */}
-            <header className="bg-white/95 backdrop-blur-md rounded-3xl border border-purple-200/90 p-4 sm:p-5 shadow-sm space-y-3.5 print:hidden transition-all duration-300">
-              {/* Upper row: Brand, Semester and Main Actions */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {/* Mobile sidebar toggle button */}
+            <header className="rounded-3xl bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white p-4 sm:p-5 shadow-lg shadow-purple-950/20 print:hidden">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     type="button"
                     onClick={() => setIsMobileSidebarOpen(true)}
-                    className="lg:hidden p-2 rounded-2xl bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200"
-                    title="เปิดเมนูนำทาง"
+                    className="lg:hidden p-2 rounded-xl bg-white/10 hover:bg-white/20"
+                    title="เปิดเมนู"
                   >
                     <Menu className="w-5 h-5" />
                   </button>
-
                   {onBackToLanding && (
                     <button
                       type="button"
                       onClick={onBackToLanding}
-                      className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-purple-900 hover:text-purple-950 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-full transition-all active:scale-95 group shrink-0"
-                      title="ย้อนกลับหน้าแรก"
+                      className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition shrink-0"
+                      title="กลับหน้าแรก"
                     >
-                      <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-                      <span className="hidden sm:inline">หน้าแรก</span>
+                      <ArrowLeft className="w-4 h-4" />
                     </button>
                   )}
-
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="bg-purple-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        {adminUser?.role === 'subadmin' ? 'แอดมินรอง' : 'ผู้ดูแลระบบ'}
-                      </span>
-                      <span className="text-xs text-purple-950 font-bold">{adminUser?.name || 'แอดมิน'}</span>
-                      <span className="text-purple-300">•</span>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('system_management')}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-bold border border-purple-200 transition"
-                      >
-                        <Calendar className="w-3 h-3 text-purple-600" />
-                        <span>{semesterSettings.semesterName} {semesterSettings.academicYear}</span>
-                      </button>
+                  <div className="min-w-0">
+                    <div className="text-[11px] text-purple-200 font-semibold truncate">
+                      {adminUser?.role === 'subadmin' ? 'แอดมินรอง' : 'ผู้ดูแลระบบ'} • {adminUser?.name || 'แอดมิน'}
                     </div>
-                    <h1 className="text-base sm:text-xl font-black text-purple-950 mt-0.5 tracking-tight">
-                      ศูนย์จัดการระบบและแดชบอร์ดแอดมิน
+                    <h1 className="text-lg sm:text-2xl font-black tracking-tight leading-tight truncate">
+                      {PAGE_TITLES[activeTab] || 'แดชบอร์ดแอดมิน'}
                     </h1>
                   </div>
                 </div>
 
-                {/* Right Action Buttons */}
                 <div className="flex items-center flex-wrap gap-2">
-                  {/* Certificate Studio Quick Button */}
                   <button
                     type="button"
-                    onClick={() => setActiveTab('certificates')}
-                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-black px-3.5 py-1.5 rounded-full active:scale-95 transition-all shadow-sm"
-                    title="เปิดสตูดิโอออกแบบและจัดวางเกียรติบัตร 10 แบบ"
+                    onClick={() => setIsTermManagerOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold transition"
+                    title="ตั้งค่าภาคเรียน"
                   >
-                    <span>🎖️</span>
-                    <span>จัดการเกียรติบัตร</span>
+                    <Calendar className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{semesterSettings.semesterName} {semesterSettings.academicYear}</span>
                   </button>
 
-                  {/* Manual Guide */}
-                  <button
-                    type="button"
-                    onClick={() => setIsManualModalOpen(true)}
-                    className="flex items-center gap-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-all"
-                    title="เปิดคู่มือการใช้งานระบบแอดมิน"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-purple-700" />
-                    <span className="hidden sm:inline">คู่มือ</span>
-                  </button>
-
-                  {/* Status Indicator Pill */}
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 flex items-center gap-1.5 text-[11px] font-bold text-emerald-900">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>บันทึก {overviewKpi.recordedCount}/{overviewKpi.totalTeachers} ({overviewKpi.recordedPercent}%)</span>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-400/20 text-emerald-100 text-xs font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-300" />
+                    <span>บันทึกแล้ว {overviewKpi.recordedCount}/{overviewKpi.totalTeachers} กลุ่ม</span>
                   </div>
 
-                  {/* Logout */}
                   <button
                     onClick={onLogout}
-                    className="flex items-center gap-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-all"
-                    title="ออกจากระบบแอดมิน"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-rose-500/80 text-xs font-bold transition"
+                    title="ออกจากระบบ"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>ออก</span>
@@ -2503,125 +2358,133 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Lower Toolbar: Real-time Live Sync, Auto-refresh & Export */}
-              <div className="pt-2.5 border-t border-purple-100/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-2.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'}`} />
-                  <span className="font-bold text-purple-950">
-                    {isSyncing ? 'กำลังซิงค์...' : 'ฐานข้อมูลออนไลน์'}
-                  </span>
-                  <span className="text-purple-300">•</span>
-                  <span className="text-purple-700/80 text-[11px]">อัปเดต: {lastUpdatedTime}</span>
+              <div className="mt-3.5 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-purple-200">
+                  <span className={`inline-block w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-300 animate-ping' : 'bg-emerald-400'}`} />
+                  <span className="font-bold text-white">{isSyncing ? 'กำลังซิงค์...' : 'ซิงค์แล้ว'}</span>
+                  <span>อัปเดต {lastUpdatedTime}</span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Auto Refresh */}
-                  <div className="flex items-center gap-1 text-[11px] text-purple-900 bg-purple-50 px-2.5 py-1 rounded-xl border border-purple-200">
-                    <span>⏱️</span>
-                    <select
-                      value={autoRefreshInterval}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setAutoRefreshInterval(val);
-                        setSyncToast(val > 0 ? `⏱️ รีเฟรชทุก ${val >= 60 ? `${val / 60} นาที` : `${val} วิ`}` : '⏸️ ปิดรีเฟรชอัตโนมัติ');
-                        setTimeout(() => setSyncToast(null), 3000);
-                      }}
-                      className="bg-transparent font-bold text-purple-900 focus:outline-none cursor-pointer"
-                    >
-                      <option value={0}>ปิดออโต้</option>
-                      <option value={30}>30 วิ</option>
-                      <option value={60}>1 นาที</option>
-                      <option value={300}>5 นาที</option>
-                    </select>
-                  </div>
-
-                  {/* Manual Sync */}
                   <button
                     onClick={() => handleManualSync(false)}
                     disabled={isSyncing}
-                    className="inline-flex items-center gap-1 bg-purple-800 hover:bg-purple-900 text-white px-3 py-1 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-purple-900 hover:bg-purple-50 font-bold transition disabled:opacity-60"
                   >
-                    <RotateCcw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>ซิงค์สด</span>
+                    <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>ซิงค์ข้อมูล</span>
                   </button>
 
-                  {/* Quick Export Master Dropdown */}
+                  <select
+                    value={autoRefreshInterval}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setAutoRefreshInterval(val);
+                      setSyncToast(val > 0 ? `รีเฟรชอัตโนมัติทุก ${val >= 60 ? `${val / 60} นาที` : `${val} วินาที`}` : 'ปิดรีเฟรชอัตโนมัติ');
+                      setTimeout(() => setSyncToast(null), 3000);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-white/10 text-white font-bold focus:outline-none cursor-pointer [&>option]:text-purple-950"
+                    title="รีเฟรชอัตโนมัติ"
+                  >
+                    <option value={0}>ไม่รีเฟรชเอง</option>
+                    <option value={30}>ทุก 30 วิ</option>
+                    <option value={60}>ทุก 1 นาที</option>
+                    <option value={300}>ทุก 5 นาที</option>
+                  </select>
+
                   <div className="relative" ref={exportDropdownRef}>
                     <button
                       onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                      className="px-2.5 py-1 rounded-xl text-xs font-bold bg-purple-50 text-purple-900 hover:bg-purple-100 transition flex items-center gap-1 border border-purple-200"
+                      className="px-3 py-1.5 rounded-xl font-bold bg-white/10 hover:bg-white/20 transition flex items-center gap-1.5"
                     >
-                      <Download className="w-3 h-3 text-purple-700" />
-                      <span>ส่งออก/พิมพ์</span>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>ส่งออก / พิมพ์</span>
                       <ChevronDown className="w-3 h-3" />
                     </button>
                     {isExportDropdownOpen && (
-                      <div className="absolute right-0 mt-1 w-60 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                      <div className="absolute right-0 mt-1.5 w-64 bg-white text-purple-950 rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
                         <button
-                          onClick={() => {
-                            setIsExportDropdownOpen(false);
-                            exportOverviewExcel();
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                          onClick={() => { setIsExportDropdownOpen(false); exportOverviewExcel(); }}
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 flex items-center gap-2"
                         >
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Excel ภาพรวม (.xls)</span>
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                          <span>Excel ภาพรวม</span>
                         </button>
                         <button
-                          onClick={() => {
-                            setIsExportDropdownOpen(false);
-                            exportOverviewWord();
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                          onClick={() => { setIsExportDropdownOpen(false); exportOverviewWord(); }}
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 flex items-center gap-2"
                         >
-                          <FileText className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Word ภาพรวม (.doc)</span>
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <span>Word ภาพรวม</span>
                         </button>
                         <button
-                          onClick={() => {
-                            setIsExportDropdownOpen(false);
-                            printOverviewReport();
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                          onClick={() => { setIsExportDropdownOpen(false); printOverviewReport(); }}
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 flex items-center gap-2"
                         >
-                          <Printer className="w-3.5 h-3.5 text-purple-700" />
+                          <Printer className="w-4 h-4 text-purple-700" />
                           <span>พิมพ์ / PDF ภาพรวม</span>
                         </button>
                         <div className="border-t border-purple-100 my-1" />
                         <button
-                          onClick={() => {
-                            setIsExportDropdownOpen(false);
-                            printAllTeachersBooklet();
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 flex items-center gap-2 transition"
+                          onClick={() => { setIsExportDropdownOpen(false); printAllTeachersBooklet(); }}
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 flex items-center gap-2"
                         >
-                          <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                          <span>พิมพ์รวม 40 กลุ่ม (Booklet)</span>
+                          <BookOpen className="w-4 h-4 text-amber-600" />
+                          <span>พิมพ์รวมทุกกลุ่ม (Booklet)</span>
                         </button>
                       </div>
                     )}
                   </div>
 
-                  {/* Google Sheets Links */}
                   <div className="relative" ref={sheetsDropdownRef}>
                     <button
                       onClick={() => setIsSheetsDropdownOpen(!isSheetsDropdownOpen)}
-                      className="px-2.5 py-1 rounded-xl text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1 border border-slate-200"
+                      className="px-3 py-1.5 rounded-xl font-bold bg-white/10 hover:bg-white/20 transition flex items-center gap-1.5"
                     >
-                      <span>ชีตต้นฉบับ</span>
+                      <span>Google Sheet</span>
                       <ChevronDown className="w-3 h-3" />
                     </button>
                     {isSheetsDropdownOpen && (
-                      <div className="absolute right-0 mt-1 w-60 bg-white rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                      <div className="absolute right-0 mt-1.5 w-72 bg-white text-purple-950 rounded-2xl shadow-xl border border-purple-100 p-2 z-50 animate-fadeIn">
+                        <button
+                          onClick={() => {
+                            setIsSheetsDropdownOpen(false);
+                            onBackupAll?.();
+                          }}
+                          disabled={isBackingUp}
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 font-bold flex items-center gap-2"
+                        >
+                          <Upload className="w-4 h-4 text-purple-700" />
+                          {isBackingUp ? 'กำลังส่งข้อมูล...' : 'ส่งข้อมูลทั้งหมดขึ้นชีต'}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setIsSheetsDropdownOpen(false);
+                            if (!confirm('ดึงข้อมูลจาก Google Sheet มาแทนข้อมูลในเครื่องนี้?')) return;
+                            const r = await restoreFromGoogleSheet();
+                            reloadDataStore();
+                            setSemesterSettings(getSemesterSettings());
+                            setTermHistory(getTermHistory());
+                            setAnnouncementsList(getAnnouncements());
+                            setSyncToast(r.message);
+                            setTimeout(() => setSyncToast(null), 5000);
+                            if (r.success) handleManualSync(true);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 font-bold flex items-center gap-2"
+                        >
+                          <Download className="w-4 h-4 text-purple-700" />
+                          ดึงข้อมูลล่าสุดจากชีต
+                        </button>
+                        <div className="border-t border-purple-100 my-1" />
                         {GOOGLE_SHEETS_SOURCES.map((s) => (
                           <a
                             key={s.id}
                             href={s.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="block px-3 py-1.5 text-xs rounded-xl hover:bg-purple-50 text-purple-950 font-medium transition"
+                            className="block px-3 py-2 text-xs rounded-xl hover:bg-purple-50 font-medium"
                           >
-                            📊 {s.name}
+                            {s.name}
                           </a>
                         ))}
                       </div>
@@ -2637,68 +2500,39 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           {/* ==================== TAB 1: ภาพรวมทั้งหมด (OVERVIEW & MATRIX COMPARISON) ==================== */}
           {(activeTab === 'overview' || activeTab === 'analytics') && (
         <div className="space-y-6 animate-fadeIn">
+          {reportTabs()}
           {/* Academic Year & Semester Selector Banner (ดูข้อมูลย้อนหลัง & สลับปีการศึกษา) */}
-          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-purple-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-amber-300 shrink-0">
+              <div className="w-11 h-11 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
                 <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs uppercase tracking-wider text-purple-200 font-bold">ข้อมูลปีการศึกษา & ภาคเรียน</span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black border border-emerald-400/30">
-                    ดูย้อนหลังได้ทุกปี
-                  </span>
-                </div>
-                <h3 className="text-sm sm:text-base font-black text-white mt-0.5">
-                  {semesterFilter === 'all' ? 'ทุกภาคเรียน' : semesterFilter} ปีการศึกษา {yearFilter === 'all' ? 'ทุกปี' : yearFilter}
-                </h3>
+                <div className="text-xs font-bold text-purple-500">กำลังแสดงข้อมูล</div>
+                <h3 className="text-base sm:text-lg font-black text-purple-950">{termFilterLabel}</h3>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {/* Year Filter */}
-              <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl border border-white/15">
-                <span className="text-purple-200 font-semibold">ปีการศึกษา:</span>
-                <select
-                  value={yearFilter}
-                  onChange={(e) => setYearFilter(e.target.value)}
-                  className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="all" className="text-slate-900">ทั้งหมด (ทุกปี)</option>
-                  {availableYears.map((y) => (
-                    <option key={y} value={y} className="text-slate-900">ปีการศึกษา {y}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Semester Filter */}
-              <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl border border-white/15">
-                <span className="text-purple-200 font-semibold">ภาคเรียน:</span>
-                <select
-                  value={semesterFilter}
-                  onChange={(e) => setSemesterFilter(e.target.value)}
-                  className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="all" className="text-slate-900">ทั้งหมด (ทุกภาคเรียน)</option>
-                  <option value="ภาคเรียนที่ 1" className="text-slate-900">ภาคเรียนที่ 1</option>
-                  <option value="ภาคเรียนที่ 2" className="text-slate-900">ภาคเรียนที่ 2</option>
-                </select>
-              </div>
-
-              {(yearFilter !== 'all' || semesterFilter !== 'all') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setYearFilter('all');
-                    setSemesterFilter('all');
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl bg-purple-800 hover:bg-purple-700 text-purple-200 hover:text-white font-bold transition flex items-center gap-1 text-[11px]"
-                >
-                  <X className="w-3 h-3" />
-                  <span>ล้างตัวกรอง</span>
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={termFilter}
+                onChange={(e) => setTermFilter(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl border border-purple-200 bg-purple-50 text-sm font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="current">ภาคปัจจุบัน ({getTermKey(semesterSettings)})</option>
+                {termOptions.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.semesterName} ปีการศึกษา {t.academicYear}
+                  </option>
+                ))}
+                <option value="all">ทุกภาคการศึกษา</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsTermManagerOpen(true)}
+                className="px-3.5 py-2.5 rounded-xl bg-purple-800 hover:bg-purple-900 text-white text-sm font-bold flex items-center gap-1.5"
+              >
+                <Settings className="w-4 h-4" /> ตั้งค่าภาคการศึกษา
+              </button>
             </div>
           </div>
 
@@ -3222,408 +3056,116 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* ==================== TAB 2: ข้อมูลรายอาจารย์ (TEACHER DETAILS & STUDENT MATRIX) ==================== */}
       {(activeTab === 'teachers' || activeTab === 'matrix') && (
-        <div className="space-y-6 animate-fadeIn">
-          {/* Cohort Selector Pills & Search Bar */}
-          <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-5 shadow-card space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              {/* Cohort filter pills */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs font-bold text-purple-900 mr-1">เลือกช่วงชั้น/กลุ่ม:</span>
-                <button
-                  onClick={() => setCohortFilter('all')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    cohortFilter === 'all'
-                      ? 'bg-purple-900 text-white shadow-sm'
-                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100'
-                  }`}
-                >
-                  ทั้งหมด ({teachers.length})
-                </button>
-                <button
-                  onClick={() => setCohortFilter('male')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    cohortFilter === 'male'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-blue-50 text-blue-900 hover:bg-blue-100'
-                  }`}
-                >
-                  นักศึกษาชาย ({teachers.filter((t) => t.gender === 'ชาย').length})
-                </button>
-                <button
-                  onClick={() => setCohortFilter('female2')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    cohortFilter === 'female2'
-                      ? 'bg-pink-600 text-white shadow-sm'
-                      : 'bg-pink-50 text-pink-900 hover:bg-pink-100'
-                  }`}
-                >
-                  นักศึกษาหญิง ปี 2 ({teachers.filter((t) => t.gender === 'หญิง' && (t.yearLevel?.includes('2') || t.groupName?.includes('2'))).length})
-                </button>
-                <button
-                  onClick={() => setCohortFilter('female3')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    cohortFilter === 'female3'
-                      ? 'bg-purple-700 text-white shadow-sm'
-                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100'
-                  }`}
-                >
-                  นักศึกษาหญิง ปี 3 ({teachers.filter((t) => t.gender === 'หญิง' && (t.yearLevel?.includes('3') || t.groupName?.includes('3'))).length})
-                </button>
-              </div>
-
-              {/* Quick Teacher Dropdown Selector */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <label className="text-xs font-black text-purple-950 shrink-0">เลือกอาจารย์:</label>
-                <select
-                  value={matrixTeacherName}
-                  onChange={(e) => setMatrixTeacherName(e.target.value)}
-                  className="w-full sm:w-72 px-3 py-2 text-xs font-bold rounded-xl border border-purple-300 bg-purple-50/80 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-xs cursor-pointer"
-                >
-                  {filteredTeachersForDetails.map((t) => (
-                    <option key={t.id} value={t.teacher}>
-                      {t.teacher} ({t.group} • {t.studentsCount} คน) {t.isRecorded ? '✓ บันทึกแล้ว' : '⏳ รอส่ง'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Teacher Search */}
-              <div className="relative w-full sm:w-60">
-                <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={teacherSearch}
-                  onChange={(e) => setTeacherSearch(e.target.value)}
-                  placeholder="พิมพ์ค้นหาชื่ออาจารย์..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs font-semibold rounded-xl border border-purple-200 bg-purple-50/40 text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-            </div>
-
-            {/* Quick Cards Grid for Teacher Selection */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-44 overflow-y-auto pr-1">
-              {filteredTeachersForDetails.map((t) => {
-                const isSelected = matrixTeacherName === t.teacher;
-                const hasRecorded = t.isRecorded;
-
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setMatrixTeacherName(t.teacher)}
-                    className={`p-2.5 rounded-2xl text-left border transition text-xs flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-purple-900 text-white border-purple-950 shadow-md ring-2 ring-purple-600'
-                        : 'bg-purple-50/50 hover:bg-purple-100/70 border-purple-100 text-purple-950'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold truncate text-[11px]">{t.teacher}</div>
-                      <div className={`text-[10px] truncate ${isSelected ? 'text-purple-200' : 'text-purple-700'}`}>
-                        {t.group}
-                      </div>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-[10px]">
-                      <span className={isSelected ? 'text-purple-200' : 'text-purple-800/70'}>
-                        {t.studentsCount} คน
-                      </span>
-                      <span
-                        className={`px-1.5 py-0.2 rounded font-bold ${
-                          isSelected
-                            ? 'bg-purple-800 text-purple-100'
-                            : hasRecorded
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {hasRecorded ? 'บันทึกแล้ว' : 'รอ'}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Active Teacher Banner + Actions Toolbar */}
-          <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-950 rounded-3xl p-5 sm:p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="bg-amber-400 text-purple-950 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  อาจารย์ที่เลือก
-                </span>
-                <span className="text-xs text-purple-200 font-semibold">
-                  {matrixCurrentTeacher?.groupName} ({matrixCurrentTeacher?.gender}) • {matrixCurrentTeacher?.yearLevel}
-                </span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black mt-1">
-                {matrixCurrentTeacher?.name}
-              </h2>
-              <p className="text-xs text-purple-200/80 mt-1">
-                จำนวนนักศึกษาในกลุ่ม {matrixStudents.length} คน • เช็คชื่อรวม {matrixRecords.length} ครั้ง • ผ่านเกณฑ์ (≥80%):{' '}
-                <span className="text-emerald-300 font-bold">
-                  {matrixStudentSummaries.filter((s) => s.rate >= 80).length} คน
-                </span>
-              </p>
-            </div>
-
-            {/* Teacher Specific Exporters */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => exportTeacherExcel(matrixTeacherName)}
-                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
-                <span>Excel กลุ่มนี้</span>
-              </button>
-              <button
-                onClick={() => exportTeacherWord(matrixTeacherName)}
-                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition"
-              >
-                <FileText className="w-3.5 h-3.5 text-blue-300" />
-                <span>Word กลุ่มนี้</span>
-              </button>
-              <button
-                onClick={() => printTeacherReport(matrixTeacherName)}
-                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-black text-xs flex items-center gap-1.5 shadow-md transition"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>พิมพ์ใบบันทึก</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Matrix Table: Students x Attendance Dates */}
-          <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 pb-3">
-              <div>
-                <h3 className="text-base font-black text-purple-950">
-                  ตารางบันทึกการเช็คชื่อรายบุคคลและวันที่
-                </h3>
-                <p className="text-xs text-purple-800/70">
-                  สัญลักษณ์: <span className="font-bold text-emerald-700">✓ มา</span> •{' '}
-                  <span className="font-bold text-rose-700">✗ ขาด</span> •{' '}
-                  <span className="font-bold text-amber-700">△ ลา</span> •{' '}
-                  <span className="text-gray-400">- ยังไม่บันทึก</span>
-                </p>
-              </div>
-              <div className="text-xs font-bold text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-100">
-                พบ {matrixUniqueDates.length} วันที่มีการบันทึก
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-purple-100">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-purple-900 text-white">
-                    <th className="py-3 px-3 font-black text-center w-12 sticky left-0 bg-purple-900 z-10">ที่</th>
-                    <th className="py-3 px-3 font-black sticky left-12 bg-purple-900 z-10 w-28">รหัสนักศึกษา</th>
-                    <th className="py-3 px-4 font-black sticky left-40 bg-purple-900 z-10 min-w-[160px]">ชื่อ-สกุล</th>
-                    <th className="py-3 px-3 font-black min-w-[130px]">สาขาวิชา</th>
-                    {matrixUniqueDates.map((dateStr) => (
-                      <th key={dateStr} className="py-3 px-2 font-black text-center whitespace-nowrap min-w-[70px]">
-                        {dateStr}
-                      </th>
-                    ))}
-                    <th className="py-3 px-2 font-black text-center bg-purple-950 w-12">มา</th>
-                    <th className="py-3 px-2 font-black text-center bg-purple-950 w-12">ขาด</th>
-                    <th className="py-3 px-2 font-black text-center bg-purple-950 w-12">ลา</th>
-                    <th className="py-3 px-3 font-black text-center bg-purple-950 w-16">ร้อยละ</th>
-                    <th className="py-3 px-3 font-black text-center bg-purple-950 w-24">ผลการประเมิน</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-purple-100">
-                  {matrixStudentSummaries.map((s, idx) => (
-                    <tr key={s.studentId} className="hover:bg-purple-50/50 transition">
-                      <td className="py-2.5 px-3 text-center font-mono font-bold text-purple-900/70 sticky left-0 bg-white group-hover:bg-purple-50/50">
-                        {idx + 1}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-purple-950 sticky left-12 bg-white group-hover:bg-purple-50/50">
-                        {s.studentId}
-                      </td>
-                      <td className="py-2.5 px-4 font-bold text-purple-950 sticky left-40 bg-white group-hover:bg-purple-50/50">
-                        {s.name}
-                      </td>
-                      <td className="py-2.5 px-3 text-purple-800 text-[11px] font-semibold">
-                        {s.major || '-'}
-                      </td>
-                      {matrixUniqueDates.map((dateStr) => {
-                        const status = s.attendanceMap[dateStr];
-                        return (
-                          <td key={dateStr} className="py-2.5 px-2 text-center font-bold">
-                            {status === 'มา' && (
-                              <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px]">
-                                ✓
-                              </span>
-                            )}
-                            {status === 'ขาด' && (
-                              <span className="inline-block px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[11px]">
-                                ✗
-                              </span>
-                            )}
-                            {status === 'ลา' && (
-                              <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px]">
-                                △
-                              </span>
-                            )}
-                            {!status && <span className="text-gray-300">-</span>}
-                          </td>
-                        );
-                      })}
-                      <td className="py-2.5 px-2 text-center font-mono font-bold text-emerald-700 bg-purple-50/20">
-                        {s.present}
-                      </td>
-                      <td className="py-2.5 px-2 text-center font-mono font-bold text-rose-700 bg-purple-50/20">
-                        {s.absent}
-                      </td>
-                      <td className="py-2.5 px-2 text-center font-mono font-bold text-amber-700 bg-purple-50/20">
-                        {s.leave}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-mono font-black text-purple-950 bg-purple-50/40">
-                        {s.rate.toFixed(1)}%
-                      </td>
-                      <td className="py-2.5 px-3 text-center bg-purple-50/40">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${
-                            s.evaluation === 'ผ่าน'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {s.evaluation}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {matrixStudentSummaries.length === 0 && (
-                    <tr>
-                      <td colSpan={9 + matrixUniqueDates.length} className="py-8 text-center text-purple-800/60 font-medium">
-                        ไม่พบรายชื่อนักศึกษาในกลุ่มอาจารย์ท่านนี้
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div className="space-y-5 animate-fadeIn">
+          {groupTabs()}
+          <TeacherDetailPanel
+            rows={allTeachersComparison}
+            students={students}
+            records={filteredRecords}
+            selected={matrixTeacherName || null}
+            onSelect={(name) => setMatrixTeacherName(name || '')}
+            onExportExcel={exportTeacherExcel}
+            onExportWord={exportTeacherWord}
+            onPrint={printTeacherReport}
+            onOpenStudent={(s) => setSelectedStudentForModal(s)}
+          />
         </div>
       )}
 
-      {/* ==================== TAB 3: กลุ่มที่ยังไม่บันทึก (PENDING GROUPS ALERT) ==================== */}
       {activeTab === 'pending' && (
-        <div className="space-y-6 animate-fadeIn">
-          {/* Amber Alert Banner */}
-          <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="p-2 rounded-2xl bg-white/20 text-white text-xl">⚠️</span>
-                <h2 className="text-xl sm:text-2xl font-black">
-                  กลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ
-                </h2>
-              </div>
-              <p className="text-xs sm:text-sm text-amber-100 font-medium">
-                พบอาจารย์ที่ยังไม่มีการส่งข้อมูลการเช็คชื่อในระบบจำนวน{' '}
-                <span className="font-black text-white underline text-base">
-                  {allTeachersComparison.filter((t) => !t.isRecorded).length} กลุ่ม
-                </span>{' '}
-                (จากทั้งหมด {allTeachersComparison.length} กลุ่ม)
-              </p>
-            </div>
+        <div className="space-y-5 animate-fadeIn">
+          {groupTabs()}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={exportPendingPdf}
-                className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-amber-950 font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
-                title="พิมพ์หรือส่งออกรายงานกลุ่มค้างส่งเป็นไฟล์ PDF"
-              >
-                <Printer className="w-4 h-4 text-amber-700" />
-                <span>แชร์เป็นไฟล์ PDF</span>
-              </button>
-              <button
-                type="button"
-                onClick={copyPendingPublicLink}
-                className="px-4 py-2.5 rounded-xl bg-amber-900/40 hover:bg-amber-900/60 border border-white/30 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
-                title="คัดลอกลิงก์ให้ทุกคนเปิดดูได้โดยไม่ต้องเข้าสู่ระบบ"
-              >
-                <Share2 className="w-4 h-4 text-amber-200" />
-                <span>คัดลอกลิงก์แชร์สาธารณะ</span>
-              </button>
-              <button
-                type="button"
-                onClick={exportPendingExcel}
-                className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-amber-200" />
-                <span>Excel</span>
-              </button>
+          <div className="rounded-3xl bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white p-5 sm:p-6 shadow-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                <div className="text-xs font-bold text-purple-200">กลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ</div>
+                <div className="text-4xl font-black leading-tight mt-1">
+                  {pendingRows.length}
+                  <span className="text-base font-bold text-purple-300 ml-2">จาก {allTeachersComparison.length} กลุ่ม</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleSharePdf}
+                  disabled={pendingBusy || pendingRows.length === 0}
+                  className="px-4 py-2.5 rounded-xl bg-white text-purple-900 hover:bg-purple-50 disabled:opacity-50 font-bold text-sm flex items-center gap-2 transition active:scale-95"
+                >
+                  <Download className="w-4 h-4" />
+                  {pendingBusy ? 'กำลังสร้าง PDF...' : 'แชร์เป็นไฟล์ PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyPendingLink}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-black text-sm flex items-center gap-2 transition active:scale-95"
+                >
+                  <Share2 className="w-4 h-4" />
+                  คัดลอกลิงก์ (ไม่ต้องล็อกอิน)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenPendingLink}
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 font-bold text-sm flex items-center gap-2 transition"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  ดูหน้าที่แชร์
+                </button>
+                <button
+                  type="button"
+                  onClick={exportPendingExcel}
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 font-bold text-sm flex items-center gap-2 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+                  Excel
+                </button>
+              </div>
             </div>
+            <p className="text-xs text-purple-300">
+              ลิงก์ที่คัดลอกเป็นรายงาน ณ เวลาที่กด ทุกคนเปิดดูได้โดยไม่ต้องล็อกอิน หากข้อมูลเปลี่ยนให้คัดลอกลิงก์ใหม่
+            </p>
           </div>
 
-          {/* Pending Groups Grid Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allTeachersComparison
-              .filter((t) => !t.isRecorded)
-              .map((t, idx) => (
-                <div
-                  key={t.id}
-                  className="bg-white rounded-3xl border border-amber-200 p-5 shadow-card hover:shadow-card-hover transition space-y-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                        ลำดับที่ {idx + 1}
-                      </span>
-                      <h4 className="text-sm font-black text-purple-950 mt-1">
-                        {t.teacher}
-                      </h4>
-                      <p className="text-xs text-purple-800/80 font-semibold">
-                        {t.group} ({t.cohortName})
-                      </p>
+          {pendingRows.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-emerald-200 p-10 text-center space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+              <h3 className="text-lg font-black text-emerald-900">ทุกกลุ่มบันทึกการเช็คชื่อครบแล้ว</h3>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {pendingRows.map((t, idx) => (
+                <div key={t.id} className="bg-white rounded-2xl border border-purple-100 shadow-card p-4 flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 text-sm font-black flex items-center justify-center shrink-0">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-purple-950 text-sm truncate">{t.teacher}</div>
+                    <div className="text-xs text-purple-600/80 truncate">
+                      {t.group} • {t.studentsCount} คน
                     </div>
-                    <span className="px-2 py-1 rounded-xl bg-rose-100 text-rose-800 text-[10px] font-black">
-                      ยังไม่บันทึก
-                    </span>
                   </div>
-
-                  <div className="pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-purple-900/70">
-                    <span>จำนวนนักศึกษา: <strong className="text-purple-950">{t.studentsCount}</strong> คน</span>
-                    <span>ช่วงชั้น: <strong className="text-purple-950">{t.yearLevel || '-'}</strong></span>
-                  </div>
-
-                  <div className="pt-1">
-                    <button
-                      onClick={() => {
-                        setTeacherSearch(t.teacher);
-                        setActiveTab('teachers');
-                      }}
-                      className="w-full py-2 rounded-xl bg-purple-50 hover:bg-purple-900 hover:text-white text-purple-900 font-bold text-xs transition text-center"
-                    >
-                      ตรวจสอบข้อมูลกลุ่มนี้ →
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMatrixTeacherName(t.teacher);
+                      setActiveTab('teachers');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-800 hover:text-white text-purple-800 text-xs font-bold transition shrink-0"
+                  >
+                    ดูกลุ่ม
+                  </button>
                 </div>
               ))}
-
-            {allTeachersComparison.filter((t) => !t.isRecorded).length === 0 && (
-              <div className="col-span-full bg-white rounded-3xl border border-emerald-200 p-8 text-center space-y-2">
-                <div className="text-4xl">🎉</div>
-                <h3 className="text-lg font-black text-emerald-900">
-                  ยอดเยี่ยมมาก! อาจารย์ทุกกลุ่มได้ทำการบันทึกข้อมูลครบถ้วนแล้ว
-                </h3>
-                <p className="text-xs text-emerald-700">
-                  ไม่มีกลุ่มค้างส่งข้อมูลการเช็คชื่อในระบบ
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ==================== TAB: จัดการระดับกลุ่ม (LEVELS 01, 02, 03) ==================== */}
       {activeTab === 'levels' && (
         <div className="space-y-6 animate-fadeIn">
+          {groupTabs()}
           {/* Action Notification Toast */}
           {levelActionMsg && (
             <div
@@ -3643,167 +3185,63 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           )}
 
-          {/* Level Header Banner */}
-          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 rounded-3xl p-6 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
-                <span className="p-2.5 rounded-2xl bg-white/20 text-white text-xl">🏷️</span>
-                <h2 className="text-xl sm:text-2xl font-black">
-                  ระบบจัดการและเลื่อน/ลดระดับกลุ่ม (Levels 01, 02, 03)
-                </h2>
-              </div>
-              <p className="text-xs sm:text-sm text-purple-200 font-medium">
-                บริหารจัดการระดับทักษะความสามารถของกลุ่มศึกษาฮะละเกาะฮ์และนักศึกษารายบุคคล
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 self-start sm:self-auto bg-white/10 px-3.5 py-2 rounded-2xl border border-white/20">
-              <label className="text-xs font-bold text-purple-100 flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={cascadeLevelToStudents}
-                  onChange={(e) => setCascadeLevelToStudents(e.target.checked)}
-                  className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
-                />
-                <span>ปรับระดับ นศ. ในกลุ่มตามอัตโนมัติ (Cascade)</span>
-              </label>
-            </div>
-          </div>
-
-          {/* 3-Level Distribution KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Level 01 */}
-            <div
-              onClick={() => setLevelFilter('01')}
-              className={`p-5 rounded-3xl border cursor-pointer transition shadow-card hover:shadow-card-hover space-y-2 ${
-                levelFilter === '01'
-                  ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-500/20'
-                  : 'bg-white border-blue-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-black">
-                  ระดับ 01 (ขั้นพื้นฐาน)
-                </span>
-                <span className="text-2xl">🌱</span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-blue-800 font-semibold pt-1 border-t border-blue-100">
-                <span>
-                  กลุ่มอาจารย์:{' '}
-                  <strong className="text-base text-blue-950">
-                    {teachers.filter((t) => (t.level || '01') === '01').length}
-                  </strong>{' '}
-                  กลุ่ม
-                </span>
-                <span>
-                  นักศึกษา:{' '}
-                  <strong className="text-base text-blue-950">
-                    {students.filter((s) => (s.level || '01') === '01').length}
-                  </strong>{' '}
-                  คน
-                </span>
-              </div>
-            </div>
-
-            {/* Level 02 */}
-            <div
-              onClick={() => setLevelFilter('02')}
-              className={`p-5 rounded-3xl border cursor-pointer transition shadow-card hover:shadow-card-hover space-y-2 ${
-                levelFilter === '02'
-                  ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-500/20'
-                  : 'bg-white border-purple-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-900 text-xs font-black">
-                  ระดับ 02 (ขั้นปานกลาง)
-                </span>
-                <span className="text-2xl">📖</span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-purple-800 font-semibold pt-1 border-t border-purple-100">
-                <span>
-                  กลุ่มอาจารย์:{' '}
-                  <strong className="text-base text-purple-950">
-                    {teachers.filter((t) => t.level === '02').length}
-                  </strong>{' '}
-                  กลุ่ม
-                </span>
-                <span>
-                  นักศึกษา:{' '}
-                  <strong className="text-base text-purple-950">
-                    {students.filter((s) => s.level === '02').length}
-                  </strong>{' '}
-                  คน
-                </span>
-              </div>
-            </div>
-
-            {/* Level 03 */}
-            <div
-              onClick={() => setLevelFilter('03')}
-              className={`p-5 rounded-3xl border cursor-pointer transition shadow-card hover:shadow-card-hover space-y-2 ${
-                levelFilter === '03'
-                  ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20'
-                  : 'bg-white border-emerald-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black">
-                  ระดับ 03 (ขั้นก้าวหน้า)
-                </span>
-                <span className="text-2xl">🌟</span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold pt-1 border-t border-emerald-100">
-                <span>
-                  กลุ่มอาจารย์:{' '}
-                  <strong className="text-base text-emerald-950">
-                    {teachers.filter((t) => t.level === '03').length}
-                  </strong>{' '}
-                  กลุ่ม
-                </span>
-                <span>
-                  นักศึกษา:{' '}
-                  <strong className="text-base text-emerald-950">
-                    {students.filter((s) => s.level === '03').length}
-                  </strong>{' '}
-                  คน
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Filter & Search Bar */}
-          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-purple-950">ตัวกรองระดับ:</span>
-              {(['all', '01', '02', '03'] as const).map((lvl) => (
+          {/* ระดับ 01 / 02 / 03 */}
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+            {(
+              [
+                { id: '01', grad: 'from-sky-500 to-indigo-600', ring: 'ring-sky-300' },
+                { id: '02', grad: 'from-violet-500 to-purple-700', ring: 'ring-purple-300' },
+                { id: '03', grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-300' },
+              ] as const
+            ).map((lv) => {
+              const gCount = teachers.filter((t) => (t.level || '01') === lv.id).length;
+              const sCount = students.filter((s) => (s.level || '01') === lv.id).length;
+              const active = levelFilter === lv.id;
+              return (
                 <button
-                  key={lvl}
-                  onClick={() => setLevelFilter(lvl)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 ${
-                    levelFilter === lvl
-                      ? 'bg-purple-900 text-white shadow-sm'
-                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100'
+                  key={lv.id}
+                  type="button"
+                  onClick={() => setLevelFilter(active ? 'all' : lv.id)}
+                  className={`relative overflow-hidden text-left rounded-3xl p-4 sm:p-5 text-white bg-gradient-to-br ${lv.grad} shadow-lg transition hover:-translate-y-0.5 ${
+                    active ? `ring-4 ${lv.ring}` : levelFilter !== 'all' ? 'opacity-60' : ''
                   }`}
                 >
-                  {lvl === 'all' && 'ทั้งหมด (ทุกระดับ)'}
-                  {lvl === '01' && 'เฉพาะ ระดับ 01 (พื้นฐาน)'}
-                  {lvl === '02' && 'เฉพาะ ระดับ 02 (ปานกลาง)'}
-                  {lvl === '03' && 'เฉพาะ ระดับ 03 (ก้าวหน้า)'}
+                  <div className="absolute -right-4 -bottom-6 text-[96px] sm:text-[120px] leading-none font-black text-white/15 select-none">
+                    {lv.id}
+                  </div>
+                  <div className="relative">
+                    <div className="text-xs sm:text-sm font-bold text-white/85">ระดับ</div>
+                    <div className="text-4xl sm:text-5xl font-black leading-none">{lv.id}</div>
+                    <div className="mt-3 text-[11px] sm:text-xs font-semibold text-white/90 space-y-0.5">
+                      <div>{gCount} กลุ่ม</div>
+                      <div>{sCount} คน</div>
+                    </div>
+                  </div>
                 </button>
-              ))}
-            </div>
+              );
+            })}
+          </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
+          <div className="bg-white rounded-2xl p-3 sm:p-4 border border-purple-100 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="ค้นหาชื่ออาจารย์ หรือกลุ่ม..."
+                placeholder="ค้นหาชื่ออาจารย์หรือกลุ่ม..."
                 value={levelSearchTerm}
                 onChange={(e) => setLevelSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-purple-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
+            <label className="text-xs font-bold text-purple-800 flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={cascadeLevelToStudents}
+                onChange={(e) => setCascadeLevelToStudents(e.target.checked)}
+                className="rounded text-purple-700 w-4 h-4"
+              />
+              ปรับระดับนักศึกษาในกลุ่มตามอัตโนมัติ
+            </label>
           </div>
 
           {/* Group Level Cards Grid */}
@@ -3987,6 +3425,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* ==================== TAB 3: PERIODIC SUMMARY (วัน/เดือน/ปี ที่บันทึกจริง) ==================== */}
       {activeTab === 'periodic' && (
+        <>
+        {reportTabs()}
 
         <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-5 animate-fadeIn">
           {/* Header & Mode Switcher */}
@@ -4134,405 +3574,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           )}
         </div>
+        </>
       )}
 
-      {/* ==================== TAB 4: DUAL-COLUMN STUDENT TRANSFER (โยกย้ายกลุ่ม 2 ฝั่ง ซ้าย-ขวา) ==================== */}
+      {/* ==================== โยกย้ายกลุ่ม ==================== */}
       {activeTab === 'transfer' && (
-        <div className="bg-white rounded-3xl border border-purple-100 p-4 sm:p-6 shadow-card space-y-5 animate-fadeIn">
-          <div className="border-b border-purple-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
-                <ArrowRightLeft className="w-5 h-5 text-purple-700" />
-                <span>ระบบโยกย้ายนักศึกษาระหว่างกลุ่ม (2 ฝั่ง ซ้าย-ขวา)</span>
-              </h2>
-              <p className="text-xs text-purple-800/70 mt-0.5">
-                เลือกกลุ่มฝั่งซ้ายและขวาเพื่อดูรายชื่อนักศึกษาทั้งสองกลุ่มพร้อมกัน สามารถย้ายสลับไปมาระหว่างสองกลุ่มได้ทันที
-              </p>
-            </div>
-
-            {/* Quick Balance Status */}
-            <div className="flex items-center gap-2 text-xs font-bold bg-purple-50 px-3.5 py-1.5 rounded-2xl border border-purple-200">
-              <span className="text-purple-700">ฝั่งซ้าย: {students.filter((s) => s.teacherName === dragSourceTeacher).length} คน</span>
-              <span className="text-purple-300">⇄</span>
-              <span className="text-purple-700">ฝั่งขวา: {students.filter((s) => s.teacherName === dragTargetTeacher).length} คน</span>
-            </div>
-          </div>
-
-          {/* Feedback Toast */}
-          {transferToast && (
-            <div
-              className={`p-3.5 rounded-2xl text-xs font-bold border flex items-center justify-between animate-fadeIn ${
-                transferToast.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>{transferToast.text}</span>
-              </div>
-              <button onClick={() => setTransferToast(null)}><X className="w-4 h-4" /></button>
-            </div>
-          )}
-
-          {/* DUAL COLUMN WORKSPACE */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* ================= LEFT COLUMN: GROUP A ================= */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOverTarget(true);
-              }}
-              onDragLeave={() => setIsDragOverTarget(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOverTarget(false);
-                const sid = e.dataTransfer.getData('text/plain') || draggedStudentId;
-                if (sid && dragSourceTeacher) {
-                  handleManualTransfer(sid, dragSourceTeacher);
-                }
-              }}
-              className="space-y-3.5 bg-gradient-to-b from-purple-50/60 to-purple-50/20 p-4 sm:p-5 rounded-3xl border border-purple-200/90 shadow-2xs flex flex-col"
-            >
-              {/* Group A Header & Selector */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-full bg-purple-200/80 text-purple-950 font-black text-xs flex items-center gap-1.5">
-                    <span>👈 กลุ่มฝั่งซ้าย (กลุ่ม A)</span>
-                  </span>
-                  <span className="text-xs font-bold text-purple-900 font-mono">
-                    {students.filter((s) => s.teacherName === dragSourceTeacher).length} คน
-                  </span>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-purple-900 block mb-1">เลือกอาจารย์กลุ่ม A:</label>
-                  <select
-                    value={dragSourceTeacher}
-                    onChange={(e) => {
-                      setDragSourceTeacher(e.target.value);
-                      setSelectedLeftStudents([]);
-                    }}
-                    className="w-full px-3.5 py-2.5 text-xs border border-purple-300 rounded-xl bg-white text-purple-950 font-bold focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-xs"
-                  >
-                    {teachers.map((t) => (
-                      <option key={t.groupId} value={t.name}>
-                        {t.name} ({t.groupName} - {t.gender})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Search in Left Group */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="ค้นหาชื่อ/รหัสในกลุ่มนี้..."
-                    value={leftSearchTerm}
-                    onChange={(e) => setLeftSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-purple-200 rounded-xl bg-white text-purple-950 placeholder-purple-300"
-                  />
-                </div>
-
-                {/* Bulk Actions Bar */}
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-purple-900 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={
-                        students.filter((s) => s.teacherName === dragSourceTeacher).length > 0 &&
-                        selectedLeftStudents.length === students.filter((s) => s.teacherName === dragSourceTeacher).length
-                      }
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedLeftStudents(
-                            students.filter((s) => s.teacherName === dragSourceTeacher).map((s) => s.studentId)
-                          );
-                        } else {
-                          setSelectedLeftStudents([]);
-                        }
-                      }}
-                      className="rounded text-purple-700 focus:ring-purple-500"
-                    />
-                    <span>เลือกทั้งหมด ({selectedLeftStudents.length})</span>
-                  </label>
-
-                  <button
-                    type="button"
-                    disabled={selectedLeftStudents.length === 0 || !dragTargetTeacher}
-                    onClick={() => handleTransferBatch(selectedLeftStudents, dragTargetTeacher)}
-                    className="px-3 py-1 bg-gradient-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-extrabold rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1"
-                  >
-                    <span>ย้ายที่เลือกไปกลุ่มขวา ➔</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Student Cards in Group A */}
-              <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1 flex-1">
-                {students
-                  .filter((s) => s.teacherName === dragSourceTeacher)
-                  .filter(
-                    (s) =>
-                      !leftSearchTerm ||
-                      s.fullName.toLowerCase().includes(leftSearchTerm.toLowerCase()) ||
-                      s.studentId.includes(leftSearchTerm)
-                  )
-                  .map((st) => {
-                    const isSelected = selectedLeftStudents.includes(st.studentId);
-                    return (
-                      <div
-                        key={st.studentId}
-                        draggable={true}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', st.studentId);
-                          setDraggedStudentId(st.studentId);
-                          // Floating ghost badge following cursor
-                          const ghost = document.createElement('div');
-                          ghost.innerText = `👤 ${st.fullName} (${st.studentId})`;
-                          ghost.style.position = 'absolute';
-                          ghost.style.top = '-9999px';
-                          ghost.style.background = '#4c1d95';
-                          ghost.style.color = '#ffffff';
-                          ghost.style.padding = '6px 12px';
-                          ghost.style.borderRadius = '9999px';
-                          ghost.style.fontSize = '12px';
-                          ghost.style.fontWeight = 'bold';
-                          ghost.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-                          ghost.style.zIndex = '99999';
-                          document.body.appendChild(ghost);
-                          e.dataTransfer.setDragImage(ghost, 20, 20);
-                          setTimeout(() => {
-                            if (document.body.contains(ghost)) document.body.removeChild(ghost);
-                          }, 100);
-                        }}
-                        className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing ${
-                          isSelected
-                            ? 'bg-purple-100/80 border-purple-400 shadow-sm'
-                            : 'bg-white hover:bg-purple-50/50 border-purple-200/90 shadow-2xs'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2.5 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedLeftStudents((prev) => [...prev, st.studentId]);
-                              } else {
-                                setSelectedLeftStudents((prev) => prev.filter((id) => id !== st.studentId));
-                              }
-                            }}
-                            className="rounded text-purple-700 focus:ring-purple-500 shrink-0"
-                          />
-                          <GripVertical className="w-3.5 h-3.5 text-purple-300 hover:text-purple-600 shrink-0" />
-                          <div className="min-w-0">
-                            <div className="text-xs font-black text-purple-950 truncate">{st.fullName}</div>
-                            <div className="text-[10px] text-purple-700 font-mono truncate">
-                              รหัส: {st.studentId} • {getStudentMajor(st)} • {st.gender}
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleManualTransfer(st.studentId, dragTargetTeacher)}
-                          className="shrink-0 px-2.5 py-1 text-[10px] font-extrabold bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg transition-all active:scale-95 flex items-center gap-1"
-                          title={`ย้ายไปยังกลุ่ม ${dragTargetTeacher}`}
-                        >
-                          <span>ย้ายไปขวา</span>
-                          <span>➔</span>
-                        </button>
-                      </div>
-                    );
-                  })}
-
-                {students.filter((s) => s.teacherName === dragSourceTeacher).length === 0 && (
-                  <div className="py-16 text-center text-xs text-gray-400 border border-dashed border-purple-200 rounded-2xl bg-white/50">
-                    ไม่มีนักศึกษาในกลุ่มนี้
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ================= RIGHT COLUMN: GROUP B ================= */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOverTarget(true);
-              }}
-              onDragLeave={() => setIsDragOverTarget(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOverTarget(false);
-                const sid = e.dataTransfer.getData('text/plain') || draggedStudentId;
-                if (sid && dragTargetTeacher) {
-                  handleManualTransfer(sid, dragTargetTeacher);
-                }
-              }}
-              className="space-y-3.5 bg-gradient-to-b from-indigo-50/60 to-indigo-50/20 p-4 sm:p-5 rounded-3xl border border-indigo-200/90 shadow-2xs flex flex-col"
-            >
-              {/* Group B Header & Selector */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-full bg-indigo-200/80 text-indigo-950 font-black text-xs flex items-center gap-1.5">
-                    <span>👉 กลุ่มฝั่งขวา (กลุ่ม B)</span>
-                  </span>
-                  <span className="text-xs font-bold text-indigo-900 font-mono">
-                    {students.filter((s) => s.teacherName === dragTargetTeacher).length} คน
-                  </span>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-indigo-900 block mb-1">เลือกอาจารย์กลุ่ม B:</label>
-                  <select
-                    value={dragTargetTeacher}
-                    onChange={(e) => {
-                      setDragTargetTeacher(e.target.value);
-                      setSelectedRightStudents([]);
-                    }}
-                    className="w-full px-3.5 py-2.5 text-xs border border-indigo-300 rounded-xl bg-white text-indigo-950 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-600 shadow-xs"
-                  >
-                    {teachers.map((t) => (
-                      <option key={t.groupId} value={t.name}>
-                        {t.name} ({t.groupName} - {t.gender})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Search in Right Group */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-indigo-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="ค้นหาชื่อ/รหัสในกลุ่มนี้..."
-                    value={rightSearchTerm}
-                    onChange={(e) => setRightSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-indigo-200 rounded-xl bg-white text-indigo-950 placeholder-indigo-300"
-                  />
-                </div>
-
-                {/* Bulk Actions Bar */}
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    disabled={selectedRightStudents.length === 0 || !dragSourceTeacher}
-                    onClick={() => handleTransferBatch(selectedRightStudents, dragSourceTeacher)}
-                    className="px-3 py-1 bg-gradient-to-r from-indigo-700 to-purple-800 hover:from-indigo-800 hover:to-purple-900 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-extrabold rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1"
-                  >
-                    <span>⬅️ ย้ายที่เลือกมากลุ่มซ้าย</span>
-                  </button>
-
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={
-                        students.filter((s) => s.teacherName === dragTargetTeacher).length > 0 &&
-                        selectedRightStudents.length === students.filter((s) => s.teacherName === dragTargetTeacher).length
-                      }
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedRightStudents(
-                            students.filter((s) => s.teacherName === dragTargetTeacher).map((s) => s.studentId)
-                          );
-                        } else {
-                          setSelectedRightStudents([]);
-                        }
-                      }}
-                      className="rounded text-indigo-700 focus:ring-indigo-500"
-                    />
-                    <span>เลือกทั้งหมด ({selectedRightStudents.length})</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Student Cards in Group B */}
-              <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1 flex-1">
-                {students
-                  .filter((s) => s.teacherName === dragTargetTeacher)
-                  .filter(
-                    (s) =>
-                      !rightSearchTerm ||
-                      s.fullName.toLowerCase().includes(rightSearchTerm.toLowerCase()) ||
-                      s.studentId.includes(rightSearchTerm)
-                  )
-                  .map((st) => {
-                    const isSelected = selectedRightStudents.includes(st.studentId);
-                    return (
-                      <div
-                        key={st.studentId}
-                        draggable={true}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', st.studentId);
-                          setDraggedStudentId(st.studentId);
-                          // Floating ghost badge following cursor
-                          const ghost = document.createElement('div');
-                          ghost.innerText = `👤 ${st.fullName} (${st.studentId})`;
-                          ghost.style.position = 'absolute';
-                          ghost.style.top = '-9999px';
-                          ghost.style.background = '#3730a3';
-                          ghost.style.color = '#ffffff';
-                          ghost.style.padding = '6px 12px';
-                          ghost.style.borderRadius = '9999px';
-                          ghost.style.fontSize = '12px';
-                          ghost.style.fontWeight = 'bold';
-                          ghost.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-                          ghost.style.zIndex = '99999';
-                          document.body.appendChild(ghost);
-                          e.dataTransfer.setDragImage(ghost, 20, 20);
-                          setTimeout(() => {
-                            if (document.body.contains(ghost)) document.body.removeChild(ghost);
-                          }, 100);
-                        }}
-                        className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing ${
-                          isSelected
-                            ? 'bg-indigo-100/80 border-indigo-400 shadow-sm'
-                            : 'bg-white hover:bg-indigo-50/50 border-indigo-200/90 shadow-2xs'
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleManualTransfer(st.studentId, dragSourceTeacher)}
-                          className="shrink-0 px-2.5 py-1 text-[10px] font-extrabold bg-indigo-100 hover:bg-indigo-200 text-indigo-900 rounded-lg transition-all active:scale-95 flex items-center gap-1"
-                          title={`ย้ายกลับไปยังกลุ่ม ${dragSourceTeacher}`}
-                        >
-                          <span>⬅️</span>
-                          <span>ย้ายมาซ้าย</span>
-                        </button>
-
-                        <div className="flex items-center space-x-2.5 min-w-0 justify-end text-right">
-                          <div className="min-w-0">
-                            <div className="text-xs font-black text-indigo-950 truncate">{st.fullName}</div>
-                            <div className="text-[10px] text-indigo-700 font-mono truncate">
-                              รหัส: {st.studentId} • {getStudentMajor(st)} • {st.gender}
-                            </div>
-                          </div>
-                          <GripVertical className="w-3.5 h-3.5 text-indigo-300 hover:text-indigo-600 shrink-0" />
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedRightStudents((prev) => [...prev, st.studentId]);
-                              } else {
-                                setSelectedRightStudents((prev) => prev.filter((id) => id !== st.studentId));
-                              }
-                            }}
-                            className="rounded text-indigo-700 focus:ring-indigo-500 shrink-0"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                {students.filter((s) => s.teacherName === dragTargetTeacher).length === 0 && (
-                  <div className="py-16 text-center text-xs text-gray-400 border border-dashed border-indigo-200 rounded-2xl bg-white/50">
-                    ไม่มีนักศึกษาในกลุ่มนี้
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+        <div className="animate-fadeIn">
+          <TransferPanel teachers={teachers} students={students} onChanged={reloadDataStore} />
         </div>
       )}
 
@@ -4642,7 +3690,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 {editorSubTab === 'students' && (
                   <button
                     type="button"
-                    onClick={() => downloadStudentImportTemplate()}
+                    onClick={() => downloadStudentImportTemplate({ majors: majorsList, teachers: teachers.map((t) => t.name) })}
                     className="px-3 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-300 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
                     title="ดาวน์โหลดไฟล์เทมเพลต Excel สำหรับกรอกข้อมูล นศ."
                   >
@@ -4830,123 +3878,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
           {/* Majors List & Management View */}
           {editorSubTab === 'majors' && (
-            <div className="space-y-4">
-              {/* Form: Add New Major */}
-              <div className="bg-purple-50/70 border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-purple-200/70 text-purple-900 flex items-center justify-center shrink-0">
-                      <GraduationCap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-sm text-purple-950">เพิ่มสาขาวิชาใหม่สำหรับนักศึกษา</h3>
-                      <p className="text-[11px] text-purple-800/70">
-                        เพิ่มสาขาวิชาใหม่เพื่อรองรับนักศึกษาและหลักสูตรที่เปิดสอนเพิ่มเติมในอนาคต
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddMajorModalOpen(true)}
-                    className="px-3.5 py-2 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    <span>เปิดหน้าต่างเพิ่มสาขาวิชา</span>
-                  </button>
-                </div>
-
-                <form onSubmit={handleAddNewMajor} className="flex flex-col sm:flex-row gap-2 pt-1">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      placeholder="ระบุชื่อสาขาวิชาใหม่ เช่น วิศวกรรมซอฟต์แวร์, นวัตกรรมดิจิทัล..."
-                      value={newMajorInput}
-                      onChange={(e) => setNewMajorInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-xs border border-purple-200 rounded-xl bg-white text-purple-950 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    <span>เพิ่มสาขาวิชาใหม่</span>
-                  </button>
-                </form>
-
-                <div className="text-[11px] text-purple-900/80 bg-white/80 p-2.5 rounded-xl border border-purple-100 flex items-start gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-700 shrink-0 mt-0.5" />
-                  <span>
-                    ระบบตรวจจับสาขาวิชาจากรหัสนักศึกษาเดิม 9 หลักและชั้นปีให้อัตโนมัติ (เช่น 441 = อิสลามศึกษา / ปี 4: การสอนอิสลามศึกษา, 442 = ภาษาอาหรับ / ปี 4: การสอนภาษาอาหรับ, 443 = วิทยาศาสตร์ทั่วไป / ปี 4: การสอนวิทยาศาสตร์ทั่วไป, 444 = เคมี / ปี 4: การสอนเคมี, 445 = ภาษาอังกฤษ / ปี 4: การสอนภาษาอังกฤษ, 446 = ภาษามลายูและเทคโนโลยีการศึกษา / ปี 4: การสอนภาษามลายูและเทคโนโลยีการศึกษา, 447 = การศึกษาปฐมวัย) และสาขาวิชาใหม่ที่เพิ่มนี้จะสามารถเลือกให้นักศึกษาได้ทันที
-                  </span>
-                </div>
-              </div>
-
-              {/* Majors Table */}
-              <div className="overflow-x-auto border border-purple-100 rounded-2xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-purple-100/60 text-purple-950 font-bold border-b border-purple-200">
-                      <th className="py-2.5 px-3">ลำดับ</th>
-                      <th className="py-2.5 px-3">ชื่อสาขาวิชา</th>
-                      <th className="py-2.5 px-3 text-center">ประเภท</th>
-                      <th className="py-2.5 px-3 text-center">จำนวนนักศึกษา</th>
-                      <th className="py-2.5 px-3 text-center">สัดส่วน</th>
-                      <th className="py-2.5 px-3 text-center">จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-purple-50">
-                    {majorsList.map((major, idx) => {
-                      const count = students.filter((s) => getStudentMajor(s) === major).length;
-                      const percent = students.length > 0 ? ((count / students.length) * 100).toFixed(1) : '0';
-                      const isDefault = DEFAULT_MAJORS.includes(major);
-
-                      return (
-                        <tr key={major} className="hover:bg-purple-50/40">
-                          <td className="py-2.5 px-3 font-mono font-bold text-purple-900">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-extrabold text-purple-950 flex items-center gap-1.5">
-                            <GraduationCap className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                            <span>{major}</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                isDefault
-                                  ? 'bg-purple-100 text-purple-900 border border-purple-200'
-                                  : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                              }`}
-                            >
-                              {isDefault ? 'สาขาหลักของระบบ' : 'เพิ่มใหม่โดยแอดมิน'}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-purple-950 tabular-nums">
-                            {count} คน
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono font-semibold text-purple-700">
-                            {percent}%
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            {isDefault ? (
-                              <span className="text-[10px] text-gray-400 font-medium">สาขาตั้งต้น</span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteMajor(major)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-all"
-                                title="ลบสาขาวิชานี้"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>ลบ</span>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <MajorsPanel
+              majors={majorsList}
+              students={students}
+              onAdd={(name) => {
+                const res = addNewMajor(name);
+                setMajorMsg({ text: res.message, success: res.success });
+                reloadDataStore();
+                setTimeout(() => setMajorMsg(null), 4000);
+              }}
+              onRename={(from, to) => {
+                const res = renameMajor(from, to);
+                setMajorMsg({ text: res.message, success: res.success });
+                reloadDataStore();
+                setTimeout(() => setMajorMsg(null), 4000);
+              }}
+              onDelete={handleDeleteMajor}
+            />
           )}
 
           {/* EDIT STUDENT MODAL */}
@@ -5865,183 +4813,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* ==================== TAB: ANNOUNCEMENTS (ระบบส่งประกาศถึงนักศึกษา) ==================== */}
+      {/* ==================== ประกาศถึงนักศึกษา ==================== */}
       {activeTab === 'announcements' && (
-        <div className="bg-white rounded-3xl border border-purple-100 p-5 sm:p-7 shadow-card space-y-6 animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-3">
-            <div>
-              <h2 className="text-base sm:text-xl font-black text-purple-950 flex items-center gap-2">
-                <Megaphone className="w-5 h-5 text-purple-700" />
-                <span>ระบบส่งประกาศและข้อความแจ้งเตือน (ส่งถึงนักศึกษา)</span>
-              </h2>
-              <p className="text-xs text-purple-800/70 mt-1">
-                แอดมินสามารถส่งประกาศไปยังนักศึกษาทุกคน หรือส่งเจาะจงเฉพาะนักศึกษาบางคน เมื่อนักศึกษาค้นหารหัสนักศึกษาจะเห็นประกาศเด่นๆ ที่หน้าแดชบอร์ดของตนเอง
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsAddAnnouncementModalOpen(true)}
-              className="px-4 py-2.5 bg-gradient-to-r from-purple-800 to-purple-950 hover:from-purple-900 hover:to-black text-white rounded-2xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>สร้างประกาศใหม่ (หน้าต่างป๊อปอัพ)</span>
-            </button>
-          </div>
-
-          {/* Form Create Announcement */}
-          <form onSubmit={handleCreateAnnouncement} className="bg-purple-50/50 p-4 sm:p-6 rounded-3xl border border-purple-200/80 space-y-4">
-            <div className="font-extrabold text-xs sm:text-sm text-purple-950 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-purple-700" />
-              <span>สร้างประกาศใหม่</span>
-            </div>
-
-            {annToast && (
-              <div className={`p-3 rounded-2xl text-xs font-bold ${annToast.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                {annToast.text}
-              </div>
-            )}
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-purple-900 block mb-1">หัวข้อประกาศ *</label>
-                <input
-                  type="text"
-                  placeholder="เช่น กำหนดการสอบประเมินอัลกุรอาน, แจ้งเตือนเวลาเข้ากิจกรรม"
-                  value={annTitle}
-                  onChange={(e) => setAnnTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white text-purple-950 font-bold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-purple-900 block mb-1">ข้อความรายละเอียดประกาศ *</label>
-                <textarea
-                  rows={3}
-                  placeholder="พิมพ์ข้อความที่ต้องการแจ้งให้นักศึกษาทราบ..."
-                  value={annContent}
-                  onChange={(e) => setAnnContent(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white text-purple-950 font-medium"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-purple-900 block mb-1">ระดับความสำคัญ</label>
-                  <select
-                    value={annPriority}
-                    onChange={(e) => setAnnPriority(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold"
-                  >
-                    <option value="normal">📌 ประกาศทั่วไป (Normal)</option>
-                    <option value="warning">⚠️ แจ้งเตือนสำคัญ (Warning)</option>
-                    <option value="urgent">🚨 ด่วนที่สุด (Urgent)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-purple-900 block mb-1">กลุ่มเป้าหมายผู้รับ</label>
-                  <select
-                    value={annTargetType}
-                    onChange={(e) => setAnnTargetType(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold"
-                  >
-                    <option value="all">📢 ส่งถึงนักศึกษาทุกคนในระบบ</option>
-                    <option value="specific">🎯 ระบุเฉพาะรหัสนักศึกษาบางคน</option>
-                  </select>
-                </div>
-              </div>
-
-              {annTargetType === 'specific' && (
-                <div className="animate-fadeIn">
-                  <label className="font-bold text-purple-900 block mb-1">
-                    ระบุรหัสนักศึกษา (คั่นด้วยเครื่องหมายจุลภาค , หรือเว้นวรรค)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="เช่น 681441001, 681441002, 671441010"
-                    value={annTargetIdsStr}
-                    onChange={(e) => setAnnTargetIdsStr(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white text-purple-950 font-mono font-bold"
-                  />
-                  <p className="text-[10px] text-purple-700/70 mt-1">
-                    * นักศึกษาที่มีรหัสตรงกับรายการนี้เท่านั้นที่จะมองเห็นประกาศนี้เมื่อค้นหารหัสตนเอง
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="px-6 py-2.5 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-black text-xs sm:text-sm rounded-2xl shadow-sm transition-all active:scale-95 flex items-center gap-2"
-            >
-              <Megaphone className="w-4 h-4" />
-              <span>โพสต์ประกาศทันที</span>
-            </button>
-          </form>
-
-          {/* Announcements List */}
-          <div className="space-y-3">
-            <h3 className="font-extrabold text-xs sm:text-sm text-purple-950 flex items-center justify-between">
-              <span>รายการประกาศที่กำลังแสดงผล ({announcementsList.length} รายการ)</span>
-            </h3>
-
-            <div className="space-y-2.5">
-              {announcementsList.map((ann) => (
-                <div
-                  key={ann.id}
-                  className="p-4 rounded-2xl bg-white border border-purple-100/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-purple-300 transition-all"
-                >
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                        ann.priority === 'urgent'
-                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                          : ann.priority === 'warning'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-purple-100 text-purple-800 border border-purple-200'
-                      }`}>
-                        {ann.priority === 'urgent' ? '🚨 ด่วนที่สุด' : ann.priority === 'warning' ? '⚠️ เตือนสำคัญ' : '📌 ทั่วไป'}
-                      </span>
-
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-800">
-                        {ann.targetType === 'all' ? 'ส่งถึง นศ.ทุกคน' : `ส่งเฉพาะ ${ann.targetStudentIds.length} รหัส`}
-                      </span>
-
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        {new Date(ann.createdAt).toLocaleString('th-TH')}
-                      </span>
-                    </div>
-
-                    <h4 className="font-black text-sm text-purple-950">{ann.title}</h4>
-                    <p className="text-xs text-purple-900/80 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
-
-                    {ann.targetType === 'specific' && (
-                      <div className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg inline-block">
-                        รหัสที่ได้รับ: {ann.targetStudentIds.join(', ')}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteAnnouncement(ann.id)}
-                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all self-end sm:self-center"
-                    title="ลบประกาศนี้"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-
-              {announcementsList.length === 0 && (
-                <div className="py-10 text-center text-xs text-gray-400 bg-purple-50/20 rounded-2xl border border-purple-100">
-                  ยังไม่มีประกาศที่กำลังเผยแพร่ในระบบ
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="animate-fadeIn">
+          <AnnouncementsPanel
+            announcements={announcementsList}
+            students={students}
+            authorName={adminUser?.name || 'แอดมิน'}
+            onCreate={handleCreateAnnouncementData}
+            onDelete={handleDeleteAnnouncement}
+          />
         </div>
       )}
 
@@ -6625,150 +5406,42 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         onClose={() => setIsManualModalOpen(false)}
       />
 
-      {/* EXCEL IMPORT MODAL */}
-      <ExcelImportModal
+      <TermManager
+        open={isTermManagerOpen}
+        onClose={() => setIsTermManagerOpen(false)}
+        settings={semesterSettings}
+        history={termHistory}
+        students={students}
+        records={records}
+        onSaved={(s) => {
+          setSemesterSettings(s);
+          setTermHistory(getTermHistory());
+          setTermFilter('current');
+          pushSemester().then((r) => {
+            setSyncToast(r.message);
+            setTimeout(() => setSyncToast(null), 4000);
+          });
+        }}
+        onStudentsChanged={reloadDataStore}
+      />
+
+      {/* EXCEL IMPORT MODAL */}      <ExcelImportModal
         isOpen={isExcelImportModalOpen}
+        majors={majorsList}
         teachers={teachers}
         existingStudentIds={useMemo(() => new Set(students.map((s) => s.studentId)), [students])}
         onClose={() => setIsExcelImportModalOpen(false)}
-        onImportSuccess={(newStudents) => {
-          addStudentsBatch(newStudents);
+        onImport={(newStudents, updates) => {
+          const res = addStudentsBatch(newStudents);
+          updates.forEach((u) => updateStudentInfo(u.studentId, u));
           reloadDataStore();
-          setEditorMsg({
-            text: `นำเข้านักศึกษาสำเร็จ ${newStudents.length} คน เรียบร้อยแล้ว`,
-            success: true,
-          });
-          setSyncToast(`นำเข้านักศึกษาสำเร็จ ${newStudents.length} คน`);
+          const msg = `นำเข้านักศึกษาใหม่ ${res.addedCount} คน` + (updates.length ? ` • อัปเดต ${updates.length} คน` : '');
+          setEditorMsg({ text: msg, success: true });
+          setSyncToast(msg);
           setTimeout(() => setSyncToast(null), 4000);
         }}
       />
 
-      {/* ADD ANNOUNCEMENT MODAL */}
-      {isAddAnnouncementModalOpen && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setIsAddAnnouncementModalOpen(false);
-            }}
-          >
-            <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative">
-              <div className="flex items-center justify-between border-b border-purple-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center">
-                    <Megaphone className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-base text-purple-950">สร้างประกาศใหม่</h3>
-                    <p className="text-[11px] text-purple-700">ส่งข้อความแจ้งเตือนถึงนักศึกษา</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAddAnnouncementModalOpen(false)}
-                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {annToast && (
-                <div className={`p-3 rounded-2xl text-xs font-bold ${annToast.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                  {annToast.text}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateAnnouncement} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="font-bold text-purple-900 block mb-1">หัวข้อประกาศ *</label>
-                  <input
-                    type="text"
-                    placeholder="เช่น กำหนดการสอบประเมินอัลกุรอาน, แจ้งเตือนเวลาเข้ากิจกรรม"
-                    value={annTitle}
-                    onChange={(e) => setAnnTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 font-bold focus:outline-none focus:ring-2 focus:ring-purple-600"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-purple-900 block mb-1">ข้อความรายละเอียดประกาศ *</label>
-                  <textarea
-                    rows={4}
-                    placeholder="พิมพ์ข้อความที่ต้องการแจ้งให้นักศึกษาทราบ..."
-                    value={annContent}
-                    onChange={(e) => setAnnContent(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-purple-900 block mb-1">ระดับความสำคัญ</label>
-                    <select
-                      value={annPriority}
-                      onChange={(e) => setAnnPriority(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold text-purple-950"
-                    >
-                      <option value="normal">📌 ประกาศทั่วไป (Normal)</option>
-                      <option value="warning">⚠️ แจ้งเตือนสำคัญ (Warning)</option>
-                      <option value="urgent">🚨 ด่วนที่สุด (Urgent)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-purple-900 block mb-1">กลุ่มเป้าหมายผู้รับ</label>
-                    <select
-                      value={annTargetType}
-                      onChange={(e) => setAnnTargetType(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-white font-bold text-purple-950"
-                    >
-                      <option value="all">📢 นักศึกษาทุกคนในระบบ</option>
-                      <option value="specific">🎯 ระบุเฉพาะรหัสนักศึกษา</option>
-                    </select>
-                  </div>
-                </div>
-
-                {annTargetType === 'specific' && (
-                  <div className="animate-fadeIn">
-                    <label className="font-bold text-purple-900 block mb-1">
-                      ระบุรหัสนักศึกษา (คั่นด้วยเครื่องหมายจุลภาค , หรือเว้นวรรค)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="เช่น 681441001, 681441002, 671441010"
-                      value={annTargetIdsStr}
-                      onChange={(e) => setAnnTargetIdsStr(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-purple-200 rounded-xl bg-purple-50/30 text-purple-950 font-mono font-bold"
-                    />
-                    <p className="text-[10px] text-purple-700/70 mt-1">
-                      * นักศึกษาที่มีรหัสตรงกับรายการนี้เท่านั้นที่จะมองเห็นประกาศนี้เมื่อค้นหารหัสตนเอง
-                    </p>
-                  </div>
-                )}
-
-                <div className="pt-2 flex items-center justify-end gap-2 border-t border-purple-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddAnnouncementModalOpen(false)}
-                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
-                  >
-                    <Megaphone className="w-4 h-4" />
-                    <span>โพสต์ประกาศทันที</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
 
       {/* ADD SUB-ADMIN MODAL */}
       {isAddSubAdminModalOpen && (

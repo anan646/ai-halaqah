@@ -1,10 +1,12 @@
 'use client';
 
+export type SignatureSize = 'medium' | 'large' | 'xlarge';
+
 export interface CertificateConfig {
-  templateId: string; // 'template-1' to 'template-10' or 'custom'
+  templateId: string; // 'template-1' to 'template-12'
   customBackgroundImage?: string; // Base64 or Image URL
   useCustomBackground: boolean;
-  
+
   // Institution details
   institutionName: string;
   institutionSubName: string;
@@ -12,23 +14,24 @@ export interface CertificateConfig {
   awardTitle: string;
   bodyText: string;
   blessingText: string;
-  
+
   // Signatories
   signatory1Title: string;
   signatory1Name: string;
   signatory1Role: string;
   signatory1SignatureUrl?: string; // Base64 or Image URL for signature 1
-  
+
   signatory2Title: string;
   signatory2Name: string;
   signatory2Role: string;
   signatory2SignatureUrl?: string; // Base64 or Image URL for signature 2
-  
+  signatureSize?: SignatureSize; // ขนาดรูปลายเซ็นบนเกียรติบัตร
+
   // Logo settings
   showLogo: boolean;
   logoPosition: 'top-center' | 'top-left' | 'top-right';
   customLogoUrl?: string;
-  
+
   // Elements layout toggles
   showStudentId: boolean;
   showMajor: boolean;
@@ -39,143 +42,189 @@ export interface CertificateConfig {
   showLevelLabel: boolean;
   showDate: boolean;
   showDocRef: boolean;
-  
+
   // Styling
   fontScale: 'normal' | 'large' | 'compact';
   primaryColor?: string;
 }
 
-export const CERTIFICATE_TEMPLATES: {
+export type CertificateLayout =
+  | 'royal'
+  | 'emerald'
+  | 'minimal'
+  | 'navy'
+  | 'arch'
+  | 'floral'
+  | 'purple-band'
+  | 'parchment'
+  | 'wave'
+  | 'noir'
+  | 'diagonal'
+  | 'ribbon';
+
+export interface CertificateTemplate {
   id: string;
   name: string;
   description: string;
+  layout: CertificateLayout;
+  /** สีหลักของกรอบ/แถบ */
   borderColor: string;
+  /** สีรอง/สีเน้น (ทอง ฯลฯ) */
   innerBorderColor: string;
+  /** สีพื้นกระดาษ (CSS background) */
   bgGradient: string;
   accentBadgeBg: string;
   accentTextColor: string;
   titleColor: string;
-  frameStyle: 'double-gold' | 'emerald' | 'minimal' | 'navy' | 'arch' | 'floral' | 'purple' | 'parchment' | 'teal' | 'noir';
-}[] = [
+  /** พื้นหลังเข้ม (ตัวอักษรต้องเป็นสีสว่าง) */
+  dark?: boolean;
+}
+
+export const CERTIFICATE_TEMPLATES: CertificateTemplate[] = [
   {
     id: 'template-1',
-    name: '1. Islamic Royal Gold',
-    description: 'ขอบทองหลวงคู่ วิจิตรศิลป์อิสลาม สง่างาม ทรงคุณค่าสูง',
-    borderColor: '#d97706', // amber-600
-    innerBorderColor: '#fcd34d', // amber-300
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #fffbeb 100%)',
+    name: 'Royal Gold',
+    description: 'ขอบทองสามชั้น มุมลายพรรณ ทางการสง่างาม',
+    layout: 'royal',
+    borderColor: '#b45309',
+    innerBorderColor: '#e8b84a',
+    bgGradient: 'radial-gradient(circle at center, #ffffff 55%, #fff7e0 100%)',
     accentBadgeBg: '#fef3c7',
     accentTextColor: '#92400e',
     titleColor: '#78350f',
-    frameStyle: 'double-gold',
   },
   {
     id: 'template-2',
-    name: '2. Emerald Classic',
-    description: 'เขียวมรกตคลาสสิก อัตลักษณ์อิสลาม นุ่มนวล ทรงเกียรติ',
-    borderColor: '#059669', // emerald-600
-    innerBorderColor: '#6ee7b7', // emerald-300
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #ecfdf5 100%)',
+    name: 'Emerald Geometry',
+    description: 'แถบลายดาวเรขาคณิตอิสลามรอบกรอบ สีเขียวมรกต',
+    layout: 'emerald',
+    borderColor: '#047857',
+    innerBorderColor: '#d4a73a',
+    bgGradient: 'linear-gradient(180deg, #ffffff 0%, #f0fdf8 100%)',
     accentBadgeBg: '#d1fae5',
     accentTextColor: '#065f46',
     titleColor: '#064e3b',
-    frameStyle: 'emerald',
   },
   {
     id: 'template-3',
-    name: '3. Modern Minimal Ivory',
-    description: 'ไอวอรี่มินิมอลโมเดิร์น คมชัด เส้นบาง สะอาดตา ทางการสากล',
-    borderColor: '#475569', // slate-600
-    innerBorderColor: '#cbd5e1', // slate-300
-    bgGradient: 'radial-gradient(circle at center, #ffffff 70%, #f8fafc 100%)',
+    name: 'Modern Minimal',
+    description: 'จัดชิดซ้าย ตัวอักษรใหญ่ เส้นบาง สะอาด ร่วมสมัย',
+    layout: 'minimal',
+    borderColor: '#1e293b',
+    innerBorderColor: '#7c3aed',
+    bgGradient: '#ffffff',
     accentBadgeBg: '#f1f5f9',
     accentTextColor: '#334155',
     titleColor: '#0f172a',
-    frameStyle: 'minimal',
   },
   {
     id: 'template-4',
-    name: '4. Royal Navy & Gold',
-    description: 'สีกรมท่าน้ำเงินลึกตัดทองคำ มหาวิทยาลัยสากล ทรงคุณวุฒิ',
-    borderColor: '#1e3a8a', // blue-900
-    innerBorderColor: '#f59e0b', // amber-500
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #eff6ff 100%)',
+    name: 'Navy Header Band',
+    description: 'แถบหัวสีกรมท่าตัดทอง เหมือนเกียรติบัตรมหาวิทยาลัยสากล',
+    layout: 'navy',
+    borderColor: '#14306b',
+    innerBorderColor: '#e0a526',
+    bgGradient: 'linear-gradient(180deg, #ffffff 0%, #f1f5fd 100%)',
     accentBadgeBg: '#dbeafe',
     accentTextColor: '#1e40af',
-    titleColor: '#172554',
-    frameStyle: 'navy',
+    titleColor: '#0f2557',
   },
   {
     id: 'template-5',
-    name: '5. Traditional Arabic Arch',
-    description: 'ซุ้มโค้งสถาปัตยกรรมอิสลามอันดาลูเซีย โดดเด่นเป็นเอกลักษณ์',
-    borderColor: '#b45309', // amber-700
-    innerBorderColor: '#fde68a', // amber-200
-    bgGradient: 'radial-gradient(circle at center, #ffffff 60%, #fff7ed 100%)',
+    name: 'Andalusian Arch',
+    description: 'ซุ้มโค้งสถาปัตยกรรมอิสลาม พื้นหลังลายจุดอบอุ่น',
+    layout: 'arch',
+    borderColor: '#9a3412',
+    innerBorderColor: '#e9b872',
+    bgGradient: 'linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)',
     accentBadgeBg: '#ffedd5',
     accentTextColor: '#9a3412',
     titleColor: '#7c2d12',
-    frameStyle: 'arch',
   },
   {
     id: 'template-6',
-    name: '6. Golden Floral Ornament',
-    description: 'กรอบลายพรรณพฤกษาทองคำ วิจิตรศิลป์ ละเอียดอ่อน อบอุ่น',
-    borderColor: '#ca8a04', // yellow-600
-    innerBorderColor: '#fef08a', // yellow-200
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #fefce8 100%)',
+    name: 'Golden Vine',
+    description: 'เถาวัลย์และใบไม้ทองที่มุมทั้งสี่ นุ่มนวล ละเอียดอ่อน',
+    layout: 'floral',
+    borderColor: '#a16207',
+    innerBorderColor: '#eab308',
+    bgGradient: 'radial-gradient(circle at center, #ffffff 60%, #fefce8 100%)',
     accentBadgeBg: '#fef9c3',
     accentTextColor: '#854d0e',
     titleColor: '#713f12',
-    frameStyle: 'floral',
   },
   {
     id: 'template-7',
-    name: '7. Deep Purple Academic',
-    description: 'สีม่วงเข้มวิชาการ อัตลักษณ์คณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี',
-    borderColor: '#6b21a8', // purple-700
-    innerBorderColor: '#d8b4fe', // purple-300
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #faf5ff 100%)',
+    name: 'Purple Side Banner',
+    description: 'แถบม่วงด้านข้างมีโลโก้ อัตลักษณ์คณะ ม.ฟาฏอนี',
+    layout: 'purple-band',
+    borderColor: '#581c87',
+    innerBorderColor: '#f1b000',
+    bgGradient: 'linear-gradient(135deg, #ffffff 0%, #faf5ff 100%)',
     accentBadgeBg: '#f3e8ff',
     accentTextColor: '#581c87',
     titleColor: '#3b0764',
-    frameStyle: 'purple',
   },
   {
     id: 'template-8',
-    name: '8. Vintage Parchment Scroll',
-    description: 'กระดาษสาโบราณ วินเทจ อบอุ่น ขลัง สไตล์กิตติคุณดั้งเดิม',
-    borderColor: '#78350f', // amber-900
-    innerBorderColor: '#d97706', // amber-600
-    bgGradient: 'radial-gradient(circle at center, #fefce8 50%, #fef3c7 100%)',
-    accentBadgeBg: '#fde68a',
-    accentTextColor: '#78350f',
+    name: 'Vintage Parchment',
+    description: 'กระดาษสาโบราณขอบเข้ม ตัวอักษรเซอริฟ ขลังสไตล์ดั้งเดิม',
+    layout: 'parchment',
+    borderColor: '#78350f',
+    innerBorderColor: '#b9852d',
+    bgGradient: 'radial-gradient(circle at center, #fdf6e3 45%, #f0dfb4 100%)',
+    accentBadgeBg: '#f3e2b3',
+    accentTextColor: '#5b2a07',
     titleColor: '#451a03',
-    frameStyle: 'parchment',
   },
   {
     id: 'template-9',
-    name: '9. Contemporary Cyan & Teal',
-    description: 'สีฟ้าน้ำทะเลโมเดิร์น สดใส มินิมอลเทคโนโลยี ร่วมสมัย',
-    borderColor: '#0f766e', // teal-700
-    innerBorderColor: '#5eead4', // teal-300
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #f0fdfa 100%)',
+    name: 'Teal Waves',
+    description: 'คลื่นสีฟ้าเขียวด้านบนและล่าง สดใสร่วมสมัย',
+    layout: 'wave',
+    borderColor: '#0f766e',
+    innerBorderColor: '#2dd4bf',
+    bgGradient: '#ffffff',
     accentBadgeBg: '#ccfbf1',
     accentTextColor: '#115e59',
     titleColor: '#134e4a',
-    frameStyle: 'teal',
   },
   {
     id: 'template-10',
-    name: '10. Imperial Noir Gold',
-    description: 'สีดำนัวร์ทองคำ พรีเมียม อลังการ สำหรับรางวัลเกียรตินิยมสูงสุด',
-    borderColor: '#18181b', // zinc-900
-    innerBorderColor: '#eab308', // yellow-500
-    bgGradient: 'radial-gradient(circle at center, #ffffff 65%, #f4f4f5 100%)',
-    accentBadgeBg: '#fef08a',
-    accentTextColor: '#713f12',
-    titleColor: '#09090b',
-    frameStyle: 'noir',
+    name: 'Imperial Noir',
+    description: 'พื้นดำนัวร์ตัวอักษรทอง พรีเมียมสำหรับรางวัลสูงสุด',
+    layout: 'noir',
+    borderColor: '#d4a73a',
+    innerBorderColor: '#f5d77a',
+    bgGradient: 'radial-gradient(circle at center, #1b1b22 40%, #09090c 100%)',
+    accentBadgeBg: '#2a2418',
+    accentTextColor: '#f5d77a',
+    titleColor: '#f8e7ab',
+    dark: true,
+  },
+  {
+    id: 'template-11',
+    name: 'Crimson Diagonal',
+    description: 'สามเหลี่ยมเฉียงสีแดงเลือดหมู-ทองที่มุม โมเดิร์นโดดเด่น',
+    layout: 'diagonal',
+    borderColor: '#9f1239',
+    innerBorderColor: '#f0b429',
+    bgGradient: 'linear-gradient(180deg, #ffffff 0%, #fff5f6 100%)',
+    accentBadgeBg: '#ffe4e8',
+    accentTextColor: '#9f1239',
+    titleColor: '#4c0519',
+  },
+  {
+    id: 'template-12',
+    name: 'Sapphire Ribbon',
+    description: 'หัวข้อบนริบบิ้นพับมุม กรอบบางสีน้ำเงินแซฟไฟร์',
+    layout: 'ribbon',
+    borderColor: '#1d4ed8',
+    innerBorderColor: '#f59e0b',
+    bgGradient: 'linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)',
+    accentBadgeBg: '#dbeafe',
+    accentTextColor: '#1e3a8a',
+    titleColor: '#172554',
   },
 ];
 
@@ -187,7 +236,7 @@ export const DEFAULT_CERTIFICATE_CONFIG: CertificateConfig = {
   activityTitle: 'โครงการฮะละเกาะฮ์อัลกุรอาน',
   awardTitle: 'เกียรติบัตร',
   bodyText: 'ได้เข้าร่วมและผ่านเกณฑ์การประเมินในโครงการฮะละเกาะฮ์อัลกุรอาน',
-  blessingText: '"ขอให้อัลลอฮ์ (ซ.บ.) ทรงประทานความรู้ ความบะรอกัต และความเจริญก้าวหน้าแก่ท่านสืบไป"',
+  blessingText: 'ขอให้อัลลอฮ์ (ซ.บ.) ทรงประทานความรู้ ความบะรอกัต และความเจริญก้าวหน้าแก่ท่านสืบไป',
   signatory1Title: 'ผู้รับผิดชอบโครงการ',
   signatory1Name: '(อาจารย์มุสลิม หะยีสะมะแอ)',
   signatory1Role: 'ประธานโครงการฮะละเกาะฮ์อัลกุรอาน',
@@ -196,6 +245,7 @@ export const DEFAULT_CERTIFICATE_CONFIG: CertificateConfig = {
   signatory2Name: '(ผศ.ดร. อับดุลฮาลิม สือแม)',
   signatory2Role: 'คณบดีคณะศึกษาศาสตร์ มหาวิทยาลัยฟาฏอนี',
   signatory2SignatureUrl: '',
+  signatureSize: 'large',
   showLogo: true,
   logoPosition: 'top-center',
   showStudentId: true,
@@ -221,6 +271,10 @@ export function getCertificateConfig(): CertificateConfig {
     if (parsed.awardTitle === 'เกียรติบัตรฉบับนี้มอบให้ไว้เพื่อแสดงว่า') {
       parsed.awardTitle = 'เกียรติบัตร';
     }
+    // เวอร์ชันเก่าเก็บคำอวยพรพร้อมเครื่องหมายคำพูด ซึ่งจะถูกครอบซ้ำตอนแสดงผล
+    if (typeof parsed.blessingText === 'string') {
+      parsed.blessingText = parsed.blessingText.replace(/^["“”]+|["“”]+$/g, '');
+    }
     return parsed;
   } catch {
     return DEFAULT_CERTIFICATE_CONFIG;
@@ -229,12 +283,15 @@ export function getCertificateConfig(): CertificateConfig {
 
 export const CERT_CONFIG_UPDATED_EVENT = 'halaqah_certificate_config_updated';
 
-export function saveCertificateConfig(config: CertificateConfig): void {
-  if (typeof window === 'undefined') return;
+/** บันทึกการตั้งค่า คืนค่า false หากพื้นที่จัดเก็บเต็ม (เช่น รูปใหญ่เกินไป) */
+export function saveCertificateConfig(config: CertificateConfig): boolean {
+  if (typeof window === 'undefined') return false;
   try {
     localStorage.setItem(CERT_STORAGE_KEY, JSON.stringify(config));
     window.dispatchEvent(new CustomEvent(CERT_CONFIG_UPDATED_EVENT, { detail: config }));
+    return true;
   } catch (err) {
     console.error('Failed to save certificate config:', err);
+    return false;
   }
 }

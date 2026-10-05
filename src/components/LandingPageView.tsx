@@ -32,10 +32,11 @@ import {
   getAnnouncements,
   getStudentMajor,
   getStudentLevel,
+  formatTermLabel,
 } from '@/lib/data-store';
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
-import { CertificateModal } from '@/components/CertificateModal';
+import { StudentPortalView } from '@/components/StudentPortalView';
 import { ModalPortal } from '@/components/ModalPortal';
 
 
@@ -71,6 +72,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   // 'student' = Dedicated Student Window
   // 'faculty' = Dedicated Faculty/Teacher Window
   const [portalView, setPortalView] = useState<'select' | 'student' | 'faculty'>('select');
+  // อ่านภาคการศึกษาหลังโหลดในเบราว์เซอร์ (ค่าอยู่ใน localStorage) เพื่อไม่ให้ hydration ไม่ตรง
+  const [termText, setTermText] = useState('');
+  useEffect(() => setTermText(formatTermLabel()), []);
 
   // Notify parent component of current portal view
   useEffect(() => {
@@ -81,7 +85,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   useEffect(() => {
     if (landingResetSignal !== undefined && landingResetSignal > 0) {
       setPortalView('select');
-      setSelectedStudent(null);
       setIsFacultyAuthModalOpen(false);
     }
   }, [landingResetSignal]);
@@ -119,53 +122,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       localStorage.setItem('halaqah_faculty_year_level', year);
     }
   };
-
-  // Student portal state (STRICTLY studentId, no name search)
-  const [studentSearchTerm, setStudentSearchTerm] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
-  // Announcements state & Immediate Pop-up Alert Carousel
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [studentAlertList, setStudentAlertList] = useState<Announcement[]>([]);
-  const [currentAlertIndex, setCurrentAlertIndex] = useState(0);
-
-  // Public Pending Attendance Report Modal (accessible via ?view=pending-report)
-  const [showPublicPendingReport, setShowPublicPendingReport] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('view') === 'pending-report' || window.location.hash === '#pending-report') {
-        setShowPublicPendingReport(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    setAnnouncements(getAnnouncements());
-  }, [portalView, selectedStudent]);
-
-  // Trigger pop-up announcement carousel immediately upon student ID search
-  useEffect(() => {
-    if (selectedStudent) {
-      const sid = (selectedStudent.studentId || '').trim();
-      const allAnns = getAnnouncements();
-      const relevant = allAnns.filter(
-        (a) => a.targetType === 'all' || a.targetStudentIds.includes(sid)
-      );
-      if (relevant.length > 0) {
-        setStudentAlertList(relevant);
-        setCurrentAlertIndex(0);
-      } else {
-        setStudentAlertList([]);
-      }
-    } else {
-      setStudentAlertList([]);
-      setCurrentAlertIndex(0);
-    }
-  }, [selectedStudent]);
-
 
   const allTeachers = useMemo(() => getActiveTeachers(), []);
   const allStudents = useMemo(() => getActiveStudents(), []);
@@ -216,8 +172,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const checkAndOpenTutorial = (role: TutorialRole) => {
     if (typeof window === 'undefined') return;
     const key = role === 'student' ? STUDENT_TUTORIAL_KEY : FACULTY_TUTORIAL_KEY;
-    const dismissed = localStorage.getItem(key);
-    if (dismissed !== 'true') {
+    // แสดงคู่มือเฉพาะครั้งแรกของแต่ละบทบาท จากนั้นจดจำไว้ ไม่เด้งซ้ำ (ยังกดปุ่ม "คู่มือ" เปิดดูเองได้)
+    if (localStorage.getItem(key) !== 'true') {
+      localStorage.setItem(key, 'true');
       setActiveTutorialRole(role);
     }
   };
@@ -245,9 +202,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
   const handleBackToSelect = () => {
     setPortalView('select');
-    setSelectedStudent(null);
-    setStudentSearchTerm('');
-    setHasSearched(false);
     setIsFacultyAuthModalOpen(false);
     setActiveTutorialRole(null);
     if (typeof window !== 'undefined') {
@@ -279,8 +233,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       setFacultyPassInput('');
       setFacultyAuthError('');
       navigateToView('faculty');
-      // Open tutorial modal immediately after entering password
-      setActiveTutorialRole('faculty');
     } else {
       setFacultyAuthError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง');
     }
@@ -316,82 +268,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
   const getStudentCount = (teacherName: string) => {
     return unifiedStudents.filter((s) => s.teacherName === teacherName).length;
-  };
-
-  // STUDENT SEARCH: STRICTLY BY EXACT STUDENT ID (NO AUTOCOMPLETE LEAKAGE)
-  const executeStudentSearch = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setHasSearched(true);
-
-    const q = studentSearchTerm.trim().replace(/[\s-]/g, '').toLowerCase();
-    if (!q) {
-      setSelectedStudent(null);
-      return;
-    }
-
-    // Exact ID match only
-    const exact = unifiedStudents.find(
-      (s) => (s.studentId || '').replace(/[\s-]/g, '').toLowerCase() === q
-    );
-    if (exact) {
-      setSelectedStudent(exact);
-    } else {
-      setSelectedStudent(null);
-    }
-  };
-
-  const handleClearStudent = () => {
-    setSelectedStudent(null);
-    setStudentSearchTerm('');
-    setHasSearched(false);
-  };
-
-  // Announcements targeted to the currently viewed student
-  const studentAnnouncements = useMemo(() => {
-    if (!selectedStudent) return [];
-    const sid = (selectedStudent.studentId || '').trim();
-    return announcements.filter(
-      (a) => a.targetType === 'all' || a.targetStudentIds.includes(sid)
-    );
-  }, [selectedStudent, announcements]);
-
-  // Student Attendance Analytics
-  const studentStats = useMemo(() => {
-    if (!selectedStudent) return null;
-    const studentRecs = records
-      .filter((r) => (r.studentId || '').trim() === (selectedStudent.studentId || '').trim())
-      .sort((a, b) => b.date.localeCompare(a.date));
-
-    const total = studentRecs.length;
-    const present = studentRecs.filter((r) => r.status === 'มา').length;
-    const absent = studentRecs.filter((r) => r.status === 'ขาด').length;
-    const leave = studentRecs.filter((r) => r.status === 'ลา').length;
-    const rate = total > 0 ? (present / total) * 100 : 0;
-    const isPassed = rate >= 80;
-
-    return {
-      records: studentRecs,
-      total,
-      present,
-      absent,
-      leave,
-      rate,
-      isPassed,
-    };
-  }, [selectedStudent, records]);
-
-  const formatThaiDate = (dateStr: string) => {
-    try {
-      const [y, m, d] = dateStr.split('-');
-      const thaiYear = parseInt(y, 10) + 543;
-      const months = [
-        'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
-      ];
-      return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${thaiYear}`;
-    } catch {
-      return dateStr;
-    }
   };
 
   const logoSrc = customLogo || '/logo.png';
@@ -470,17 +346,22 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             </div>
           </div>
 
-          {/* Title & Subtitle Pill */}
-          <div className="space-y-2 pt-1 text-center">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-purple-950 tracking-tight text-balance">
-              กลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)
-            </h1>
-
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-purple-200/80 shadow-[0_4px_16px_rgba(107,33,168,0.08)]">
-              <span className="w-2 h-2 rounded-full bg-[#f1b000] shadow-[0_0_8px_rgba(241,176,0,0.9)] animate-pulse" />
-              <span className="text-xs sm:text-sm text-purple-950 font-extrabold tracking-wide">
-                ระบบบันทึกและติดตามการเข้าร่วม
+          {/* ชื่อระบบ */}
+          <div className="text-center space-y-3 pt-1">
+            <div className="text-[11px] sm:text-xs font-bold tracking-[0.25em] text-purple-500 uppercase">
+              Halaqah Al-Quran
+            </div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.25]">
+              <span className="text-purple-950">กลุ่มศึกษาอัลกุรอาน</span>
+              <br />
+              <span className="inline-block pt-2 -mt-2 pb-1 bg-gradient-to-r from-purple-700 via-fuchsia-600 to-indigo-700 bg-clip-text text-transparent">
+                หะละเกาะห์
               </span>
+            </h1>
+            <p className="text-sm sm:text-base text-purple-800/70 font-medium">ระบบบันทึกและติดตามการเข้าร่วม</p>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-100/80 text-purple-800 text-xs font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {termText || '\u00a0'}
             </div>
           </div>
         </div>
@@ -969,489 +850,14 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       {/* 4. DEDICATED STUDENT WINDOW (แยกหน้าต่าง ไม่เห็นสำหรับบุคลากร) */}
       {/* ============================================================== */}
       {portalView === 'student' && (
-        <div className="space-y-3 sm:space-y-4 max-w-2xl mx-auto animate-fadeIn">
-          {/* Back Navigation Bar & Quick Tutorial */}
-          <div className="flex items-center justify-between gap-1.5 sm:gap-2 bg-white/95 backdrop-blur-md p-2 sm:p-2.5 rounded-2xl border border-purple-100 shadow-2xs">
-            <button
-              type="button"
-              onClick={handleBackToSelect}
-              className="inline-flex items-center space-x-1 sm:space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-2.5 sm:px-3 py-1.5 rounded-full shadow-2xs transition-all active:scale-95 shrink-0"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-purple-700" />
-              <span>ย้อนกลับ</span>
-            </button>
-
-            {/* Compact Branding */}
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logoSrc} alt="Logo" className="w-6 h-6 sm:w-7 sm:h-7 object-contain shrink-0" />
-              <span className="hidden sm:inline text-xs sm:text-sm font-black text-purple-950 truncate">
-                กลุ่มศึกษาอัลกุรอาน
-              </span>
-              <span className="text-[10px] sm:text-xs font-mono font-bold text-purple-800 bg-purple-100 px-2 sm:px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                สำหรับนักศึกษา
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveTutorialRole('student')}
-                className="inline-flex items-center space-x-1 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-2.5 py-1.5 rounded-full shadow-2xs transition-all active:scale-95"
-                title="เปิดดูคู่มือการใช้งานสำหรับนักศึกษา"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-purple-700" />
-                <span>คู่มือ</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Student Search Box (STRICTLY EXACT STUDENT ID ONLY) */}
-          <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm sm:text-base font-black text-purple-950 flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-purple-700" />
-                  <span>ตรวจสอบข้อมูลเฉพาะบุคคลตามรหัสนักศึกษา</span>
-                </h2>
-                <p className="text-[11px] text-purple-700/80 font-medium mt-0.5">
-                  ระบุรหัสนักศึกษาของท่านให้ครบถ้วนเพื่อเข้าดูข้อมูลส่วนบุคคลเท่านั้น
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-50 border border-purple-200/80 rounded-full text-xs font-extrabold text-purple-800">
-                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                  <span>เห็นเฉพาะตนเอง</span>
-                </div>
-              </div>
-
-            </div>
-
-            <form onSubmit={executeStudentSearch} className="flex gap-2">
-              <div className="relative flex-1">
-                <div className="absolute left-3.5 top-3 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center pointer-events-none">
-                  <Search className="w-3.5 h-3.5 text-purple-700" />
-                </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="กรอกรหัสนักศึกษาของท่าน เช่น 681441001..."
-                  value={studentSearchTerm}
-                  onChange={(e) => {
-                    setStudentSearchTerm(e.target.value);
-                    setHasSearched(false);
-                  }}
-                  className="w-full pl-12 pr-10 py-3 text-xs sm:text-sm bg-purple-50/50 border border-purple-200/90 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-600 text-purple-950 font-mono font-bold placeholder-purple-400"
-                />
-                {studentSearchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStudentSearchTerm('');
-                      setHasSearched(false);
-                    }}
-                    className="absolute right-3 top-3 text-xs text-purple-400 hover:text-purple-700"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="px-6 py-3 bg-gradient-to-r from-purple-800 to-purple-900 text-white text-xs sm:text-sm font-extrabold rounded-2xl shadow-sm hover:from-purple-900 hover:to-purple-950 transition-all active:scale-95 shrink-0"
-              >
-                ค้นหา
-              </button>
-            </form>
-
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-purple-50/60 border border-purple-100/80 text-[11px] text-purple-900/80 font-medium">
-              <Lock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-              <span>ระบบรักษาความปลอดภัย: ไม่แสดงรายชื่อเพื่อนนักศึกษา จะแสดงข้อมูลเฉพาะเจ้าของรหัสที่ระบุถูกต้องเท่านั้น</span>
-            </div>
-
-            {/* Not Found State */}
-            {hasSearched && !selectedStudent && studentSearchTerm.trim() && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center text-xs text-rose-800 font-semibold space-y-1 animate-fadeIn">
-                <div className="font-bold">ไม่พบข้อมูลรหัสนักศึกษา &ldquo;{studentSearchTerm}&rdquo; ในระบบ</div>
-                <div className="text-[11px] text-rose-600 font-normal">
-                  กรุณาตรวจสอบรหัสนักศึกษาให้ถูกต้องครบถ้วน หรือติดต่ออาจารย์ผู้ดูแลกลุ่มหะละเกาะห์
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Selected Student Dashboard View */}
-          {selectedStudent && studentStats && (
-            <div className="space-y-5 animate-fadeIn">
-              {/* ==================== 4A. CONSOLIDATED ANNOUNCEMENTS CONTAINER (กล่องเดียว รวมทุกประกาศ) ==================== */}
-              {studentAnnouncements.length > 0 && (
-                <div className="rounded-3xl border border-purple-200 bg-white/95 backdrop-blur-md p-4 sm:p-5 shadow-card space-y-3 animate-fadeIn">
-                  <div className="flex items-center justify-between border-b border-purple-100 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
-                        <Megaphone className="w-4 h-4 text-purple-700" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-black text-purple-950">ประกาศและแจ้งเตือน ({studentAnnouncements.length})</h3>
-                        <p className="text-[10px] text-purple-600">ข้อความจากผู้ดูแลระบบสำหรับนักศึกษา</p>
-                      </div>
-                    </div>
-                    {studentAnnouncements.some((a) => a.priority === 'urgent') && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black animate-pulse">
-                        🚨 มีประกาศด่วน
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {/* Sort urgent first, then warning, then normal */}
-                    {[...studentAnnouncements]
-                      .sort((a, b) => {
-                        const score = (p: string) => (p === 'urgent' ? 3 : p === 'warning' ? 2 : 1);
-                        return score(b.priority) - score(a.priority);
-                      })
-                      .map((ann) => (
-                        <div
-                          key={ann.id}
-                          className={`rounded-2xl p-3.5 border transition-all ${
-                            ann.priority === 'urgent'
-                              ? 'bg-rose-50/90 border-rose-200 text-rose-950'
-                              : ann.priority === 'warning'
-                              ? 'bg-amber-50/90 border-amber-200 text-amber-950'
-                              : 'bg-purple-50/60 border-purple-100 text-purple-950'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                  ann.priority === 'urgent'
-                                    ? 'bg-rose-600 text-white'
-                                    : ann.priority === 'warning'
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-purple-200 text-purple-800'
-                                }`}
-                              >
-                                {ann.priority === 'urgent'
-                                  ? '🚨 ด่วนที่สุด'
-                                  : ann.priority === 'warning'
-                                  ? '⚠️ สำคัญ'
-                                  : '📢 ทั่วไป'}
-                              </span>
-                              <h4 className="text-xs sm:text-sm font-black tracking-tight">{ann.title}</h4>
-                            </div>
-                            <span className="text-[10px] opacity-60 font-mono shrink-0">
-                              {new Date(ann.createdAt).toLocaleDateString('th-TH')}
-                            </span>
-                          </div>
-                          <p className="text-xs mt-1.5 opacity-90 leading-relaxed whitespace-pre-wrap font-medium">
-                            {ann.content}
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Minimalist, Clean Student Profile Card (ตามรูปแนบ 3) */}
-              <div className="relative overflow-hidden rounded-3xl bg-white border border-purple-100/90 p-5 sm:p-6 shadow-card space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="space-y-2">
-                    {/* Identification Chips */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="bg-purple-900 text-white text-xs font-mono font-black px-3 py-1 rounded-full shadow-2xs">
-                        {selectedStudent.studentId}
-                      </span>
-                      <span className="bg-purple-50 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-full border border-purple-200">
-                        {selectedStudent.gender === 'ชาย' ? '👨 นศ.ชาย' : '👩 นศ.หญิง'}
-                      </span>
-                      <span className="bg-purple-50 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-full border border-purple-200">
-                        {selectedStudent.yearLevel}
-                      </span>
-                      <span className="bg-amber-50 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded-full border border-amber-200 flex items-center gap-1">
-                        <GraduationCap className="w-3.5 h-3.5 text-amber-700" />
-                        <span>สาขา: {getStudentMajor(selectedStudent)}</span>
-                      </span>
-
-                      {/* Group Level Badge (01 / 02 / 03) */}
-                      <span className="bg-amber-100 text-amber-900 text-[11px] font-black px-3 py-1 rounded-full border border-amber-300 flex items-center gap-1">
-                        <Award className="w-3.5 h-3.5 text-amber-700" />
-                        <span>
-                          {getStudentLevel(selectedStudent) === '01' && 'ระดับ 01'}
-                          {getStudentLevel(selectedStudent) === '02' && 'ระดับ 02'}
-                          {getStudentLevel(selectedStudent) === '03' && 'ระดับ 03'}
-                        </span>
-                      </span>
-
-                      {/* Attendance Performance Badge */}
-                      {studentStats.rate === 100 && (
-                        <span className="bg-emerald-50 text-emerald-800 text-[11px] font-black px-3 py-1 rounded-full border border-emerald-300">
-                          🥇 เข้าครบ 100%
-                        </span>
-                      )}
-                      {studentStats.rate >= 90 && studentStats.rate < 100 && (
-                        <span className="bg-blue-50 text-blue-800 text-[11px] font-black px-3 py-1 rounded-full border border-blue-300">
-                          🥈 ดีเยี่ยม 90%+
-                        </span>
-                      )}
-                      {studentStats.rate >= 80 && studentStats.rate < 90 && (
-                        <span className="bg-amber-50 text-amber-800 text-[11px] font-black px-3 py-1 rounded-full border border-amber-300">
-                          🥉 ผ่านเกณฑ์
-                        </span>
-                      )}
-                      {studentStats.rate < 80 && (
-                        <span className="bg-rose-50 text-rose-800 text-[11px] font-black px-3 py-1 rounded-full border border-rose-300">
-                          ⚠️ เฝ้าระวัง (&lt;80%)
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">
-                        ชื่อ - นามสกุล นักศึกษา
-                      </div>
-                      <h2 className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight">
-                        {selectedStudent.fullName}
-                      </h2>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleClearStudent}
-                    className="self-start sm:self-auto text-xs font-bold px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 transition-all active:scale-95"
-                  >
-                    ค้นหารหัสอื่น
-                  </button>
-                </div>
-
-                {/* Supervisor / Group Leader Bar */}
-                <div className="pt-3 border-t border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-purple-200 text-purple-900 flex items-center justify-center shrink-0">
-                      <Award className="w-5 h-5 text-purple-800" />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-purple-700 font-bold">
-                        อาจารย์ผู้ดูแลกลุ่ม / หะละเกาะห์
-                      </div>
-                      <div className="text-xs sm:text-sm font-black text-purple-950">
-                        {selectedStudent.teacherName}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="self-start sm:self-auto text-xs font-mono font-bold px-3 py-1 rounded-xl bg-white text-purple-900 border border-purple-200 shadow-2xs">
-                    {selectedStudent.groupName}
-                  </span>
-                </div>
-              </div>
-
-              {/* E-Certificate Claim Banner (สำหรับนักศึกษาที่ผ่านเกณฑ์ 80%) - วางเด่นด้านบนสุด ไม่จมอยู่ล่างสุด */}
-              {studentStats.isPassed && (
-                <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-3xl p-5 sm:p-6 text-white shadow-xl shadow-amber-950/20 border-2 border-yellow-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-2xl bg-white/20 text-white shrink-0 shadow-inner">
-                        <Award className="w-7 h-7 text-yellow-100 animate-bounce" />
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-base sm:text-lg font-black tracking-wide">
-                            ยินดีด้วย! ท่านผ่านเกณฑ์การเข้าร่วมกิจกรรม ({studentStats.rate.toFixed(1)}%)
-                          </h3>
-                          {studentStats.rate >= 90 && (
-                            <span className="px-2.5 py-0.5 rounded-full bg-yellow-300 text-amber-950 text-[10px] font-black uppercase shadow-xs">
-                              🌟 เกียรตินิยม A+ (ดีเยี่ยม)
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-amber-100 font-medium">
-                          {studentStats.rate >= 90
-                            ? 'ผลการประเมินระดับดีเยี่ยม (เกียรตินิยม A+) สามารถกดรับและพิมพ์วุฒิบัตรอิเล็กทรอนิกส์ได้ทันที'
-                            : 'ท่านสามารถกดรับวุฒิบัตรอิเล็กทรอนิกส์ (E-Certificate) อย่างเป็นทางการเพื่อเก็บไว้ในแฟ้มสะสมงาน'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsCertModalOpen(true)}
-                    className="px-5 py-3 rounded-2xl bg-white text-amber-950 hover:bg-amber-50 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer shrink-0"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>{studentStats.rate >= 90 ? '🏅 ดูและพิมพ์เกียรติบัตร A+' : 'ดูและพิมพ์เกียรติบัตร (E-Certificate)'}</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Attendance KPI Cards (Tactile 4-Card Bento) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                {/* Rate Card */}
-                <div className="p-3.5 rounded-2xl bg-white border border-purple-100 shadow-card space-y-1">
-                  <div className="text-[11px] font-bold text-purple-800/80">อัตราการเข้าร่วม</div>
-                  <div className="text-2xl font-black text-purple-950 font-mono">
-                    {studentStats.rate.toFixed(1)}%
-                  </div>
-                  <div>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                      studentStats.isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {studentStats.isPassed ? '✓ ผ่านเกณฑ์ (80%)' : '⚠ ต้องปรับปรุง'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Present Card */}
-                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 shadow-card space-y-1">
-                  <div className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    <span>มา (ครั้ง)</span>
-                  </div>
-                  <div className="text-2xl font-black text-emerald-900 font-mono">
-                    {studentStats.present}
-                  </div>
-                  <div className="text-[10px] text-emerald-700 font-medium">
-                    จากทั้งหมด {studentStats.total} ครั้ง
-                  </div>
-                </div>
-
-                {/* Absent Card */}
-                <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200/80 shadow-card space-y-1">
-                  <div className="text-[11px] font-bold text-rose-800 flex items-center gap-1">
-                    <UserX className="w-3 h-3" />
-                    <span>ขาด (ครั้ง)</span>
-                  </div>
-                  <div className="text-2xl font-black text-rose-900 font-mono">
-                    {studentStats.absent}
-                  </div>
-                  <div className="text-[10px] text-rose-700 font-medium">
-                    {studentStats.absent === 0 ? 'ดีเยี่ยม ไม่เคยขาด' : 'ขาดกิจกรรม'}
-                  </div>
-                </div>
-
-                {/* Leave Card */}
-                <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 shadow-card space-y-1">
-                  <div className="text-[11px] font-bold text-amber-800 flex items-center gap-1">
-                    <FileText className="w-3 h-3" />
-                    <span>ลา (ครั้ง)</span>
-                  </div>
-                  <div className="text-2xl font-black text-amber-900 font-mono">
-                    {studentStats.leave}
-                  </div>
-                  <div className="text-[10px] text-amber-700 font-medium">
-                    มีการแจ้งลาถูกต้อง
-                  </div>
-                </div>
-              </div>
-
-              {/* Attendance Progress Meter */}
-              <div className="bg-white rounded-3xl p-4 sm:p-5 border border-purple-100 shadow-card space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-purple-950">
-                  <span className="flex items-center gap-1.5">
-                    <BarChart3 className="w-4 h-4 text-purple-700" />
-                    <span>แถบความก้าวหน้าการเข้าร่วมกิจกรรม (เกณฑ์ผ่าน 80%)</span>
-                  </span>
-                  <span className="font-mono text-purple-900 font-extrabold">{studentStats.rate.toFixed(1)}%</span>
-                </div>
-                <div className="relative h-4 w-full bg-purple-100 rounded-full overflow-hidden">
-                  <div
-                    style={{ width: `${Math.min(studentStats.rate, 100)}%` }}
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      studentStats.isPassed ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gradient-to-r from-amber-500 to-rose-500'
-                    }`}
-                  />
-                  {/* 80% line */}
-                  <div className="absolute top-0 bottom-0 left-[80%] w-0.5 bg-purple-950/40 z-10" title="เกณฑ์ 80%" />
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-purple-700/70 font-semibold">
-                  <span>0%</span>
-                  <span className="text-purple-900 font-bold">เป้าหมาย 80%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-
-              {/* Attendance History Timeline (ทุกวันที่เช็คชื่อ) */}
-              <div className="bg-white rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-card space-y-3">
-
-                <div className="flex items-center justify-between border-b border-purple-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-purple-700" />
-                    <h3 className="text-xs sm:text-sm font-extrabold text-purple-950">
-                      ประวัติการเข้าร่วมกิจกรรมรายวัน ({studentStats.records.length} ครั้ง)
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {studentStats.records.map((r, idx) => (
-                    <div
-                      key={`${r.date}-${idx}`}
-                      className="p-3 sm:p-3.5 rounded-2xl border border-purple-100/90 bg-purple-50/20 hover:bg-purple-50/50 flex items-center justify-between transition-colors"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="text-xs sm:text-sm font-extrabold text-purple-950">
-                          {formatThaiDate(r.date)}
-                        </div>
-                        <div className="text-[11px] text-purple-700/80 font-medium flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-purple-500" />
-                          <span>เวลา {r.recordedTime || '-'} น.</span>
-                          <span>•</span>
-                          <span>ผู้บันทึก: {r.teacherName}</span>
-                        </div>
-                      </div>
-
-                      {/* Status Badge */}
-                      <div>
-                        {r.status === 'มา' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <Check className="w-3.5 h-3.5" />
-                            <span>มา</span>
-                          </span>
-                        )}
-                        {r.status === 'ขาด' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-200">
-                            <UserX className="w-3.5 h-3.5" />
-                            <span>ขาด</span>
-                          </span>
-                        )}
-                        {r.status === 'ลา' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
-                            <FileText className="w-3.5 h-3.5" />
-                            <span>ลา</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {studentStats.records.length === 0 && (
-                    <div className="py-8 text-center text-purple-400 text-xs">
-                      ยังไม่มีบันทึกข้อมูลการเช็คชื่อของนักศึกษาคนนี้ในระบบ
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Empty State when no student selected */}
-          {!selectedStudent && !hasSearched && (
-            <div className="py-12 px-4 text-center bg-white rounded-3xl border border-dashed border-purple-200 space-y-2">
-              <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center mx-auto">
-                <Lock className="w-6 h-6" />
-              </div>
-              <h3 className="text-sm font-extrabold text-purple-950">
-                กรุณาระบุรหัสนักศึกษาของท่านเพื่อเข้าดูข้อมูล
-              </h3>
-              <p className="text-xs text-purple-700/70 max-w-sm mx-auto">
-                ระบบรักษาความเป็นส่วนตัว จะแสดงประวัติการเช็คชื่อ สถิติ และประกาศเฉพาะบุคคลตามรหัสที่ระบุเท่านั้น
-              </p>
-            </div>
-          )}
-        </div>
+        <StudentPortalView
+          records={records}
+          students={unifiedStudents}
+          customLogo={customLogo}
+          resetSignal={landingResetSignal}
+          onBack={handleBackToSelect}
+          onOpenTutorial={() => setActiveTutorialRole('student')}
+        />
       )}
 
       {/* 5. FOOTER QUICK ACTIONS (Admin link only) */}
@@ -1479,268 +885,6 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       )}
 
 
-      {/* Announcement Alert Pop-up Modal (เด้งขึ้นกลางหน้าจอทันทีเมื่อนักศึกษาระบุรหัส พร้อมเลื่อนซ้าย-ขวาได้อย่างอิสระ) */}
-      {studentAlertList.length > 0 && studentAlertList[currentAlertIndex] && (() => {
-        const currentAlert = studentAlertList[currentAlertIndex];
-        const totalAlerts = studentAlertList.length;
-
-        const handlePrevAlert = () => {
-          setCurrentAlertIndex((prev) => (prev > 0 ? prev - 1 : totalAlerts - 1));
-        };
-
-        const handleNextAlert = () => {
-          setCurrentAlertIndex((prev) => (prev < totalAlerts - 1 ? prev + 1 : 0));
-        };
-
-        return (
-          <ModalPortal>
-            <div
-              className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setStudentAlertList([]);
-              }}
-            >
-              <div
-                className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-lg border border-purple-200 shadow-2xl space-y-4 my-auto relative animate-scaleUp select-none"
-                onTouchStart={(e) => {
-                  (e.currentTarget as any).touchStartX = e.touches[0].clientX;
-                }}
-                onTouchEnd={(e) => {
-                  const startX = (e.currentTarget as any).touchStartX;
-                  if (typeof startX === 'number') {
-                    const diff = e.changedTouches[0].clientX - startX;
-                    if (diff > 50) handlePrevAlert(); // Swipe right -> prev
-                    if (diff < -50) handleNextAlert(); // Swipe left -> next
-                  }
-                }}
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-3 border-b border-purple-100 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                      currentAlert.priority === 'urgent'
-                        ? 'bg-rose-100 text-rose-700 animate-pulse'
-                        : currentAlert.priority === 'warning'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-purple-100 text-purple-700'
-                    }`}>
-                      {currentAlert.priority === 'urgent' ? (
-                        <Megaphone className="w-5 h-5 text-rose-600" />
-                      ) : (
-                        <Bell className="w-5 h-5 text-purple-600" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                          currentAlert.priority === 'urgent'
-                            ? 'bg-rose-500 text-white'
-                            : currentAlert.priority === 'warning'
-                            ? 'bg-amber-500 text-white'
-                            : 'bg-purple-100 text-purple-900'
-                        }`}>
-                          {currentAlert.priority === 'urgent'
-                            ? '🚨 ด่วนที่สุด'
-                            : currentAlert.priority === 'warning'
-                            ? '⚠️ แจ้งเตือนสำคัญ'
-                            : '📢 ประกาศทั่วไป'}
-                        </span>
-                        {currentAlert.targetType === 'specific' && (
-                          <span className="text-[10px] bg-indigo-100 text-indigo-900 font-bold px-2 py-0.5 rounded-full">
-                            🎯 เฉพาะท่าน
-                          </span>
-                        )}
-                        {totalAlerts > 1 && (
-                          <span className="text-[10px] bg-purple-100 text-purple-900 font-bold px-2 py-0.5 rounded-full">
-                            เรื่องที่ {currentAlertIndex + 1}/{totalAlerts}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-base sm:text-lg font-black text-purple-950 mt-1">
-                        {currentAlert.title}
-                      </h3>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setStudentAlertList([])}
-                    className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition shrink-0"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Announcement Content */}
-                <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 text-xs sm:text-sm text-purple-950 leading-relaxed font-medium whitespace-pre-wrap max-h-60 overflow-y-auto">
-                  {currentAlert.content}
-                </div>
-
-                {/* Sender info */}
-                <div className="text-[11px] text-purple-700/80 flex items-center justify-between font-semibold pt-1">
-                  <span>ประกาศโดย: {currentAlert.authorName || 'ผู้ดูแลระบบ'}</span>
-                  <span>{currentAlert.createdAt}</span>
-                </div>
-
-                {/* Navigation controls if multiple announcements */}
-                {totalAlerts > 1 && (
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-purple-100">
-                    <button
-                      type="button"
-                      onClick={handlePrevAlert}
-                      className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-900 text-xs font-bold flex items-center gap-1 transition active:scale-95"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      <span>ก่อนหน้า</span>
-                    </button>
-
-                    {/* Dots indicator */}
-                    <div className="flex items-center gap-1.5">
-                      {studentAlertList.map((_, dotIdx) => (
-                        <button
-                          key={dotIdx}
-                          type="button"
-                          onClick={() => setCurrentAlertIndex(dotIdx)}
-                          className={`w-2.5 h-2.5 rounded-full transition-all ${
-                            dotIdx === currentAlertIndex
-                              ? 'bg-purple-800 scale-125'
-                              : 'bg-purple-200 hover:bg-purple-300'
-                          }`}
-                          title={`ไปยังเรื่องที่ ${dotIdx + 1}`}
-                        />
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleNextAlert}
-                      className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-900 text-xs font-bold flex items-center gap-1 transition active:scale-95"
-                    >
-                      <span>ถัดไป</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-purple-100 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setStudentAlertList([])}
-                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>รับทราบและปิดหน้าต่าง</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </ModalPortal>
-        );
-      })()}
-
-      {/* Official E-Certificate Modal */}
-      {isCertModalOpen && selectedStudent && studentStats && (
-        <CertificateModal
-          student={selectedStudent}
-          attendanceRate={studentStats.rate}
-          totalPresent={studentStats.present}
-          totalSessions={studentStats.total}
-          customLogo={customLogo}
-          onClose={() => setIsCertModalOpen(false)}
-        />
-      )}
-
-      {/* Public Pending Attendance Report Modal (No login required) */}
-      {showPublicPendingReport && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowPublicPendingReport(false);
-            }}
-          >
-            <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-2xl border border-amber-200 shadow-2xl space-y-4 my-auto relative">
-              <div className="flex items-center justify-between border-b border-amber-100 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-                    <span className="text-xl">📋</span>
-                  </div>
-                  <div>
-                    <h3 className="font-black text-base sm:text-lg text-purple-950">
-                      กลุ่มที่ยังไม่มีการบันทึกการเช็คชื่อ
-                    </h3>
-                    <p className="text-xs text-amber-800">
-                      รายงานติดตามกลุ่มหะละเกาะห์ (ข้อมูลสาธารณะ ไม่ต้องเข้าสู่ระบบ)
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPublicPendingReport(false)}
-                  className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Pending List */}
-              {(() => {
-                const recordedTeacherNames = new Set(records.map((r) => r.teacherName));
-                const pendingTeachers = allTeachers.filter((t) => !recordedTeacherNames.has(t.name));
-
-                return (
-                  <div className="space-y-3">
-                    <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 flex items-center justify-between">
-                      <span>⚠️ พบกลุ่มที่ยังไม่มีบันทึก: {pendingTeachers.length} กลุ่ม</span>
-                      <span className="text-amber-700">จากทั้งหมด {allTeachers.length} กลุ่ม</span>
-                    </div>
-
-                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1 border border-purple-100 rounded-2xl p-2 bg-slate-50/50">
-                      {pendingTeachers.length === 0 ? (
-                        <div className="py-12 text-center text-xs font-bold text-emerald-700">
-                          🎉 บันทึกการเช็คชื่อครบทุกกลุ่มแล้ว
-                        </div>
-                      ) : (
-                        pendingTeachers.map((t, idx) => (
-                          <div
-                            key={t.groupId}
-                            className="p-3 bg-white rounded-xl border border-purple-100 shadow-2xs flex items-center justify-between gap-2"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-900 text-xs font-black flex items-center justify-center shrink-0">
-                                {idx + 1}
-                              </span>
-                              <div className="min-w-0">
-                                <div className="text-xs font-black text-purple-950 truncate">{t.name}</div>
-                                <div className="text-[10px] text-purple-700">
-                                  {t.groupName} • {t.gender} • {t.yearLevel || '-'}
-                                </div>
-                              </div>
-                            </div>
-                            <span className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
-                              ยังไม่ส่ง
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="pt-2 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setShowPublicPendingReport(false)}
-                        className="px-5 py-2.5 bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm"
-                      >
-                        ปิดหน้าต่าง
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </ModalPortal>
-      )}
     </div>
   );
 };
