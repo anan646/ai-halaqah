@@ -684,6 +684,28 @@ export function deleteStudent(studentId: string): { success: boolean; message: s
   return { success: true, message: `ลบรหัสนักศึกษา ${studentId} เรียบร้อยแล้ว` };
 }
 
+// 9.1 ลบนักศึกษาหลายคนพร้อมกัน (Batch Delete)
+export function deleteStudentsBatch(
+  studentIds: string[]
+): { success: boolean; message: string; count: number } {
+  if (!studentIds || studentIds.length === 0) {
+    return { success: false, message: 'กรุณาเลือกนักศึกษาที่ต้องการลบ', count: 0 };
+  }
+  const current = getActiveStudents();
+  const toDeleteSet = new Set(studentIds);
+  const updated = current.filter((s) => !toDeleteSet.has(s.studentId));
+  const count = current.length - updated.length;
+  if (count === 0) {
+    return { success: false, message: 'ไม่พบรายชื่อนักศึกษาที่จะลบในระบบ', count: 0 };
+  }
+  saveActiveStudents(updated);
+  return {
+    success: true,
+    message: `ลบข้อมูลนักศึกษาจำนวน ${count} คน เรียบร้อยแล้ว`,
+    count,
+  };
+}
+
 // 10. ลบอาจารย์
 export function deleteTeacher(teacherName: string): { success: boolean; message: string } {
   const current = getActiveTeachers();

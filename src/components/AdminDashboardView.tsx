@@ -110,6 +110,7 @@ import {
   promoteSelectedStudents,
   setStudentYearLevel,
   batchAssignStudentsToTeacher,
+  deleteStudentsBatch,
 } from '@/lib/data-store';
 import {
   exportToExcel,
@@ -867,6 +868,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const res = batchAssignStudentsToTeacher(selectedStudentIds, batchTargetTeacher);
     setIsBatchAssigning(false);
 
+    setEditorMsg({ text: res.message, success: res.success });
+    if (res.success) {
+      setSelectedStudentIds([]);
+      reloadDataStore();
+    }
+    setTimeout(() => setEditorMsg(null), 5000);
+  };
+
+  const handleBatchDeleteStudents = () => {
+    if (selectedStudentIds.length === 0) {
+      setEditorMsg({ text: 'กรุณาเลือกนักศึกษาที่ต้องการลบอย่างน้อย 1 คน', success: false });
+      return;
+    }
+
+    const confirmMsg = `⚠️ คำเตือนสำคัญ:\nคุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลนักศึกษาที่เลือกจำนวน ${selectedStudentIds.length} คน ออกจากระบบอย่างถาวร?\n\n(การดำเนินการนี้จะลบข้อมูลออกและไม่สามารถกู้คืนกลับมาได้)`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    const res = deleteStudentsBatch(selectedStudentIds);
     setEditorMsg({ text: res.message, success: res.success });
     if (res.success) {
       setSelectedStudentIds([]);
@@ -3955,8 +3976,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </button>
                 </div>
 
-                {/* Counter & Clear filters button */}
-                <div className="flex items-center gap-2 text-xs text-purple-900 font-medium self-end sm:self-auto">
+                {/* Counter, Select-All Shortcut & Clear filters button */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-purple-900 font-medium self-end sm:self-auto">
+                  {filteredStudents.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleToggleSelectAllStudents}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[11px] font-bold transition-all active:scale-95 shadow-xs"
+                      title={isAllFilteredSelected ? 'ยกเลิกการเลือกทั้งหมด' : 'เลือกนักศึกษาทั้งหมดที่แสดงตามตัวกรอง'}
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      <span>{isAllFilteredSelected ? 'ยกเลิกเลือกทั้งหมด' : `เลือกทั้งหมด (${filteredStudents.length})`}</span>
+                    </button>
+                  )}
+
                   <span>
                     แสดง <strong className="font-extrabold text-purple-950">{filteredStudents.length}</strong> จาก {students.length} คน
                   </span>
@@ -4040,45 +4073,74 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               {/* BATCH ACTION BAR (When 1 or more students are selected) */}
               {selectedStudentIds.length > 0 && (
-                <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-800 text-white p-3 rounded-2xl shadow-lg border border-purple-600 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 animate-fadeIn">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-purple-900 font-extrabold text-xs shadow-sm">
+                <div className="bg-gradient-to-r from-purple-950 via-purple-900 to-indigo-950 text-white p-3.5 rounded-2xl shadow-xl border border-purple-600 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 animate-fadeIn">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-purple-950 font-black text-xs shadow-sm ring-2 ring-purple-300">
                       {selectedStudentIds.length}
                     </span>
                     <div>
-                      <p className="font-bold text-xs">เลือกนักศึกษาอยู่ {selectedStudentIds.length} คน</p>
-                      <p className="text-[11px] text-purple-200">เลือกอาจารย์ผู้ดูแลเพื่อกำหนดหรือโยกย้ายให้นักศึกษาที่เลือกทั้งหมดพร้อมกัน</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-extrabold text-xs text-white">เลือกนักศึกษาอยู่ {selectedStudentIds.length} คน</p>
+                        {!isAllFilteredSelected && filteredStudents.length > selectedStudentIds.length && (
+                          <button
+                            type="button"
+                            onClick={handleToggleSelectAllStudents}
+                            className="px-2 py-0.5 bg-purple-800/80 hover:bg-purple-700 text-purple-200 hover:text-white rounded text-[10px] font-bold transition-all underline"
+                          >
+                            เลือกทั้งหมดที่แสดง ({filteredStudents.length})
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-purple-200">
+                        สามารถกำหนดอาจารย์ผู้ดูแลพร้อมกัน หรือกดลบนักศึกษาที่เลือกทั้งหมดออกจากระบบ
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={batchTargetTeacher}
-                      onChange={(e) => setBatchTargetTeacher(e.target.value)}
-                      className="px-3 py-2 text-xs bg-white text-purple-950 font-bold rounded-xl border border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                    >
-                      <option value="">-- เลือกอาจารย์ผู้ดูแลเป้าหมาย --</option>
-                      {teachers.map((t) => (
-                        <option key={t.groupId} value={t.name}>
-                          {t.name} ({t.groupName} - {t.gender} {t.yearLevel})
-                        </option>
-                      ))}
-                    </select>
+                    {/* Batch Assign Group */}
+                    <div className="flex items-center gap-1.5 bg-purple-900/60 p-1 rounded-xl border border-purple-500/50">
+                      <select
+                        value={batchTargetTeacher}
+                        onChange={(e) => setBatchTargetTeacher(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs bg-white text-purple-950 font-bold rounded-lg border-none focus:outline-none focus:ring-2 focus:ring-purple-400 max-w-[200px] sm:max-w-xs"
+                      >
+                        <option value="">-- เลือกอาจารย์เป้าหมาย --</option>
+                        {teachers.map((t) => (
+                          <option key={t.groupId} value={t.name}>
+                            {t.name} ({t.groupName} - {t.gender} {t.yearLevel})
+                          </option>
+                        ))}
+                      </select>
 
+                      <button
+                        type="button"
+                        onClick={handleBatchAssignTeacher}
+                        disabled={!batchTargetTeacher || isBatchAssigning}
+                        className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-xs transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
+                        title="กำหนดอาจารย์ผู้ดูแลให้นักศึกษาที่เลือกทั้งหมด"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isBatchAssigning ? 'บันทึก...' : 'กำหนดอาจารย์'}</span>
+                      </button>
+                    </div>
+
+                    {/* Batch Delete Button */}
                     <button
                       type="button"
-                      onClick={handleBatchAssignTeacher}
-                      disabled={!batchTargetTeacher || isBatchAssigning}
-                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+                      onClick={handleBatchDeleteStudents}
+                      className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95 whitespace-nowrap"
+                      title="ลบข้อมูลนักศึกษาที่เลือกทั้งหมดออกจากระบบอย่างถาวร"
                     >
-                      <Check className="w-4 h-4" />
-                      <span>{isBatchAssigning ? 'กำลังบันทึก...' : `บันทึกกำหนดอาจารย์ (${selectedStudentIds.length} คน)`}</span>
+                      <Trash2 className="w-4 h-4" />
+                      <span>ลบที่เลือก ({selectedStudentIds.length} คน)</span>
                     </button>
 
+                    {/* Deselect / Cancel */}
                     <button
                       type="button"
                       onClick={() => setSelectedStudentIds([])}
-                      className="px-3 py-2 bg-purple-800 hover:bg-purple-700 text-purple-200 hover:text-white font-semibold text-xs rounded-xl transition-all"
+                      className="px-3 py-2 bg-purple-800/80 hover:bg-purple-700 text-purple-200 hover:text-white font-semibold text-xs rounded-xl transition-all"
                     >
                       ยกเลิก
                     </button>
