@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Award, Printer, X, Download, CheckCircle2, Loader2 } from 'lucide-react';
+import { Award, Printer, X, Download, CheckCircle2, Loader2, Lock } from 'lucide-react';
 import { Student } from '@/lib/types';
-import { getStudentMajor, getStudentLevel, getSemesterSettings } from '@/lib/data-store';
+import { getStudentMajor, getStudentLevel, getSemesterSettings, SEMESTER_SETTINGS_UPDATED_EVENT } from '@/lib/data-store';
 import { CertificateConfig, getCertificateConfig, CERT_CONFIG_UPDATED_EVENT } from '@/lib/certificate-config';
 import { saveCertificatePdf, printCertificate } from '@/lib/certificate-export';
 import { CertificateCanvas, CertificatePreview, CertificateStudentData } from './CertificateCanvas';
@@ -25,21 +25,66 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   customLogo,
   onClose,
 }) => {
-  const semester = getSemesterSettings();
+  const [semester, setSemester] = useState(() => getSemesterSettings());
   const [config, setConfig] = useState<CertificateConfig>(() => getCertificateConfig());
   const [busy, setBusy] = useState<'print' | 'pdf' | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const handleUpdate = () => setConfig(getCertificateConfig());
+    const handleSemester = () => setSemester(getSemesterSettings());
     handleUpdate();
+    handleSemester();
     window.addEventListener(CERT_CONFIG_UPDATED_EVENT, handleUpdate);
+    window.addEventListener(SEMESTER_SETTINGS_UPDATED_EVENT, handleSemester);
     window.addEventListener('storage', handleUpdate);
+    window.addEventListener('storage', handleSemester);
     return () => {
       window.removeEventListener(CERT_CONFIG_UPDATED_EVENT, handleUpdate);
+      window.removeEventListener(SEMESTER_SETTINGS_UPDATED_EVENT, handleSemester);
       window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('storage', handleSemester);
     };
   }, []);
+
+  // การป้องกันระดับความปลอดภัย: เฉพาะนักศึกษาที่ผ่านเกณฑ์ 80% ขึ้นไปเท่านั้นที่จะได้รับเกียรติบัตร
+  if (attendanceRate < 80) {
+    return (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-purple-950/70 backdrop-blur-sm animate-fadeIn"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 sm:p-7 text-center space-y-4 animate-scaleUp">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-purple-950">เกียรติบัตรถูกล็อก</h3>
+            <p className="text-xs text-purple-800/80 leading-relaxed">
+              ขออภัย ระบบกำหนดให้นักศึกษาที่มีอัตราการเข้าร่วมกิจกรรม <strong className="text-purple-950">80.0% ขึ้นไป</strong> เท่านั้นจึงจะมีสิทธิ์ได้รับและพิมพ์เกียรติบัตร
+            </p>
+            <div className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-100 text-xs font-bold text-purple-900 space-y-1">
+              <div>
+                อัตราการเข้าร่วมปัจจุบันของคุณ: <span className="text-rose-600 font-black text-sm">{attendanceRate.toFixed(1)}%</span>
+              </div>
+              <div className="text-[11px] text-purple-600/90 font-medium">
+                (เข้าร่วม {totalPresent} / {totalSessions} ครั้ง • ยังไม่ถึงเกณฑ์ 80%)
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 px-4 rounded-2xl bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-sm transition active:scale-95 shadow-md shadow-purple-950/20"
+          >
+            รับทราบและปิด
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const data: CertificateStudentData = {
     fullName: student.fullName,

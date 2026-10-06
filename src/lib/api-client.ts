@@ -16,6 +16,7 @@ import {
   saveAllSessionMetadata,
   saveTermHistory,
   saveSemesterSettings,
+  ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from './data-store';
 import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
 
@@ -123,6 +124,8 @@ export function saveLocalAttendanceRecords(records: AttendanceRecord[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(records));
+    window.dispatchEvent(new CustomEvent(ATTENDANCE_RECORDS_UPDATED_EVENT, { detail: records }));
+    window.dispatchEvent(new Event('storage'));
   } catch (e) {
     console.error('Error saving local attendance:', e);
   }

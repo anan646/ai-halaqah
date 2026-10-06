@@ -11,6 +11,9 @@ const STORAGE_KEY_SESSIONS = 'halaqah_sessions_metadata_v1';
 const STORAGE_KEY_SEMESTER = 'halaqah_semester_settings_v1';
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 
+export const SEMESTER_SETTINGS_UPDATED_EVENT = 'halaqah_semester_settings_updated_v1';
+export const ATTENDANCE_RECORDS_UPDATED_EVENT = 'halaqah_attendance_records_updated_v1';
+
 function getLocalAttendance(): any[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -25,6 +28,8 @@ function saveLocalAttendance(records: any[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(records));
+    window.dispatchEvent(new CustomEvent(ATTENDANCE_RECORDS_UPDATED_EVENT, { detail: records }));
+    window.dispatchEvent(new Event('storage'));
   } catch {}
 }
 
@@ -1012,7 +1017,11 @@ export function getSemesterSettings(): SemesterSettings {
 
 export function saveSemesterSettings(settings: SemesterSettings): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_SEMESTER, JSON.stringify(settings));
+  try {
+    localStorage.setItem(STORAGE_KEY_SEMESTER, JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent(SEMESTER_SETTINGS_UPDATED_EVENT, { detail: settings }));
+    window.dispatchEvent(new Event('storage'));
+  } catch {}
 }
 
 // ----------------------------------------------------

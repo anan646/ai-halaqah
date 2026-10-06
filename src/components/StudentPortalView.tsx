@@ -12,17 +12,27 @@ import {
   FileText,
   GraduationCap,
   HelpCircle,
+  Lock,
   LogOut,
   ShieldCheck,
   Sparkles,
   UserX,
   X,
 } from 'lucide-react';
-import { AttendanceRecord, Student, Announcement } from '@/lib/types';
-import { getAnnouncements, getStudentMajor, getStudentLevel, isRecordInTerm, getSemesterSettings, formatTermLabel } from '@/lib/data-store';
+import { AttendanceRecord, Student, Announcement, SemesterSettings } from '@/lib/types';
+import {
+  getAnnouncements,
+  getStudentMajor,
+  getStudentLevel,
+  isRecordInTerm,
+  getSemesterSettings,
+  formatTermLabel,
+  SEMESTER_SETTINGS_UPDATED_EVENT,
+  ATTENDANCE_RECORDS_UPDATED_EVENT,
+} from '@/lib/data-store';
 import { CertificateModal } from './CertificateModal';
 import { AnnouncementBox } from './AnnouncementBox';
-import { fetchPublicData, PublicRosterStudent } from '@/lib/api-client';
+import { fetchPublicData, PublicRosterStudent, getLocalAttendanceRecords } from '@/lib/api-client';
 
 interface Props {
   records: AttendanceRecord[];
@@ -81,7 +91,56 @@ export const StudentPortalView: React.FC<Props> = ({
   const [certOpen, setCertOpen] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const semester = useMemo(() => getSemesterSettings(), []);
+
+  // ข้อมูลภาคการศึกษาและเป้าหมายชั่วโมง (อัปเดตแบบเรียลไทม์)
+  const [semester, setSemester] = useState<SemesterSettings>(() => getSemesterSettings());
+
+  // ข้อมูลการเช็คชื่อ (อัปเดตแบบเรียลไทม์ทันทีที่อาจารย์หรือแอดมินบันทึก)
+  const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>(() => {
+    const local = getLocalAttendanceRecords();
+    return local && local.length > 0 ? local : records;
+  });
+
+  // ซิงค์ liveRecords เมื่อ props records มีการเปลี่ยนแปลง
+  useEffect(() => {
+    if (records && records.length > 0) {
+      setLiveRecords(records);
+    }
+  }, [records]);
+
+  // ติดตามการเปลี่ยนแปลงของภาคการศึกษา/เป้าหมายครั้งแบบเรียลไทม์ (Custom Event, Storage Event, Polling)
+  useEffect(() => {
+    const syncSemester = () => {
+      setSemester(getSemesterSettings());
+    };
+    window.addEventListener(SEMESTER_SETTINGS_UPDATED_EVENT, syncSemester);
+    window.addEventListener('storage', syncSemester);
+    const timer = setInterval(syncSemester, 3000);
+    return () => {
+      window.removeEventListener(SEMESTER_SETTINGS_UPDATED_EVENT, syncSemester);
+      window.removeEventListener('storage', syncSemester);
+      clearInterval(timer);
+    };
+  }, []);
+
+  // ติดตามการบันทึกการเช็คชื่อแบบเรียลไทม์ (Custom Event, Storage Event, Polling)
+  useEffect(() => {
+    const syncAttendance = () => {
+      const current = getLocalAttendanceRecords();
+      if (current && current.length > 0) {
+        setLiveRecords(current);
+      }
+    };
+    window.addEventListener(ATTENDANCE_RECORDS_UPDATED_EVENT, syncAttendance);
+    window.addEventListener('storage', syncAttendance);
+    const timer = setInterval(syncAttendance, 3000);
+    return () => {
+      window.removeEventListener(ATTENDANCE_RECORDS_UPDATED_EVENT, syncAttendance);
+      window.removeEventListener('storage', syncAttendance);
+      clearInterval(timer);
+    };
+  }, []);
+
   // ข้อมูลกลางจาก Google Sheet (ประกาศและรายชื่อ) ทำให้นักศึกษาเห็นตรงกันทุกเครื่อง
   const [remote, setRemote] = useState<{ ok: boolean; announcements: Announcement[]; roster: PublicRosterStudent[] }>({
     ok: false,
@@ -156,11 +215,11 @@ export const StudentPortalView: React.FC<Props> = ({
         (a.targetType === 'all' || a.targetStudentIds.includes(sid)) &&
         (!a.expiresAt || new Date(a.expiresAt).getTime() > now)
     );
-  }, [student]);
+  }, [student, remote]);
 
   const stats = useMemo(() => {
     if (!student) return null;
-    const recs = records
+    const recs = liveRecords
       .filter((r) => (r.studentId || '').trim() === student.studentId.trim() && isRecordInTerm(r, semester))
       .sort((a, b) => b.date.localeCompare(a.date));
     const present = recs.filter((r) => r.status === 'มา').length;
@@ -170,8 +229,16 @@ export const StudentPortalView: React.FC<Props> = ({
     // ผูก % การเข้าร่วมกับจำนวนครั้งเป้าหมายที่กำหนดโดยแอดมิน (semester.targetSessions)
     const target = semester?.targetSessions > 0 ? semester.targetSessions : (total || 12);
     const rate = target > 0 ? Math.min(100, (present / target) * 100) : 0;
-    return { recs, present, absent, leave, total, target, rate, passed: rate >= 80 };
-  }, [student, records, semester]);
+    const passed = rate >= 80;
+    return { recs, present, absent, leave, total, target, rate, passed };
+  }, [student, liveRecords, semester]);
+
+  // ปิดหน้าต่างเกียรติบัตรทันทีหากอัตราการเข้าร่วมตกลงต่ำกว่า 80% แบบเรียลไทม์
+  useEffect(() => {
+    if (stats && !stats.passed && certOpen) {
+      setCertOpen(false);
+    }
+  }, [stats?.passed, certOpen]);
 
   const logo = customLogo || '/logo.png';
 
@@ -340,27 +407,93 @@ export const StudentPortalView: React.FC<Props> = ({
       {/* ===== การแจ้งเตือน (กล่องเดียว) ===== */}
       <AnnouncementBox items={announcements} readIds={readIds} onMarkRead={markRead} />
 
-      {/* ===== เกียรติบัตร ===== */}
-      {stats.passed && (
-        <div className="rounded-3xl bg-gradient-to-r from-amber-400 to-yellow-300 text-purple-950 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/50 flex items-center justify-center shrink-0">
+      {/* ===== ส่วนเกียรติบัตร (อัปเดตเรียลไทม์ • เฉพาะนักศึกษาที่ผ่านเกณฑ์ 80% เท่านั้น) ===== */}
+      {stats.passed ? (
+        <div className="rounded-3xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-300 text-purple-950 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-amber-500/20 border border-amber-200 animate-fadeIn">
+          <div className="flex items-center gap-3.5">
+            <div className="w-13 h-13 rounded-2xl bg-white/60 backdrop-blur shadow-sm flex items-center justify-center shrink-0 text-amber-800">
               <Award className="w-7 h-7" />
             </div>
             <div>
-              <div className="font-black">ยินดีด้วย! คุณผ่านเกณฑ์ ({stats.rate.toFixed(1)}%)</div>
-              <div className="text-xs font-semibold text-purple-900/80">
-                {stats.rate >= 90 ? 'เกียรตินิยม A+ ' : ''}รับเกียรติบัตรได้เลย
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-base">ยินดีด้วย! คุณผ่านเกณฑ์ ({stats.rate.toFixed(1)}%)</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-extrabold shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" />
+                  ปลดล็อกแล้ว
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/70 text-purple-950 text-[10px] font-bold">
+                  ⚡ เรียลไทม์
+                </span>
+              </div>
+              <div className="text-xs font-semibold text-purple-900/90 mt-1">
+                {stats.rate >= 90 ? 'เกียรตินิยม A+ • ' : ''}เข้าร่วมครบตามเกณฑ์ ≥80% ({passRequirement} ครั้งขึ้นไป) รับเกียรติบัตรได้เลย
               </div>
             </div>
           </div>
           <button
             type="button"
             onClick={() => setCertOpen(true)}
-            className="px-5 py-3 rounded-2xl bg-purple-900 hover:bg-purple-950 text-white font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition shrink-0"
+            className="px-5 py-3 rounded-2xl bg-purple-900 hover:bg-purple-950 text-white font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition shrink-0 shadow-md shadow-purple-950/20"
           >
-            <Sparkles className="w-4 h-4 text-amber-300" /> ดูเกียรติบัตร
+            <Sparkles className="w-4 h-4 text-amber-300" /> ดูเกียรติบัตร / บันทึก PDF
           </button>
+        </div>
+      ) : (
+        <div className="rounded-3xl bg-white border border-purple-100 p-5 shadow-card space-y-3.5 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 text-purple-500">
+                <Lock className="w-6 h-6 text-purple-700" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-black text-purple-950 text-sm sm:text-base">เกียรติบัตรถูกล็อก</span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold">
+                    ต้องผ่าน ≥80%
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-bold">
+                    ⚡ อัปเดตเรียลไทม์
+                  </span>
+                </div>
+                <div className="text-xs text-purple-700/80 mt-1">
+                  ปัจจุบันเข้าร่วม {stats.present}/{stats.target} ครั้ง ({stats.rate.toFixed(1)}%) • ขาดอีก <strong className="text-purple-950">{remainingToPass} ครั้ง</strong> เพื่อปลดล็อกเกียรติบัตร
+                </div>
+              </div>
+            </div>
+            <div className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-purple-50 text-purple-400 border border-purple-100 text-xs font-bold shrink-0 cursor-not-allowed select-none">
+              <Lock className="w-3.5 h-3.5" /> เกียรติบัตรยังไม่ปลดล็อก
+            </div>
+          </div>
+
+          {/* แถบความคืบหน้าสู่เกณฑ์ 80% */}
+          <div className="pt-0.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-purple-800/80 mb-1.5">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                อัตราการเข้าร่วมปัจจุบัน: <strong className="text-purple-950">{stats.rate.toFixed(1)}%</strong>
+              </span>
+              <span>
+                เกณฑ์ผ่าน: <strong className="text-purple-950">80.0%</strong> ({passRequirement} ครั้ง)
+              </span>
+            </div>
+            <div className="relative w-full h-3 rounded-full bg-purple-100/80 overflow-hidden ring-1 ring-purple-200/50">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-purple-500 via-indigo-600 to-purple-700 transition-all duration-500"
+                style={{ width: `${Math.min(100, stats.rate)}%` }}
+              />
+              {/* เส้นขีดบอกตำแหน่ง 80% */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-10"
+                style={{ left: '80%' }}
+                title="เกณฑ์ผ่าน 80%"
+              />
+            </div>
+            <div className="flex justify-between items-center text-[10px] text-purple-500 mt-1">
+              <span>0%</span>
+              <span className="font-bold text-amber-700">เกณฑ์ 80%</span>
+              <span>100%</span>
+            </div>
+          </div>
         </div>
       )}
 
