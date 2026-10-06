@@ -167,8 +167,10 @@ export const StudentPortalView: React.FC<Props> = ({
     const absent = recs.filter((r) => r.status === 'ขาด').length;
     const leave = recs.filter((r) => r.status === 'ลา').length;
     const total = recs.length;
-    const rate = total > 0 ? (present / total) * 100 : 0;
-    return { recs, present, absent, leave, total, rate, passed: rate >= 80 };
+    // ผูก % การเข้าร่วมกับจำนวนครั้งเป้าหมายที่กำหนดโดยแอดมิน (semester.targetSessions)
+    const target = semester?.targetSessions > 0 ? semester.targetSessions : (total || 12);
+    const rate = target > 0 ? Math.min(100, (present / target) * 100) : 0;
+    return { recs, present, absent, leave, total, target, rate, passed: rate >= 80 };
   }, [student, records, semester]);
 
   const logo = customLogo || '/logo.png';
@@ -259,16 +261,16 @@ export const StudentPortalView: React.FC<Props> = ({
 
   /* ============================ หน้าข้อมูลนักศึกษา ============================ */
   const level = getStudentLevel(student);
+  const passRequirement = Math.ceil(stats.target * 0.8);
+  const remainingToPass = Math.max(0, passRequirement - stats.present);
   const badge =
-    stats.total === 0
-      ? null
-      : stats.rate === 100
+    stats.rate >= 100
       ? 'เข้าครบ 100%'
       : stats.rate >= 90
       ? 'ดีเยี่ยม 90%+'
       : stats.rate >= 80
-      ? 'ผ่านเกณฑ์'
-      : 'ต้องปรับปรุง';
+      ? 'ผ่านเกณฑ์ (80%+)'
+      : `ขาดอีก ${remainingToPass} ครั้ง เพื่อผ่าน`;
 
   const tiles = [
     { label: 'มา', value: stats.present, icon: <Check className="w-4 h-4" />, grad: 'from-violet-500 to-purple-700' },
@@ -373,11 +375,12 @@ export const StudentPortalView: React.FC<Props> = ({
             <div className="text-xs text-purple-200 font-semibold">อัตราการเข้าร่วม • {formatTermLabel(semester)}</div>
             <div className="text-2xl font-black leading-tight">
               {stats.present}
-              <span className="text-sm font-bold text-purple-200"> / {stats.total} ครั้ง</span>
+              <span className="text-sm font-bold text-purple-200"> / {stats.target} ครั้ง (เป้าหมาย)</span>
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {badge && <span className="px-2.5 py-1 rounded-full bg-white/15 text-[11px] font-bold">{badge}</span>}
-              <span className="px-2.5 py-1 rounded-full bg-white/15 text-[11px] font-bold">เกณฑ์ผ่าน 80%</span>
+              <span className="px-2.5 py-1 rounded-full bg-white/15 text-[11px] font-bold">เกณฑ์ผ่าน 80% ({passRequirement} ครั้ง)</span>
+              <span className="px-2.5 py-1 rounded-full bg-white/10 text-[11px] text-purple-200">เช็คชื่อแล้ว {stats.total} ครั้ง</span>
             </div>
           </div>
         </div>
@@ -438,7 +441,7 @@ export const StudentPortalView: React.FC<Props> = ({
           student={student}
           attendanceRate={stats.rate}
           totalPresent={stats.present}
-          totalSessions={stats.total}
+          totalSessions={stats.target}
           customLogo={customLogo}
           onClose={() => setCertOpen(false)}
         />

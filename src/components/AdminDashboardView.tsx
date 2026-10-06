@@ -542,13 +542,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       map.get(r.studentId)!.push(r);
     });
 
+    const target = semesterSettings.targetSessions || 12;
     return students.map((st) => {
       const recs = map.get(st.studentId) || [];
       const present = recs.filter((r) => r.status === 'มา').length;
       const absent = recs.filter((r) => r.status === 'ขาด').length;
       const leave = recs.filter((r) => r.status === 'ลา').length;
       const total = recs.length;
-      const rate = total > 0 ? (present / total) * 100 : 0;
+      // ผูก % การเข้าร่วมกับจำนวนครั้งที่กำหนดโดยแอดมิน (targetSessions)
+      const rate = target > 0 ? Math.min(100, (present / target) * 100) : 0;
       const latest = recs[recs.length - 1];
 
       return {
@@ -568,7 +570,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         lastRecordedTime: latest ? `${latest.date} ${latest.recordedTime || ''}` : '-',
       };
     }).sort((a, b) => b.attendanceRate - a.attendanceRate);
-  }, [records, students]);
+  }, [records, students, semesterSettings]);
 
   // ==================== MATRIX VIEW DATA (MATCHING IMAGE 3) ====================
   const matrixCurrentTeacher = useMemo(() => {
@@ -611,8 +613,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         else if (r.status === 'ลา') leave++;
       });
 
-      const totalDates = matrixUniqueDates.length;
-      const rate = totalDates > 0 ? (present / totalDates) * 100 : 0;
+      // ผูก % การเข้าร่วมกับจำนวนครั้งที่กำหนดโดยแอดมิน (targetSessions)
+      const target = semesterSettings.targetSessions || matrixUniqueDates.length || 12;
+      const rate = target > 0 ? Math.min(100, (present / target) * 100) : 0;
       const evaluation = rate >= 80 ? 'ผ่าน' : 'ไม่ผ่าน';
 
       return {
@@ -627,7 +630,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         evaluation,
       };
     });
-  }, [matrixStudents, matrixRecords, matrixUniqueDates]);
+  }, [matrixStudents, matrixRecords, matrixUniqueDates, semesterSettings]);
 
   // Drag and drop handlers
   const handleDropStudent = (targetTeacher: string) => {

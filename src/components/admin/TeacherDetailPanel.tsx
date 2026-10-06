@@ -13,7 +13,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { AttendanceRecord, Student } from '@/lib/types';
-import { getStudentMajor } from '@/lib/data-store';
+import { getStudentMajor, getSemesterSettings } from '@/lib/data-store';
 
 export interface TeacherRow {
   id: string;
@@ -78,10 +78,14 @@ export const TeacherDetailPanel: React.FC<Props> = ({
   // ข้อมูลนักศึกษาในกลุ่ม: นับตามรหัสนักศึกษา เพื่อให้ประวัติติดตัวนักศึกษาแม้ถูกย้ายกลุ่มมาแล้ว
   const detail = useMemo(() => {
     if (!current) return null;
+    const semester = getSemesterSettings();
     const members = students.filter((s) => s.teacherName === current.teacher);
     const ids = new Set(members.map((m) => m.studentId));
     const groupRecords = records.filter((r) => ids.has(r.studentId) || r.teacherName === current.teacher);
     const dates = Array.from(new Set(groupRecords.map((r) => r.date))).sort();
+    // ผูก % การเข้าร่วมกับจำนวนครั้งที่กำหนดโดยแอดมิน (semester.targetSessions)
+    const targetSessions = semester?.targetSessions > 0 ? semester.targetSessions : (dates.length || 12);
+
     const summaries = members.map((st) => {
       const map: Record<string, string> = {};
       let present = 0;
@@ -95,10 +99,10 @@ export const TeacherDetailPanel: React.FC<Props> = ({
           else if (r.status === 'ขาด') absent++;
           else if (r.status === 'ลา') leave++;
         });
-      const rate = dates.length > 0 ? (present / dates.length) * 100 : 0;
+      const rate = targetSessions > 0 ? Math.min(100, (present / targetSessions) * 100) : 0;
       return { st, map, present, absent, leave, rate, pass: rate >= 80 };
     });
-    return { members, dates, summaries, passCount: summaries.filter((s) => s.pass).length };
+    return { members, dates, summaries, targetSessions, passCount: summaries.filter((s) => s.pass).length };
   }, [current, students, records]);
 
   const idx = current ? filtered.findIndex((r) => r.teacher === current.teacher) : -1;
@@ -237,9 +241,10 @@ export const TeacherDetailPanel: React.FC<Props> = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {[
                   ['นักศึกษา', `${detail.members.length}`, 'คน'],
+                  ['เป้าหมายภาคเรียน', `${detail.targetSessions}`, 'ครั้ง'],
                   ['เช็คชื่อแล้ว', `${detail.dates.length}`, 'ครั้ง'],
                   ['ผ่านเกณฑ์ ≥80%', `${detail.passCount}`, 'คน'],
                 ].map(([label, v, unit]) => (

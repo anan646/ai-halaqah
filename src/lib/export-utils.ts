@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, HeadingLevel, WidthType, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 import { AttendanceRecord, TeacherSummary, StudentSummary } from './types';
+import { getSemesterSettings } from './data-store';
 
 // ======================== EXCEL EXPORT (.XLSX) ========================
 export function exportToExcel(
@@ -254,8 +255,10 @@ export function exportGroupDetailedExcel(
       rowObj[d] = status;
     });
 
-    const totalDays = uniqueDates.length;
-    const rate = totalDays > 0 ? (present / totalDays) * 100 : 0;
+    const semester = getSemesterSettings();
+    const target = semester?.targetSessions > 0 ? semester.targetSessions : (uniqueDates.length || 12);
+    const rate = target > 0 ? Math.min(100, (present / target) * 100) : 0;
+    rowObj['เป้าหมาย (ครั้ง)'] = target;
     rowObj['มา (ครั้ง)'] = present;
     rowObj['ขาด (ครั้ง)'] = absent;
     rowObj['ลา (ครั้ง)'] = leave;
