@@ -50,6 +50,10 @@ import {
   Menu,
   Share2,
   PlusCircle,
+  AlertTriangle,
+  UserX,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import {
   AttendanceRecord,
@@ -105,6 +109,7 @@ import {
   getTermHistory,
   promoteSelectedStudents,
   setStudentYearLevel,
+  batchAssignStudentsToTeacher,
 } from '@/lib/data-store';
 import {
   exportToExcel,
@@ -322,6 +327,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [originalTeacherName, setOriginalTeacherName] = useState<string>('');
   const [editorMsg, setEditorMsg] = useState<{ text: string; success: boolean } | null>(null);
   const [editorSearch, setEditorSearch] = useState('');
+
+  // ==================== STUDENT FILTER & BATCH ASSIGN STATE ====================
+  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'unassigned' | 'assigned'>('all');
+  const [studentYearFilter, setStudentYearFilter] = useState<string>('all');
+  const [studentGenderFilter, setStudentGenderFilter] = useState<string>('all');
+  const [studentMajorFilter, setStudentMajorFilter] = useState<string>('all');
+  const [studentTeacherFilter, setStudentTeacherFilter] = useState<string>('all');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [batchTargetTeacher, setBatchTargetTeacher] = useState<string>('');
+  const [isBatchAssigning, setIsBatchAssigning] = useState<boolean>(false);
 
   // ==================== SUB-ADMINS STATE ====================
   const [subAdminsList, setSubAdminsList] = useState<SubAdmin[]>([]);
@@ -734,6 +749,147 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setEditorMsg({ text: res.message, success: res.success });
       if (res.success) reloadDataStore();
     }
+  };
+
+  // ==================== STUDENT FILTER & BATCH ACTIONS ====================
+  const activeTeacherNamesSet = useMemo(() => {
+    return new Set(teachers.map((t) => t.name.trim()));
+  }, [teachers]);
+
+  const isStudentUnassigned = useMemo(() => {
+    return (s: Student) => {
+      if (!s.teacherName) return true;
+      const tn = s.teacherName.trim();
+      if (tn === '' || tn === '-' || tn.includes('ไม่ระบุ') || tn.includes('ตกหล่น')) return true;
+      return !activeTeacherNamesSet.has(tn);
+    };
+  }, [activeTeacherNamesSet]);
+
+  const unassignedStudentsCount = useMemo(() => {
+    return students.filter(isStudentUnassigned).length;
+  }, [students, isStudentUnassigned]);
+
+  const assignedStudentsCount = useMemo(() => {
+    return students.length - unassignedStudentsCount;
+  }, [students, unassignedStudentsCount]);
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      // 1. Status filter (all | unassigned | assigned)
+      if (studentStatusFilter === 'unassigned' && !isStudentUnassigned(s)) return false;
+      if (studentStatusFilter === 'assigned' && isStudentUnassigned(s)) return false;
+
+      // 2. Year level filter
+      if (studentYearFilter !== 'all' && s.yearLevel !== studentYearFilter) return false;
+
+      // 3. Gender filter
+      if (studentGenderFilter !== 'all' && s.gender !== studentGenderFilter) return false;
+
+      // 4. Major filter
+      if (studentMajorFilter !== 'all') {
+        const major = getStudentMajor(s);
+        if (major !== studentMajorFilter) return false;
+      }
+
+      // 5. Specific Teacher filter
+      if (studentTeacherFilter !== 'all') {
+        if (studentTeacherFilter === '__unassigned__') {
+          if (!isStudentUnassigned(s)) return false;
+        } else if (s.teacherName !== studentTeacherFilter) {
+          return false;
+        }
+      }
+
+      // 6. Search input (รหัส, ชื่อ, อาจารย์, สาขา, กลุ่ม)
+      if (editorSearch.trim()) {
+        const q = editorSearch.toLowerCase().trim();
+        const sMajor = getStudentMajor(s).toLowerCase();
+        const match =
+          s.fullName.toLowerCase().includes(q) ||
+          s.studentId.toLowerCase().includes(q) ||
+          (s.teacherName && s.teacherName.toLowerCase().includes(q)) ||
+          sMajor.includes(q) ||
+          (s.groupName && s.groupName.toLowerCase().includes(q));
+        if (!match) return false;
+      }
+
+      return true;
+    });
+  }, [
+    students,
+    studentStatusFilter,
+    studentYearFilter,
+    studentGenderFilter,
+    studentMajorFilter,
+    studentTeacherFilter,
+    editorSearch,
+    isStudentUnassigned,
+  ]);
+
+  const isAllFilteredSelected = useMemo(() => {
+    if (filteredStudents.length === 0) return false;
+    return filteredStudents.every((s) => selectedStudentIds.includes(s.studentId));
+  }, [filteredStudents, selectedStudentIds]);
+
+  const handleToggleSelectAllStudents = () => {
+    if (isAllFilteredSelected) {
+      const filteredIds = new Set(filteredStudents.map((s) => s.studentId));
+      setSelectedStudentIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+    } else {
+      const newIds = filteredStudents.map((s) => s.studentId);
+      setSelectedStudentIds((prev) => Array.from(new Set([...prev, ...newIds])));
+    }
+  };
+
+  const handleToggleSelectStudent = (studentId: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const handleSelectAllUnassigned = () => {
+    const unassigned = students.filter(isStudentUnassigned);
+    setSelectedStudentIds(unassigned.map((s) => s.studentId));
+    setStudentStatusFilter('unassigned');
+  };
+
+  const handleBatchAssignTeacher = () => {
+    if (!batchTargetTeacher) {
+      setEditorMsg({ text: 'กรุณาเลือกอาจารย์ผู้ดูแลเป้าหมาย', success: false });
+      return;
+    }
+    if (selectedStudentIds.length === 0) {
+      setEditorMsg({ text: 'กรุณาเลือกนักศึกษาอย่างน้อย 1 คน', success: false });
+      return;
+    }
+
+    setIsBatchAssigning(true);
+    const res = batchAssignStudentsToTeacher(selectedStudentIds, batchTargetTeacher);
+    setIsBatchAssigning(false);
+
+    setEditorMsg({ text: res.message, success: res.success });
+    if (res.success) {
+      setSelectedStudentIds([]);
+      reloadDataStore();
+    }
+    setTimeout(() => setEditorMsg(null), 5000);
+  };
+
+  const hasActiveStudentFilters =
+    studentStatusFilter !== 'all' ||
+    studentYearFilter !== 'all' ||
+    studentGenderFilter !== 'all' ||
+    studentMajorFilter !== 'all' ||
+    studentTeacherFilter !== 'all' ||
+    editorSearch.trim() !== '';
+
+  const handleResetStudentFilters = () => {
+    setStudentStatusFilter('all');
+    setStudentYearFilter('all');
+    setStudentGenderFilter('all');
+    setStudentMajorFilter('all');
+    setStudentTeacherFilter('all');
+    setEditorSearch('');
   };
 
   // Manual / Guide & Quick Modal States
@@ -3743,79 +3899,349 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           )}
 
-          {/* Students List */}
+          {/* Students List & Advanced Filtering */}
           {editorSubTab === 'students' && (
-            <div className="overflow-x-auto border border-purple-100 rounded-2xl">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-purple-100/60 text-purple-950 font-bold border-b border-purple-200">
-                    <th className="py-2.5 px-3">รหัส</th>
-                    <th className="py-2.5 px-3">ชื่อ - นามสกุล</th>
-                    <th className="py-2.5 px-3">สาขาวิชา</th>
-                    <th className="py-2.5 px-3 text-center">เพศ</th>
-                    <th className="py-2.5 px-3 text-center">ชั้นปี</th>
-                    <th className="py-2.5 px-3">กลุ่ม</th>
-                    <th className="py-2.5 px-3">อาจารย์ผู้ดูแล</th>
-                    <th className="py-2.5 px-3 text-center">จัดการ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-purple-50">
-                  {students
-                    .filter(
-                      (s) =>
-                        !editorSearch ||
-                        s.fullName.toLowerCase().includes(editorSearch.toLowerCase()) ||
-                        s.studentId.includes(editorSearch) ||
-                        s.teacherName.toLowerCase().includes(editorSearch.toLowerCase()) ||
-                        getStudentMajor(s).toLowerCase().includes(editorSearch.toLowerCase())
-                    )
-                    .slice(0, 100)
-                    .map((st) => (
-                      <tr key={st.studentId} className="hover:bg-purple-50/40">
-                        <td className="py-2 px-3 font-mono font-bold text-purple-900">{st.studentId}</td>
-                        <td className="py-2 px-3 font-bold text-purple-950">{st.fullName}</td>
-                        <td className="py-2 px-3">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200 whitespace-nowrap">
-                            {getStudentMajor(st)}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            st.gender === 'ชาย' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
-                          }`}>
-                            {st.gender}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-center font-medium">{st.yearLevel}</td>
-                        <td className="py-2 px-3 text-purple-800/80">{st.groupName}</td>
-                        <td className="py-2 px-3 text-purple-900 font-semibold">{st.teacherName}</td>
-                        <td className="py-2 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOriginalStudentId(st.studentId);
-                                setEditingStudent(st);
-                              }}
-                              className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                              <span>แก้ไข</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteStudent(st.studentId, st.fullName)}
-                              className="p-1 hover:bg-rose-100 text-rose-600 rounded-lg transition-all"
-                              title="ลบนักศึกษา"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+            <div className="space-y-3">
+              {/* Quick Filter Pills & Result Counter */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                {/* Status Filter Buttons */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setStudentStatusFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      studentStatusFilter === 'all'
+                        ? 'bg-purple-800 text-white shadow-xs'
+                        : 'bg-white hover:bg-purple-50 text-purple-900 border border-purple-200'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>ทั้งหมด ({students.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStudentStatusFilter('unassigned')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      studentStatusFilter === 'unassigned'
+                        ? 'bg-amber-600 text-white shadow-xs ring-2 ring-amber-400'
+                        : unassignedStudentsCount > 0
+                        ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                        : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
+                    }`}
+                  >
+                    <AlertTriangle className={`w-3.5 h-3.5 ${unassignedStudentsCount > 0 && studentStatusFilter !== 'unassigned' ? 'text-amber-600' : ''}`} />
+                    <span>⚠️ ตกหล่น/ไม่มีอาจารย์ ({unassignedStudentsCount})</span>
+                    {unassignedStudentsCount > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                        studentStatusFilter === 'unassigned' ? 'bg-white text-amber-800' : 'bg-amber-200 text-amber-900'
+                      }`}>
+                        ต้องระบุ
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStudentStatusFilter('assigned')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      studentStatusFilter === 'assigned'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-200'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>มีอาจารย์แล้ว ({assignedStudentsCount})</span>
+                  </button>
+                </div>
+
+                {/* Counter & Clear filters button */}
+                <div className="flex items-center gap-2 text-xs text-purple-900 font-medium self-end sm:self-auto">
+                  <span>
+                    แสดง <strong className="font-extrabold text-purple-950">{filteredStudents.length}</strong> จาก {students.length} คน
+                  </span>
+                  {hasActiveStudentFilters && (
+                    <button
+                      type="button"
+                      onClick={handleResetStudentFilters}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-semibold transition-all active:scale-95"
+                      title="ล้างตัวกรองและการค้นหาทั้งหมด"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>ล้างตัวกรอง</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Secondary Filter Controls (Dropdowns: ชั้นปี, เพศ, สาขาวิชา, อาจารย์) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-purple-50/50 p-2.5 rounded-2xl border border-purple-100">
+                <div>
+                  <label className="block text-[10px] font-bold text-purple-900 mb-1">ชั้นปี</label>
+                  <select
+                    value={studentYearFilter}
+                    onChange={(e) => setStudentYearFilter(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg text-purple-950 font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="all">ทุกชั้นปี</option>
+                    <option value="ปี 1">ปี 1</option>
+                    <option value="ปี 2">ปี 2</option>
+                    <option value="ปี 3">ปี 3</option>
+                    <option value="ปี 4">ปี 4</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-purple-900 mb-1">เพศ</label>
+                  <select
+                    value={studentGenderFilter}
+                    onChange={(e) => setStudentGenderFilter(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg text-purple-950 font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="all">ทุกเพศ</option>
+                    <option value="ชาย">ชาย</option>
+                    <option value="หญิง">หญิง</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-purple-900 mb-1">สาขาวิชา</label>
+                  <select
+                    value={studentMajorFilter}
+                    onChange={(e) => setStudentMajorFilter(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg text-purple-950 font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="all">ทุกสาขาวิชา ({majorsList.length})</option>
+                    {majorsList.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-purple-900 mb-1">อาจารย์ผู้ดูแล</label>
+                  <select
+                    value={studentTeacherFilter}
+                    onChange={(e) => setStudentTeacherFilter(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg text-purple-950 font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="all">ทุกอาจารย์ ({teachers.length})</option>
+                    <option value="__unassigned__" className="text-amber-700 font-bold">⚠️ เฉพาะไม่มีอาจารย์/ตกหล่น</option>
+                    {teachers.map((t) => (
+                      <option key={t.groupId} value={t.name}>
+                        {t.name} ({t.groupName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* BATCH ACTION BAR (When 1 or more students are selected) */}
+              {selectedStudentIds.length > 0 && (
+                <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-800 text-white p-3 rounded-2xl shadow-lg border border-purple-600 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 animate-fadeIn">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-purple-900 font-extrabold text-xs shadow-sm">
+                      {selectedStudentIds.length}
+                    </span>
+                    <div>
+                      <p className="font-bold text-xs">เลือกนักศึกษาอยู่ {selectedStudentIds.length} คน</p>
+                      <p className="text-[11px] text-purple-200">เลือกอาจารย์ผู้ดูแลเพื่อกำหนดหรือโยกย้ายให้นักศึกษาที่เลือกทั้งหมดพร้อมกัน</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={batchTargetTeacher}
+                      onChange={(e) => setBatchTargetTeacher(e.target.value)}
+                      className="px-3 py-2 text-xs bg-white text-purple-950 font-bold rounded-xl border border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    >
+                      <option value="">-- เลือกอาจารย์ผู้ดูแลเป้าหมาย --</option>
+                      {teachers.map((t) => (
+                        <option key={t.groupId} value={t.name}>
+                          {t.name} ({t.groupName} - {t.gender} {t.yearLevel})
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleBatchAssignTeacher}
+                      disabled={!batchTargetTeacher || isBatchAssigning}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{isBatchAssigning ? 'กำลังบันทึก...' : `บันทึกกำหนดอาจารย์ (${selectedStudentIds.length} คน)`}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentIds([])}
+                      className="px-3 py-2 bg-purple-800 hover:bg-purple-700 text-purple-200 hover:text-white font-semibold text-xs rounded-xl transition-all"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick shortcut banner when viewing unassigned and not all selected */}
+              {studentStatusFilter === 'unassigned' && unassignedStudentsCount > 0 && selectedStudentIds.length === 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-amber-950">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      พบนศ. ที่ยังไม่มีอาจารย์ผู้ดูแลหรือตกหล่นจำนวน <strong className="font-bold text-amber-900">{unassignedStudentsCount}</strong> คน
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllUnassigned}
+                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs active:scale-95 flex items-center gap-1.5"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>เลือก นศ. ที่ไม่มีอาจารย์ทั้งหมด ({unassignedStudentsCount} คน)</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Students Data Table */}
+              <div className="overflow-x-auto border border-purple-100 rounded-2xl shadow-xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-purple-100/60 text-purple-950 font-bold border-b border-purple-200">
+                      <th className="py-2.5 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllFilteredSelected}
+                          onChange={handleToggleSelectAllStudents}
+                          className="w-4 h-4 rounded border-purple-300 text-purple-800 focus:ring-purple-400 cursor-pointer"
+                          title={isAllFilteredSelected ? 'ยกเลิกการเลือกทั้งหมด' : 'เลือกทั้งหมดที่แสดง'}
+                        />
+                      </th>
+                      <th className="py-2.5 px-3">รหัส</th>
+                      <th className="py-2.5 px-3">ชื่อ - นามสกุล</th>
+                      <th className="py-2.5 px-3">สาขาวิชา</th>
+                      <th className="py-2.5 px-3 text-center">เพศ</th>
+                      <th className="py-2.5 px-3 text-center">ชั้นปี</th>
+                      <th className="py-2.5 px-3">กลุ่ม</th>
+                      <th className="py-2.5 px-3">อาจารย์ผู้ดูแล</th>
+                      <th className="py-2.5 px-3 text-center">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-purple-50">
+                    {filteredStudents.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-gray-500">
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <UserX className="w-8 h-8 text-purple-300" />
+                            <p className="font-semibold text-sm text-purple-950">ไม่พบข้อมูลนักศึกษาที่ตรงกับเงื่อนไข</p>
+                            <p className="text-xs text-purple-500">ลองเปลี่ยนคำค้นหา หรือล้างตัวกรองเพื่อดูข้อมูลทั้งหมด</p>
+                            {hasActiveStudentFilters && (
+                              <button
+                                type="button"
+                                onClick={handleResetStudentFilters}
+                                className="mt-2 px-3.5 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-xl font-bold text-xs transition-all"
+                              >
+                                ล้างตัวกรองทั้งหมด
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredStudents.map((st) => {
+                        const isUnassigned = isStudentUnassigned(st);
+                        const isSelected = selectedStudentIds.includes(st.studentId);
+                        const isTeacherDeleted = st.teacherName && !activeTeacherNamesSet.has(st.teacherName.trim());
+
+                        return (
+                          <tr
+                            key={st.studentId}
+                            className={`transition-colors ${
+                              isSelected
+                                ? 'bg-purple-100/70'
+                                : isUnassigned
+                                ? 'bg-amber-50/40 hover:bg-amber-100/50'
+                                : 'hover:bg-purple-50/40'
+                            }`}
+                          >
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelectStudent(st.studentId)}
+                                className="w-4 h-4 rounded border-purple-300 text-purple-800 focus:ring-purple-400 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-2 px-3 font-mono font-bold text-purple-900">{st.studentId}</td>
+                            <td className="py-2 px-3 font-bold text-purple-950">
+                              <div className="flex items-center gap-1.5">
+                                <span>{st.fullName}</span>
+                                {isUnassigned && (
+                                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                    ตกหล่น
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200 whitespace-nowrap">
+                                {getStudentMajor(st)}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  st.gender === 'ชาย' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
+                                }`}
+                              >
+                                {st.gender}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center font-medium">{st.yearLevel}</td>
+                            <td className="py-2 px-3 text-purple-800/80">{st.groupName || '-'}</td>
+                            <td className="py-2 px-3">
+                              {isUnassigned ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  <span>{isTeacherDeleted ? `${st.teacherName} (ไม่อยู่ในระบบ)` : 'ยังไม่มีอาจารย์'}</span>
+                                </span>
+                              ) : (
+                                <span className="text-purple-900 font-semibold">{st.teacherName}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOriginalStudentId(st.studentId);
+                                    setEditingStudent(st);
+                                  }}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>แก้ไข</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteStudent(st.studentId, st.fullName)}
+                                  className="p-1 hover:bg-rose-100 text-rose-600 rounded-lg transition-all"
+                                  title="ลบนักศึกษา"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -3981,17 +4407,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <div>
                     <label className="font-bold text-purple-900">อาจารย์ผู้ดูแล</label>
                     <select
-                      value={editingStudent.teacherName}
+                      value={editingStudent.teacherName || ''}
                       onChange={(e) => {
                         const t = teachers.find((item) => item.name === e.target.value);
                         setEditingStudent({
                           ...editingStudent,
                           teacherName: e.target.value,
                           groupName: t ? t.groupName : editingStudent.groupName,
+                          groupId: t ? t.groupId : editingStudent.groupId,
                         });
                       }}
                       className="w-full mt-1 p-2.5 border border-purple-200 rounded-xl font-semibold"
                     >
+                      {!teachers.some((t) => t.name === editingStudent.teacherName) && (
+                        <option value={editingStudent.teacherName || ''}>
+                          ⚠️ {editingStudent.teacherName ? `${editingStudent.teacherName} (ไม่อยู่ในระบบ/ตกหล่น)` : '-- ยังไม่มีอาจารย์ผู้ดูแล (ตกหล่น) --'}
+                        </option>
+                      )}
                       {teachers.map((t) => (
                         <option key={t.groupId} value={t.name}>
                           {t.name} ({t.groupName})

@@ -319,6 +319,47 @@ export function moveStudentToTeacher(
   };
 }
 
+// 1.1 กำหนดหรือโยกย้ายนักศึกษาทีละหลายคน (Batch Assign)
+export function batchAssignStudentsToTeacher(
+  studentIds: string[],
+  targetTeacherName: string
+): { success: boolean; message: string; count: number } {
+  if (!studentIds || studentIds.length === 0) {
+    return { success: false, message: 'กรุณาเลือกนักศึกษาอย่างน้อย 1 คน', count: 0 };
+  }
+
+  const students = getActiveStudents();
+  const teachers = getActiveTeachers();
+
+  const targetTeacher = teachers.find((t) => t.name.trim() === targetTeacherName.trim());
+  if (!targetTeacher) {
+    return { success: false, message: 'ไม่พบอาจารย์เป้าหมายที่เลือก', count: 0 };
+  }
+
+  let count = 0;
+  const targetIdSet = new Set(studentIds);
+  for (let i = 0; i < students.length; i++) {
+    if (targetIdSet.has(students[i].studentId)) {
+      students[i] = {
+        ...students[i],
+        teacherName: targetTeacher.name,
+        groupName: targetTeacher.groupName,
+        groupId: targetTeacher.groupId,
+        yearLevel: students[i].yearLevel || targetTeacher.yearLevel,
+        gender: students[i].gender || targetTeacher.gender,
+      };
+      count++;
+    }
+  }
+
+  saveActiveStudents(students);
+  return {
+    success: true,
+    message: `กำหนดอาจารย์ "${targetTeacher.name}" (${targetTeacher.groupName}) ให้นักศึกษาจำนวน ${count} คน สำเร็จแล้ว`,
+    count,
+  };
+}
+
 // 2. แก้ไขข้อมูลนักศึกษา (รหัส, ชื่อ, กลุ่ม, ชั้นปี, เพศ, อาจารย์)
 export function updateStudentInfo(
   studentIdOrOriginalId: string,
