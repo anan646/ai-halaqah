@@ -156,6 +156,10 @@ function doGet(e) {
     return jsonResponse({ success: true, settings: readSettings(ss) });
   }
 
+  if (action === 'getStats') {
+    return jsonResponse({ success: true, message: 'Google Sheet connected successfully' });
+  }
+
   return jsonResponse({ success: false, message: 'Invalid action' });
 }
 

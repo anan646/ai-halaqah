@@ -83,10 +83,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         rating,
         message: message.trim(),
       });
-      // ซิงค์ส่งขึ้น Google Sheet เบื้องหลังทันที
-      sendFeedbackToGoogleSheet(savedItem).catch((err) => {
-        console.warn('Sync feedback to Google Sheet failed:', err);
-      });
+      // ซิงค์ส่งขึ้น Google Sheet ทันที
+      await sendFeedbackToGoogleSheet(savedItem);
       setIsSubmitted(true);
       setTimeout(() => {
         setIsSubmitted(false);
