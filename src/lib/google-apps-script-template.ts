@@ -32,6 +32,7 @@ const SHEET_TERMS = 'Terms';
 const SHEET_ANNOUNCEMENTS = 'Announcements';
 const SHEET_SESSIONS = 'Sessions';
 const SHEET_SUBADMINS = 'SubAdmins';
+const SHEET_FEEDBACKS = 'Feedbacks';
 
 // SHA-256 ของรหัสแอดมินหลักตั้งต้น (ใช้เมื่อไม่ได้ตั้ง Script Property ADMIN_KEY)
 const DEFAULT_ADMIN_KEY_SHA256 = '7cedcfc143f7c3a15869169ed87af666741d557df898b0c0d7d956444e54d0ec';
@@ -50,6 +51,7 @@ HEADERS[SHEET_ANNOUNCEMENTS] = ['ID', 'หัวข้อ', 'ข้อควา�
 HEADERS[SHEET_SESSIONS] = ['วันที่', 'อาจารย์', 'หัวข้อ/ซูเราะฮ์', 'บันทึกเพิ่มเติม'];
 HEADERS[SHEET_SETTINGS] = ['Key', 'Value'];
 HEADERS[SHEET_SUBADMINS] = ['ID', 'ชื่อแอดมินรอง', 'รหัสผ่าน (SHA-256)', 'สร้างเมื่อ'];
+HEADERS[SHEET_FEEDBACKS] = ['ID', 'บทบาท (Role)', 'หมวดหมู่ (Category)', 'คะแนน (Rating)', 'ข้อความ (Message)', 'ส่งเมื่อ (CreatedAt)', 'สถานะ (Status)', 'บันทึกแอดมิน (AdminNote)'];
 
 const DEFAULT_MAJORS = [
   'อิสลามศึกษา', 'การสอนอิสลามศึกษา', 'ภาษาอาหรับ', 'การสอนภาษาอาหรับ', 'วิทยาศาสตร์ทั่วไป',
@@ -170,6 +172,24 @@ function doPost(e) {
       return jsonResponse({ success: true, message: 'บันทึกการเช็คชื่อลง Google Sheet สำเร็จ', inserted: res.inserted, updated: res.updated });
     }
 
+    // บันทึกข้อเสนอแนะแบบไม่ระบุตัวตน (นศ./อาจารย์ใช้ ไม่ต้องมีรหัสแอดมิน)
+    if (action === 'saveFeedback') {
+      const fb = body.feedback;
+      if (!fb || !fb.message) return jsonResponse({ success: false, message: 'No feedback provided' });
+      const sheet = ss.getSheetByName(SHEET_FEEDBACKS);
+      sheet.appendRow([
+        fb.id || ('FB_' + new Date().getTime()),
+        fb.role || 'student',
+        fb.category || 'general',
+        fb.rating || 5,
+        String(fb.message || ''),
+        fb.createdAt || new Date().toISOString(),
+        fb.status || 'unread',
+        fb.adminNote || ''
+      ]);
+      return jsonResponse({ success: true, message: 'บันทึกข้อเสนอแนะลง Google Sheet สำเร็จ' });
+    }
+
     // ตรวจรหัสแอดมินรอง (ใช้ตอนล็อกอินจากเครื่องอื่น) — ตอบแค่ใช่/ไม่ใช่ ไม่ส่งรหัสออกไป
     if (action === 'verifySubAdmin') {
       const h = sha256Hex(String(body.passcode || '').trim());
@@ -236,6 +256,7 @@ function doPost(e) {
         }), true);
       }
       if (body.semester) saveSemester(ss, body.semester, body.terms || []);
+      if (body.feedbacks && body.feedbacks.length) writeFeedbacks(ss, body.feedbacks);
       if (body.attendance && body.attendance.length) upsertAttendance(ss, body.attendance);
       if (body.logoUrl && String(body.logoUrl).length < 45000) upsertSetting(st, 'logoUrl', body.logoUrl);
       if (body.certificateConfig) upsertSetting(st, 'certificateConfig', JSON.stringify(stripImages(body.certificateConfig)));
@@ -254,6 +275,7 @@ function doPost(e) {
         terms: readTerms(ss),
         announcements: readAnnouncements(ss),
         sessions: readSessions(ss),
+        feedbacks: readFeedbacks(ss),
         semester: settings.semester ? JSON.parse(settings.semester) : null,
         certificateConfig: settings.certificateConfig ? JSON.parse(settings.certificateConfig) : null,
         subAdmins: bodyRows(ss.getSheetByName(SHEET_SUBADMINS)).filter(function (r) { return r[0]; }).map(function (r) {
@@ -384,6 +406,27 @@ function readAnnouncements(ss) {
 function writeAnnouncements(ss, list) {
   writeRows(ss.getSheetByName(SHEET_ANNOUNCEMENTS), list.map(function (a) {
     return [a.id, a.title, a.content, a.priority, a.targetType, (a.targetStudentIds || []).join(', '), a.createdAt, a.authorName || '', a.expiresAt || ''];
+  }), true);
+}
+
+function readFeedbacks(ss) {
+  return bodyRows(ss.getSheetByName(SHEET_FEEDBACKS)).filter(function (r) { return r[0]; }).map(function (r) {
+    return {
+      id: String(r[0]),
+      role: String(r[1] || 'student'),
+      category: String(r[2] || 'general'),
+      rating: Number(r[3]) || 5,
+      message: String(r[4] || ''),
+      createdAt: toIso(r[5]),
+      status: String(r[6] || 'unread'),
+      adminNote: String(r[7] || '')
+    };
+  });
+}
+
+function writeFeedbacks(ss, list) {
+  writeRows(ss.getSheetByName(SHEET_FEEDBACKS), list.map(function (f) {
+    return [f.id, f.role, f.category, f.rating || 5, f.message, f.createdAt, f.status || 'unread', f.adminNote || ''];
   }), true);
 }
 

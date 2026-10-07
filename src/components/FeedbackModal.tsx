@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { FeedbackCategory, FeedbackRole } from '@/lib/types';
 import { addFeedback } from '@/lib/data-store';
+import { sendFeedbackToGoogleSheet } from '@/lib/api-client';
+import { ModalPortal } from './ModalPortal';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -69,17 +71,21 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
 
     setIsSubmitting(true);
     try {
-      addFeedback({
+      const savedItem = addFeedback({
         role,
         category,
         rating,
         message: message.trim(),
+      });
+      // ซิงค์ส่งขึ้น Google Sheet เบื้องหลังทันที
+      sendFeedbackToGoogleSheet(savedItem).catch((err) => {
+        console.warn('Sync feedback to Google Sheet failed:', err);
       });
       setIsSubmitted(true);
       setTimeout(() => {
@@ -96,12 +102,13 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-purple-950/70 backdrop-blur-sm animate-fadeIn overflow-y-auto"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
-      }}
-    >
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-purple-950/70 backdrop-blur-sm animate-fadeIn overflow-y-auto"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !isSubmitting) onClose();
+        }}
+      >
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto border border-purple-100 animate-scaleUp">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-800 via-purple-900 to-indigo-950 px-5 sm:px-6 py-4 text-white flex items-center justify-between gap-3 shrink-0">
@@ -295,5 +302,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         )}
       </div>
     </div>
+  </ModalPortal>
   );
 };

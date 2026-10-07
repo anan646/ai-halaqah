@@ -16,6 +16,8 @@ import {
   saveAllSessionMetadata,
   saveTermHistory,
   saveSemesterSettings,
+  getFeedbacks,
+  saveFeedbacks,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from './data-store';
 import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
@@ -245,6 +247,7 @@ export async function backupAllToGoogleSheet(): Promise<{
         majors: getActiveMajors(),
         announcements: getAnnouncements(),
         sessions: getAllSessionMetadata(),
+        feedbacks: getFeedbacks(),
         semester: getSemesterSettings(),
         terms: getTermHistory(),
         attendance,
@@ -291,6 +294,7 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     if (Array.isArray(d.majors) && d.majors.length) saveActiveMajors(d.majors);
     if (Array.isArray(d.announcements)) saveAnnouncements(d.announcements);
     if (Array.isArray(d.sessions)) saveAllSessionMetadata(d.sessions);
+    if (Array.isArray(d.feedbacks)) saveFeedbacks(d.feedbacks);
     if (Array.isArray(d.terms) && d.terms.length) saveTermHistory(d.terms);
     if (d.semester) saveSemesterSettings({ ...getSemesterSettings(), ...d.semester });
     if (d.certificateConfig) saveCertificateConfig({ ...getCertificateConfig(), ...d.certificateConfig });
@@ -426,3 +430,34 @@ export async function pushAnnouncements(list: Announcement[]): Promise<{ success
     return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
   }
 }
+
+/** บันทึกข้อเสนอแนะขึ้น Google Sheet ทันที (หากตั้ง Web App URL ไว้) */
+export async function sendFeedbackToGoogleSheet(feedback: {
+  id?: string;
+  role: string;
+  category: string;
+  rating?: number;
+  message: string;
+  createdAt?: string;
+  status?: string;
+  adminNote?: string;
+}): Promise<{ success: boolean; message: string }> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) {
+    return { success: false, message: 'บันทึกในเครื่องเรียบร้อย (ยังไม่ได้ตั้งค่า Web App URL)' };
+  }
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'saveFeedback', feedback }),
+    });
+    const data = await res.json();
+    return data?.success
+      ? { success: true, message: 'ส่งข้อเสนอแนะถึงฐานข้อมูลกลางเรียบร้อย' }
+      : { success: false, message: data?.message || 'ส่งขึ้น Google Sheet ไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
