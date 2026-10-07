@@ -54,6 +54,7 @@ import {
   UserX,
   CheckSquare,
   Square,
+  MessageSquare,
 } from 'lucide-react';
 import {
   AttendanceRecord,
@@ -111,6 +112,8 @@ import {
   setStudentYearLevel,
   batchAssignStudentsToTeacher,
   deleteStudentsBatch,
+  getFeedbacks,
+  FEEDBACKS_UPDATED_EVENT,
 } from '@/lib/data-store';
 import {
   exportToExcel,
@@ -132,6 +135,7 @@ import { TransferPanel } from './admin/TransferPanel';
 import { AnnouncementsPanel } from './admin/AnnouncementsPanel';
 import { MajorsPanel } from './admin/MajorsPanel';
 import { TermManager } from './admin/TermManager';
+import { FeedbackPanel } from './admin/FeedbackPanel';
 import { savePendingReportPdf } from './PendingReport';
 import { buildPendingShareUrl, PendingSnapshot } from '@/lib/pending-report';
 
@@ -158,6 +162,7 @@ type TabType =
   | 'transfer'
   | 'editor'
   | 'announcements'
+  | 'feedbacks'
   | 'system_management'
   | 'certificates'
   | 'export';
@@ -330,7 +335,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [editorSearch, setEditorSearch] = useState('');
 
   // ==================== STUDENT FILTER & BATCH ASSIGN STATE ====================
-  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'unassigned' | 'assigned'>('all');
+  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'unassigned' | 'assigned' | 'duplicate'>('all');
   const [studentYearFilter, setStudentYearFilter] = useState<string>('all');
   const [studentGenderFilter, setStudentGenderFilter] = useState<string>('all');
   const [studentMajorFilter, setStudentMajorFilter] = useState<string>('all');
@@ -338,6 +343,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [batchTargetTeacher, setBatchTargetTeacher] = useState<string>('');
   const [isBatchAssigning, setIsBatchAssigning] = useState<boolean>(false);
+
+  // ==================== ANONYMOUS FEEDBACKS STATE ====================
+  const [unreadFeedbacksCount, setUnreadFeedbacksCount] = useState<number>(() => {
+    return getFeedbacks().filter((f) => f.status === 'unread').length;
+  });
+
+  useEffect(() => {
+    const syncFb = () => {
+      setUnreadFeedbacksCount(getFeedbacks().filter((f) => f.status === 'unread').length);
+    };
+    window.addEventListener(FEEDBACKS_UPDATED_EVENT, syncFb);
+    window.addEventListener('storage', syncFb);
+    return () => {
+      window.removeEventListener(FEEDBACKS_UPDATED_EVENT, syncFb);
+      window.removeEventListener('storage', syncFb);
+    };
+  }, []);
 
   // ==================== SUB-ADMINS STATE ====================
   const [subAdminsList, setSubAdminsList] = useState<SubAdmin[]>([]);
@@ -777,11 +799,62 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     return students.length - unassignedStudentsCount;
   }, [students, unassignedStudentsCount]);
 
+  // ระบบตรวจสอบนักศึกษาที่มีรหัสหรือชื่อซ้ำกัน
+  const duplicateStudentInfo = useMemo(() => {
+    const idCounts = new Map<string, number>();
+    const nameCounts = new Map<string, number>();
+
+    students.forEach((s) => {
+      const id = (s.studentId || '').trim().toLowerCase();
+      if (id) idCounts.set(id, (idCounts.get(id) || 0) + 1);
+
+      const name = (s.fullName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      if (name) nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+    });
+
+    const duplicateIdSet = new Set<string>();
+    const duplicateNameSet = new Set<string>();
+
+    idCounts.forEach((count, id) => {
+      if (count > 1) duplicateIdSet.add(id);
+    });
+    nameCounts.forEach((count, name) => {
+      if (count > 1) duplicateNameSet.add(name);
+    });
+
+    const isDuplicate = (s: Student) => {
+      const id = (s.studentId || '').trim().toLowerCase();
+      const name = (s.fullName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      return Boolean((id && duplicateIdSet.has(id)) || (name && duplicateNameSet.has(name)));
+    };
+
+    const getDuplicateReason = (s: Student) => {
+      const id = (s.studentId || '').trim().toLowerCase();
+      const name = (s.fullName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const hasId = id && duplicateIdSet.has(id);
+      const hasName = name && duplicateNameSet.has(name);
+      if (hasId && hasName) return 'รหัสและชื่อซ้ำ';
+      if (hasId) return 'รหัสนักศึกษาซ้ำ';
+      if (hasName) return 'ชื่อ-นามสกุลซ้ำ';
+      return null;
+    };
+
+    const duplicateList = students.filter(isDuplicate);
+    return {
+      duplicateIdSet,
+      duplicateNameSet,
+      isDuplicate,
+      getDuplicateReason,
+      count: duplicateList.length,
+    };
+  }, [students]);
+
   const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      // 1. Status filter (all | unassigned | assigned)
+    const matched = students.filter((s) => {
+      // 1. Status filter (all | unassigned | assigned | duplicate)
       if (studentStatusFilter === 'unassigned' && !isStudentUnassigned(s)) return false;
       if (studentStatusFilter === 'assigned' && isStudentUnassigned(s)) return false;
+      if (studentStatusFilter === 'duplicate' && !duplicateStudentInfo.isDuplicate(s)) return false;
 
       // 2. Year level filter
       if (studentYearFilter !== 'all' && s.yearLevel !== studentYearFilter) return false;
@@ -819,6 +892,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       return true;
     });
+
+    // หากกำลังกรองรายชื่อซ้ำ ให้เรียงกลุ่มซ้ำติดกัน เพื่อให้แอดมินเปรียบเทียบได้ง่าย
+    if (studentStatusFilter === 'duplicate') {
+      return [...matched].sort((a, b) => {
+        const aId = (a.studentId || '').trim().toLowerCase();
+        const bId = (b.studentId || '').trim().toLowerCase();
+        if (duplicateStudentInfo.duplicateIdSet.has(aId) && aId === bId) {
+          return a.fullName.localeCompare(b.fullName, 'th');
+        }
+        const aName = (a.fullName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        const bName = (b.fullName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        if (duplicateStudentInfo.duplicateNameSet.has(aName) && aName === bName) {
+          return a.studentId.localeCompare(b.studentId);
+        }
+        if (duplicateStudentInfo.duplicateIdSet.has(aId) && duplicateStudentInfo.duplicateIdSet.has(bId)) {
+          return aId.localeCompare(bId);
+        }
+        return aName.localeCompare(bName, 'th');
+      });
+    }
+
+    return matched;
   }, [
     students,
     studentStatusFilter,
@@ -828,6 +923,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     studentTeacherFilter,
     editorSearch,
     isStudentUnassigned,
+    duplicateStudentInfo,
   ]);
 
   const isAllFilteredSelected = useMemo(() => {
@@ -2306,6 +2402,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     editor: 'จัดการข้อมูล นักศึกษา/อาจารย์',
     transfer: 'โยกย้ายกลุ่ม',
     announcements: 'ส่งประกาศ',
+    feedbacks: 'ความคิดเห็น & ข้อเสนอแนะ',
     certificates: 'สตูดิโอเกียรติบัตร',
     export: 'ส่งออกไฟล์',
     system_management: 'ตั้งค่าระบบ',
@@ -2340,6 +2437,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         { label: 'ข้อมูล นศ./อาจารย์', icon: DatabaseIcon, ids: ['editor'] },
         { label: 'โยกย้ายกลุ่ม', icon: ArrowRightLeft, ids: ['transfer'] },
         { label: 'ส่งประกาศ', icon: Megaphone, ids: ['announcements'], badge: () => announcementsList.length },
+        {
+          label: 'ความคิดเห็น & ข้อเสนอแนะ',
+          icon: MessageSquare,
+          ids: ['feedbacks'],
+          badge: () => unreadFeedbacksCount,
+          badgeTone: 'alert',
+        },
       ],
     },
     {
@@ -3977,6 +4081,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>มีอาจารย์แล้ว ({assignedStudentsCount})</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStudentStatusFilter('duplicate')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      studentStatusFilter === 'duplicate'
+                        ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400'
+                        : duplicateStudentInfo.count > 0
+                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-300'
+                        : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
+                    }`}
+                  >
+                    <AlertTriangle className={`w-3.5 h-3.5 ${duplicateStudentInfo.count > 0 && studentStatusFilter !== 'duplicate' ? 'text-rose-600' : ''}`} />
+                    <span>⚠️ ตรวจพบชื่อ/รหัสซ้ำ ({duplicateStudentInfo.count})</span>
+                    {duplicateStudentInfo.count > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                        studentStatusFilter === 'duplicate' ? 'bg-white text-rose-800' : 'bg-rose-200 text-rose-900'
+                      }`}>
+                        ต้องตรวจ
+                      </span>
+                    )}
+                  </button>
                 </div>
 
                 {/* Counter, Select-All Shortcut & Clear filters button */}
@@ -4171,6 +4297,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               )}
 
+              {/* Quick shortcut banner when viewing duplicates */}
+              {studentStatusFilter === 'duplicate' && duplicateStudentInfo.count > 0 && (
+                <div className="bg-rose-50 border border-rose-300 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-rose-950 animate-fadeIn">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>
+                      ตรวจพบรายชื่อนักศึกษาที่มีรหัสหรือชื่อซ้ำกันทั้งหมด <strong className="font-bold text-rose-900">{duplicateStudentInfo.count}</strong> รายการ (เรียงกลุ่มซ้ำติดกันเพื่อให้เปรียบเทียบและลบได้ง่าย)
+                    </span>
+                  </div>
+                  {selectedStudentIds.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentIds(filteredStudents.map((s) => s.studentId))}
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      <span>เลือกรายการซ้ำทั้งหมด ({duplicateStudentInfo.count} คน)</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Students Data Table */}
               <div className="overflow-x-auto border border-purple-100 rounded-2xl shadow-xs">
                 <table className="w-full text-left text-xs border-collapse">
@@ -4220,6 +4368,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         const isUnassigned = isStudentUnassigned(st);
                         const isSelected = selectedStudentIds.includes(st.studentId);
                         const isTeacherDeleted = st.teacherName && !activeTeacherNamesSet.has(st.teacherName.trim());
+                        const isDup = duplicateStudentInfo.isDuplicate(st);
+                        const dupReason = duplicateStudentInfo.getDuplicateReason(st);
 
                         return (
                           <tr
@@ -4227,6 +4377,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             className={`transition-colors ${
                               isSelected
                                 ? 'bg-purple-100/70'
+                                : isDup
+                                ? 'bg-rose-50/60 hover:bg-rose-100/70'
                                 : isUnassigned
                                 ? 'bg-amber-50/40 hover:bg-amber-100/50'
                                 : 'hover:bg-purple-50/40'
@@ -4240,10 +4392,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                                 className="w-4 h-4 rounded border-purple-300 text-purple-800 focus:ring-purple-400 cursor-pointer"
                               />
                             </td>
-                            <td className="py-2 px-3 font-mono font-bold text-purple-900">{st.studentId}</td>
+                            <td className="py-2 px-3 font-mono font-bold text-purple-900">
+                              <div className="flex items-center gap-1">
+                                <span>{st.studentId}</span>
+                                {duplicateStudentInfo.duplicateIdSet.has((st.studentId || '').trim().toLowerCase()) && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-black bg-rose-200 text-rose-900 border border-rose-300" title="รหัสนักศึกษานี้ซ้ำกับรายการอื่น">
+                                    รหัสซ้ำ
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="py-2 px-3 font-bold text-purple-950">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span>{st.fullName}</span>
+                                {dupReason && (
+                                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                    ⚠️ {dupReason}
+                                  </span>
+                                )}
                                 {isUnassigned && (
                                   <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
                                     ตกหล่น
@@ -5834,6 +6000,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             systemLogo={customLogo}
             isEmbedded={true}
           />
+        </div>
+      )}
+
+      {/* ==================== TAB: ความคิดเห็น & ข้อเสนอแนะ (FEEDBACK PANEL) ==================== */}
+      {activeTab === 'feedbacks' && (
+        <div className="animate-fadeIn">
+          <FeedbackPanel />
         </div>
       )}
             </main>

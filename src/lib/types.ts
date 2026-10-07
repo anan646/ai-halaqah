@@ -153,4 +153,19 @@ export interface TermInfo {
   activatedAt: string;
 }
 
+export type FeedbackRole = 'student' | 'teacher';
+export type FeedbackCategory = 'grouping' | 'system' | 'general';
+export type FeedbackStatus = 'unread' | 'read' | 'resolved';
+
+export interface FeedbackItem {
+  id: string;
+  role: FeedbackRole; // 'student' | 'teacher' (ไม่ระบุตัวตน)
+  category: FeedbackCategory; // 'grouping' = การจัดกลุ่ม/โยกย้าย, 'system' = การใช้งานระบบ/เช็คชื่อ, 'general' = ทั่วไป
+  rating?: number; // 1-5 คะแนนความพึงพอใจ
+  message: string; // ข้อความข้อเสนอแนะ
+  createdAt: string; // วันที่เวลา ISO
+  status?: FeedbackStatus; // สถานะการดำเนินการ 'unread' | 'read' | 'resolved'
+  adminNote?: string; // บันทึกช่วยจำของแอดมิน
+}
+
 

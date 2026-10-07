@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Lock,
   LogOut,
+  MessageSquare,
   ShieldCheck,
   Sparkles,
   UserX,
@@ -32,6 +33,7 @@ import {
 } from '@/lib/data-store';
 import { CertificateModal } from './CertificateModal';
 import { AnnouncementBox } from './AnnouncementBox';
+import { FeedbackModal } from './FeedbackModal';
 import { fetchPublicData, PublicRosterStudent, getLocalAttendanceRecords } from '@/lib/api-client';
 
 interface Props {
@@ -89,6 +91,7 @@ export const StudentPortalView: React.FC<Props> = ({
   const [student, setStudent] = useState<Student | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [certOpen, setCertOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -317,11 +320,26 @@ export const StudentPortalView: React.FC<Props> = ({
                 ดูข้อมูลของฉัน <ArrowRight className="w-5 h-5" />
               </button>
             </form>
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-purple-500">
-              <ShieldCheck className="w-3.5 h-3.5" /> แสดงเฉพาะข้อมูลของเจ้าของรหัสเท่านั้น
+            <div className="flex items-center justify-between text-[11px] text-purple-600 pt-1">
+              <div className="flex items-center gap-1 text-purple-500">
+                <ShieldCheck className="w-3.5 h-3.5" /> แสดงเฉพาะข้อมูลตนเอง
+              </div>
+              <button
+                type="button"
+                onClick={() => setFeedbackOpen(true)}
+                className="text-purple-700 hover:text-purple-950 font-bold underline flex items-center gap-1 transition"
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> ส่งข้อเสนอแนะ
+              </button>
             </div>
           </div>
         </div>
+
+        <FeedbackModal
+          isOpen={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          presetRole="student"
+        />
       </div>
     );
   }
@@ -354,17 +372,28 @@ export const StudentPortalView: React.FC<Props> = ({
             setStudent(null);
             setInput('');
           }}
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-purple-800 px-3.5 py-2 rounded-full bg-white border border-purple-100 shadow-sm hover:bg-purple-50 transition"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-purple-800 px-3.5 py-2 rounded-full bg-white border border-purple-100 shadow-sm hover:bg-purple-50 transition"
         >
           <LogOut className="w-4 h-4" /> ใช้รหัสอื่น
         </button>
-        <button
-          type="button"
-          onClick={onOpenTutorial}
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-purple-700 px-3 py-2 rounded-full hover:bg-purple-100 transition"
-        >
-          <HelpCircle className="w-4 h-4" /> วิธีใช้
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-purple-800 px-3.5 py-2 rounded-full bg-white border border-purple-100 shadow-sm hover:bg-purple-50 transition active:scale-95"
+            title="ส่งข้อเสนอแนะถึงผู้ดูแลระบบ (ไม่ระบุตัวตน)"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
+            <span>ข้อเสนอแนะ</span>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenTutorial}
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-purple-700 px-3 py-2 rounded-full hover:bg-purple-100 transition"
+          >
+            <HelpCircle className="w-4 h-4" /> วิธีใช้
+          </button>
+        </div>
       </div>
 
       {/* ===== การ์ดโปรไฟล์ ===== */}
@@ -579,6 +608,12 @@ export const StudentPortalView: React.FC<Props> = ({
           onClose={() => setCertOpen(false)}
         />
       )}
+
+      <FeedbackModal
+        isOpen={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        presetRole="student"
+      />
     </div>
   );
 };

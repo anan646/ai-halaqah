@@ -45,6 +45,7 @@ import {
   formatTermLabel,
 } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
+import { FeedbackModal } from './FeedbackModal';
 
 
 interface TeacherAttendanceViewProps {
@@ -74,6 +75,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   // 1. Teacher selection
   const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const updateClock = () => {
@@ -460,6 +462,16 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
               <span>คู่มือบุคลากร</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsFeedbackOpen(true)}
+            className="inline-flex items-center space-x-1.5 text-xs font-extrabold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/90 px-3.5 py-2 rounded-full shadow-2xs transition-all active:scale-95"
+            title="ส่งข้อเสนอแนะถึงผู้ดูแลระบบ (ไม่ระบุตัวตน)"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
+            <span>ข้อเสนอแนะ</span>
+          </button>
         </div>
 
         {/* Real-time Clock with Pulsing Dot */}
@@ -811,6 +823,12 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           </button>
         </div>
       </div>
+
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        presetRole="teacher"
+      />
     </div>
   );
 };

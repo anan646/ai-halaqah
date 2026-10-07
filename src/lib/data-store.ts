@@ -1,4 +1,17 @@
-import { Student, Teacher, Announcement, GroupLevel, SessionMetadata, SemesterSettings, TermInfo, AttendanceRecord } from './types';
+import {
+  Student,
+  Teacher,
+  Announcement,
+  GroupLevel,
+  SessionMetadata,
+  SemesterSettings,
+  TermInfo,
+  AttendanceRecord,
+  FeedbackItem,
+  FeedbackRole,
+  FeedbackCategory,
+  FeedbackStatus,
+} from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
 
@@ -10,9 +23,11 @@ const STORAGE_KEY_MAJORS = 'halaqah_active_majors_v2';
 const STORAGE_KEY_SESSIONS = 'halaqah_sessions_metadata_v1';
 const STORAGE_KEY_SEMESTER = 'halaqah_semester_settings_v1';
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
+const STORAGE_KEY_FEEDBACKS = 'halaqah_anonymous_feedbacks_v1';
 
 export const SEMESTER_SETTINGS_UPDATED_EVENT = 'halaqah_semester_settings_updated_v1';
 export const ATTENDANCE_RECORDS_UPDATED_EVENT = 'halaqah_attendance_records_updated_v1';
+export const FEEDBACKS_UPDATED_EVENT = 'halaqah_feedbacks_updated_v1';
 
 function getLocalAttendance(): any[] {
   if (typeof window === 'undefined') return [];
@@ -1039,6 +1054,7 @@ export function exportFullDatabaseJson(): string {
     sessions: getAllSessionMetadata(),
     semester: getSemesterSettings(),
     certificateConfig: getCertificateConfig(),
+    feedbacks: getFeedbacks(),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -1070,6 +1086,9 @@ export function importFullDatabaseJson(jsonStr: string): { success: boolean; mes
     }
     if (parsed.certificateConfig) {
       saveCertificateConfig(parsed.certificateConfig);
+    }
+    if (Array.isArray(parsed.feedbacks)) {
+      saveFeedbacks(parsed.feedbacks);
     }
 
     return {
@@ -1240,3 +1259,70 @@ export function promoteSelectedStudents(ids: string[]): { promoted: number; grad
 export function setStudentYearLevel(studentId: string, yearLevel: string): void {
   saveActiveStudents(getActiveStudents().map((s) => (s.studentId === studentId ? { ...s, yearLevel } : s)));
 }
+
+// ----------------------------------------------------
+// 19. ระบบข้อเสนอแนะ/ความคิดเห็นแบบไม่ระบุตัวตน (Anonymous Feedback)
+// ----------------------------------------------------
+
+export function getFeedbacks(): FeedbackItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_FEEDBACKS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveFeedbacks(items: FeedbackItem[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_FEEDBACKS, JSON.stringify(items));
+    window.dispatchEvent(new CustomEvent(FEEDBACKS_UPDATED_EVENT, { detail: items }));
+    window.dispatchEvent(new Event('storage'));
+  } catch {}
+}
+
+export function addFeedback(data: {
+  role: FeedbackRole;
+  category: FeedbackCategory;
+  rating?: number;
+  message: string;
+}): FeedbackItem {
+  const current = getFeedbacks();
+  const newItem: FeedbackItem = {
+    id: `FB_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    role: data.role,
+    category: data.category,
+    rating: data.rating,
+    message: data.message.trim(),
+    createdAt: new Date().toISOString(),
+    status: 'unread',
+  };
+  const updated = [newItem, ...current];
+  saveFeedbacks(updated);
+  return newItem;
+}
+
+export function updateFeedbackStatus(id: string, status: FeedbackStatus, adminNote?: string): boolean {
+  const current = getFeedbacks();
+  const idx = current.findIndex((f) => f.id === id);
+  if (idx === -1) return false;
+  current[idx] = {
+    ...current[idx],
+    status,
+    adminNote: adminNote !== undefined ? adminNote : current[idx].adminNote,
+  };
+  saveFeedbacks(current);
+  return true;
+}
+
+export function deleteFeedback(id: string): boolean {
+  const current = getFeedbacks();
+  const filtered = current.filter((f) => f.id !== id);
+  if (filtered.length === current.length) return false;
+  saveFeedbacks(filtered);
+  return true;
+}
