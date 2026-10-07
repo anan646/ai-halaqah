@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Star,
   FileSpreadsheet,
+  RotateCw,
+  Cloud,
 } from 'lucide-react';
 import { FeedbackItem, FeedbackRole, FeedbackCategory, FeedbackStatus } from '@/lib/types';
 import {
@@ -25,6 +27,11 @@ import {
   deleteFeedback,
   FEEDBACKS_UPDATED_EVENT,
 } from '@/lib/data-store';
+import {
+  fetchAllFeedbacks,
+  sendFeedbackToGoogleSheet,
+  deleteFeedbackFromGoogleSheet,
+} from '@/lib/api-client';
 
 const THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
@@ -65,6 +72,20 @@ export const FeedbackPanel: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Sync from Google Sheet on mount and poll every 8 seconds
+  useEffect(() => {
+    fetchAllFeedbacks().then((res) => {
+      if (res.fromRemote) setFeedbacks(getFeedbacks());
+    });
+    const timer = setInterval(() => {
+      fetchAllFeedbacks().then((res) => {
+        if (res.fromRemote) setFeedbacks(getFeedbacks());
+      });
+    }, 8000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Reload feedbacks on event or storage change
   useEffect(() => {
@@ -76,6 +97,19 @@ export const FeedbackPanel: React.FC = () => {
       window.removeEventListener('storage', reload);
     };
   }, []);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetchAllFeedbacks();
+      setFeedbacks(getFeedbacks());
+      if (res.fromRemote) {
+        // toast or notice
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // KPIs
   const stats = useMemo(() => {
@@ -119,14 +153,20 @@ export const FeedbackPanel: React.FC = () => {
 
   const handleUpdateStatus = (id: string, status: FeedbackStatus) => {
     updateFeedbackStatus(id, status);
-    setFeedbacks(getFeedbacks());
+    const updated = getFeedbacks();
+    setFeedbacks(updated);
+    const item = updated.find((f) => f.id === id);
+    if (item) sendFeedbackToGoogleSheet(item).catch(() => null);
   };
 
   const handleSaveNote = (id: string) => {
     const target = feedbacks.find((f) => f.id === id);
     if (target) {
       updateFeedbackStatus(id, target.status || 'read', noteInput.trim());
-      setFeedbacks(getFeedbacks());
+      const updated = getFeedbacks();
+      setFeedbacks(updated);
+      const item = updated.find((f) => f.id === id);
+      if (item) sendFeedbackToGoogleSheet(item).catch(() => null);
     }
     setEditingNoteId(null);
     setNoteInput('');
@@ -136,6 +176,7 @@ export const FeedbackPanel: React.FC = () => {
     if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อเสนอแนะนี้?')) {
       deleteFeedback(id);
       setFeedbacks(getFeedbacks());
+      deleteFeedbackFromGoogleSheet(id).catch(() => null);
     }
   };
 
@@ -189,14 +230,27 @@ export const FeedbackPanel: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleExportCsv}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-purple-100/80 hover:bg-purple-200 text-purple-950 text-xs font-bold transition active:scale-95 shadow-2xs self-start sm:self-auto shrink-0"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-purple-700" />
-          <span>ส่งออกรายงาน (CSV)</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold transition active:scale-95 border border-purple-200/70 disabled:opacity-50"
+            title="ดึงข้อมูลล่าสุดจาก Google Sheet"
+          >
+            <RotateCw className={`w-3.5 h-3.5 text-purple-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'กำลังดึงข้อมูล...' : 'ดึงข้อมูลล่าสุด'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-purple-100/80 hover:bg-purple-200 text-purple-950 text-xs font-bold transition active:scale-95 shadow-2xs"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-purple-700" />
+            <span>ส่งออก (CSV)</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Stats Cards */}

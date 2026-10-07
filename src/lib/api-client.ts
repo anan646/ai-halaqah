@@ -461,3 +461,67 @@ export async function sendFeedbackToGoogleSheet(feedback: {
   }
 }
 
+/** ดึงรายการข้อเสนอแนะทั้งหมดจาก Google Sheet (รวมถึงที่ส่งมาจากสมาร์ทโฟนเครื่องอื่น) */
+export async function fetchAllFeedbacks(): Promise<{ feedbacks: any[]; fromRemote: boolean }> {
+  const scriptUrl = getSavedScriptUrl();
+  const localFeedbacks = getFeedbacks();
+
+  if (!scriptUrl) {
+    return { feedbacks: localFeedbacks, fromRemote: false };
+  }
+
+  try {
+    const res = await fetch(`${scriptUrl}?action=getFeedbacks`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.feedbacks)) {
+      const map = new Map<string, any>();
+      // ใส่ของในเครื่องก่อน
+      localFeedbacks.forEach((f) => map.set(f.id, f));
+      // รวมของจาก Google Sheet ทับ (หรือเติมอันใหม่จากมือถือเข้ามา)
+      data.feedbacks.forEach((f: any) => {
+        if (map.has(f.id)) {
+          // ถ้ามีในเครื่องแล้ว ใช้ข้อมูลที่มีความคืบหน้าล่าสุด
+          const local = map.get(f.id);
+          map.set(f.id, {
+            ...f,
+            status: local.status !== 'unread' ? local.status : f.status,
+            adminNote: local.adminNote || f.adminNote,
+          });
+        } else {
+          map.set(f.id, f);
+        }
+      });
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      saveFeedbacks(merged);
+      return { feedbacks: merged, fromRemote: true };
+    }
+  } catch (err) {
+    console.warn('Could not fetch feedbacks from Google Sheets:', err);
+  }
+
+  return { feedbacks: localFeedbacks, fromRemote: false };
+}
+
+/** ลบข้อเสนอแนะใน Google Sheet */
+export async function deleteFeedbackFromGoogleSheet(id: string): Promise<boolean> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return false;
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteFeedback', id }),
+    });
+    const d = await res.json();
+    return !!d?.success;
+  } catch {
+    return false;
+  }
+}

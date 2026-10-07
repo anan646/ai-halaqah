@@ -132,6 +132,11 @@ function doGet(e) {
     return jsonResponse({ success: true, records: readAttendance(ss) });
   }
 
+  // ดึงข้อเสนอแนะทั้งหมดจาก Google Sheet (สำหรับหน้าแอดมิน)
+  if (action === 'getFeedbacks') {
+    return jsonResponse({ success: true, feedbacks: readFeedbacks(ss) });
+  }
+
   // ข้อมูลสาธารณะ: ประกาศ รายชื่อสำหรับค้นหารหัส อาจารย์ และภาคการศึกษาปัจจุบัน (ไม่ต้องล็อกอิน)
   if (action === 'getPublicData') {
     const settings = readSettings(ss);
@@ -172,12 +177,20 @@ function doPost(e) {
       return jsonResponse({ success: true, message: 'บันทึกการเช็คชื่อลง Google Sheet สำเร็จ', inserted: res.inserted, updated: res.updated });
     }
 
-    // บันทึกข้อเสนอแนะแบบไม่ระบุตัวตน (นศ./อาจารย์ใช้ ไม่ต้องมีรหัสแอดมิน)
+    // บันทึก/อัปเดตข้อเสนอแนะ (นศ./อาจารย์/แอดมิน ใช้ ไม่ต้องมีรหัสแอดมิน)
     if (action === 'saveFeedback') {
       const fb = body.feedback;
       if (!fb || !fb.message) return jsonResponse({ success: false, message: 'No feedback provided' });
       const sheet = ss.getSheetByName(SHEET_FEEDBACKS);
-      sheet.appendRow([
+      const data = sheet.getDataRange().getValues();
+      let rowIndex = -1;
+      const fbId = String(fb.id || '');
+      if (fbId) {
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][0]) === fbId) { rowIndex = i + 1; break; }
+        }
+      }
+      const row = [
         fb.id || ('FB_' + new Date().getTime()),
         fb.role || 'student',
         fb.category || 'general',
@@ -186,8 +199,23 @@ function doPost(e) {
         fb.createdAt || new Date().toISOString(),
         fb.status || 'unread',
         fb.adminNote || ''
-      ]);
+      ];
+      if (rowIndex > 0) {
+        sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+      } else {
+        sheet.appendRow(row);
+      }
       return jsonResponse({ success: true, message: 'บันทึกข้อเสนอแนะลง Google Sheet สำเร็จ' });
+    }
+
+    if (action === 'deleteFeedback') {
+      const sheet = ss.getSheetByName(SHEET_FEEDBACKS);
+      const data = sheet.getDataRange().getValues();
+      const targetId = String(body.id || '');
+      for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][0]) === targetId) sheet.deleteRow(i + 1);
+      }
+      return jsonResponse({ success: true });
     }
 
     // ตรวจรหัสแอดมินรอง (ใช้ตอนล็อกอินจากเครื่องอื่น) — ตอบแค่ใช่/ไม่ใช่ ไม่ส่งรหัสออกไป

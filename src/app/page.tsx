@@ -9,7 +9,14 @@ import { AdminLoginView } from '@/components/AdminLoginView';
 import { SettingsModal } from '@/components/SettingsModal';
 import { OnboardingTutorialModal } from '@/components/OnboardingTutorialModal';
 import { AttendanceRecord } from '@/lib/types';
-import { fetchAllAttendance, getLocalAttendanceRecords, getSavedLogo, backupAllToGoogleSheet, applyPublicDataToLocal } from '@/lib/api-client';
+import {
+  fetchAllAttendance,
+  getLocalAttendanceRecords,
+  getSavedLogo,
+  backupAllToGoogleSheet,
+  applyPublicDataToLocal,
+  fetchAllFeedbacks,
+} from '@/lib/api-client';
 import { getAdminSession, setAdminSession } from '@/lib/admin-auth';
 import { getActiveStudents } from '@/lib/data-store';
 import { PublicPendingReportPage } from '@/components/PendingReport';
@@ -82,9 +89,14 @@ export default function HomePage() {
       setRecords(res.records);
     } catch (err) {
       console.error('Error fetching records:', err);
-    } finally {
-      setIsSyncing(false);
     }
+
+    // ซิงค์ข้อเสนอแนะจาก Google Sheet (รวมข้อเสนอแนะจากสมาร์ทโฟนของทุกคน)
+    fetchAllFeedbacks().catch((err) => {
+      console.warn('Error fetching feedbacks:', err);
+    });
+
+    setIsSyncing(false);
   }, []);
 
   useEffect(() => {
