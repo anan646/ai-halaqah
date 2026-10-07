@@ -27,6 +27,7 @@ const STORAGE_KEY_SCRIPT_URL = 'halaqah_apps_script_url';
 const STORAGE_KEY_LOGO = 'halaqah_custom_logo_v4';
 const STORAGE_KEY_LAST_BACKUP = 'halaqah_last_backup_time';
 const DEFAULT_SHEET_ID = '1S8XLzMp1w9CdeW5rydKmTYvvL_ie-ecFIfQbqi_P_D0';
+const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwJ5HT2q7jOMRxA-iAihWvzdMJbu4vmJ32e7lZ7YIf42Z4MuKWJ9byqxSu9yEJ9HB86_A/exec';
 
 export function getGoogleSheetUrl(): string {
   const sheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
@@ -38,7 +39,7 @@ export function getSavedScriptUrl(): string {
     const saved = localStorage.getItem(STORAGE_KEY_SCRIPT_URL);
     if (saved && saved.trim()) return saved.trim();
   }
-  return process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || '';
+  return process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
 }
 
 export function setSavedScriptUrl(url: string) {

@@ -4,10 +4,12 @@ const ADMIN_KEY_STORAGE = 'halaqah_admin_key';
 const STORAGE_KEY_SUB_ADMINS = 'halaqah_sub_admins_v1';
 const STORAGE_KEY_ADMIN_SESSION = 'halaqah_active_admin_session';
 
+const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwJ5HT2q7jOMRxA-iAihWvzdMJbu4vmJ32e7lZ7YIf42Z4MuKWJ9byqxSu9yEJ9HB86_A/exec';
+
 // อ่าน URL ของ Apps Script ตรงนี้ (ไม่ import จาก api-client เพื่อเลี่ยงการ import วนกัน)
 function scriptUrl(): string {
   if (typeof window === 'undefined') return '';
-  return (localStorage.getItem('halaqah_apps_script_url') || process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || '').trim();
+  return (localStorage.getItem('halaqah_apps_script_url') || process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL).trim();
 }
 
 async function postScript(payload: Record<string, unknown>): Promise<any> {

@@ -68,6 +68,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const [message, setMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [syncMessage, setSyncMessage] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -84,13 +85,15 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         message: message.trim(),
       });
       // ซิงค์ส่งขึ้น Google Sheet ทันที
-      await sendFeedbackToGoogleSheet(savedItem);
+      const syncRes = await sendFeedbackToGoogleSheet(savedItem);
+      setSyncMessage(syncRes.message || (syncRes.success ? 'ส่งขึ้น Google Sheet เรียบร้อยแล้ว' : 'บันทึกในเครื่อง'));
       setIsSubmitted(true);
       setTimeout(() => {
         setIsSubmitted(false);
+        setSyncMessage('');
         setMessage('');
         onClose();
-      }, 1800);
+      }, syncRes.success ? 1800 : 2600);
     } catch (err) {
       console.error('Failed to submit feedback:', err);
       alert('เกิดข้อผิดพลาดในการส่งข้อเสนอแนะ กรุณาลองใหม่อีกครั้ง');
@@ -140,6 +143,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
             <p className="text-xs sm:text-sm text-purple-800/80 leading-relaxed max-w-sm mx-auto">
               ขอขอบคุณสำหรับความคิดเห็นอันมีค่า ข้อมูลนี้จะถูกนำไปใช้เพื่อพัฒนาและปรับปรุงระบบหะละเกาะห์ให้ดียิ่งขึ้น
             </p>
+            {syncMessage && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 mx-auto mt-2">
+                <span>☁️ {syncMessage}</span>
+              </div>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto max-h-[82vh]">
