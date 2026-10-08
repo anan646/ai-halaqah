@@ -55,6 +55,7 @@ import {
   CheckSquare,
   Square,
   MessageSquare,
+  Loader2,
 } from 'lucide-react';
 import {
   AttendanceRecord,
@@ -125,7 +126,7 @@ import {
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
-import { setSavedLogo, pushAnnouncements, pushSemester, restoreFromGoogleSheet } from '@/lib/api-client';
+import { setSavedLogo, pushAnnouncements, pushSemester, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { AdminManualModal } from './AdminManualModal';
 import { ExcelImportModal } from './ExcelImportModal';
@@ -449,22 +450,72 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [facultyPass, setFacultyPass] = useState('');
   const [newFacultyPass, setNewFacultyPass] = useState('');
   const [facultyPassMsg, setFacultyPassMsg] = useState<{ text: string; success: boolean } | null>(null);
+  const [isSavingFacultyPass, setIsSavingFacultyPass] = useState(false);
 
   useEffect(() => {
     setFacultyPass(getFacultyPassword());
   }, []);
 
-  const handleSaveFacultyPass = (e: React.FormEvent) => {
+  const handleSaveFacultyPass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFacultyPass.trim() || newFacultyPass.trim().length < 4) {
+    const trimmed = newFacultyPass.trim();
+    if (!trimmed || trimmed.length < 4) {
       setFacultyPassMsg({ text: 'รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร', success: false });
       return;
     }
-    saveFacultyPassword(newFacultyPass.trim());
-    setFacultyPass(newFacultyPass.trim());
-    setNewFacultyPass('');
-    setFacultyPassMsg({ text: 'บันทึกรหัสผ่านสำหรับบุคลากรเรียบร้อยแล้ว', success: true });
-    setTimeout(() => setFacultyPassMsg(null), 4000);
+    setIsSavingFacultyPass(true);
+    setFacultyPassMsg(null);
+    try {
+      const res = await pushFacultyPassword(trimmed);
+      setFacultyPass(trimmed);
+      setNewFacultyPass('');
+      setFacultyPassMsg({
+        text: res.message || 'บันทึกและซิงค์รหัสผ่านไปยังทุกอุปกรณ์ (รวมถึง PWA บนมือถือ) เรียบร้อยแล้ว',
+        success: res.success,
+      });
+    } catch (err: any) {
+      setFacultyPassMsg({ text: `เกิดข้อผิดพลาด: ${err?.message || err}`, success: false });
+    } finally {
+      setIsSavingFacultyPass(false);
+      setTimeout(() => setFacultyPassMsg(null), 5000);
+    }
+  };
+
+  // ==================== MASTER ADMIN PASSWORD STATE ====================
+  const [newMasterAdminPass, setNewMasterAdminPass] = useState('');
+  const [confirmMasterAdminPass, setConfirmMasterAdminPass] = useState('');
+  const [masterAdminPassMsg, setMasterAdminPassMsg] = useState<{ text: string; success: boolean } | null>(null);
+  const [isSavingMasterAdminPass, setIsSavingMasterAdminPass] = useState(false);
+
+  const handleSaveMasterAdminPass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pass = newMasterAdminPass.trim();
+    if (!pass || pass.length < 4) {
+      setMasterAdminPassMsg({ text: 'รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร', success: false });
+      return;
+    }
+    if (pass !== confirmMasterAdminPass.trim()) {
+      setMasterAdminPassMsg({ text: 'รหัสผ่านยืนยันไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง', success: false });
+      return;
+    }
+    setIsSavingMasterAdminPass(true);
+    setMasterAdminPassMsg(null);
+    try {
+      const res = await pushMasterAdminPassword(pass);
+      if (res.success) {
+        setNewMasterAdminPass('');
+        setConfirmMasterAdminPass('');
+        try {
+          sessionStorage.setItem('halaqah_admin_key', pass);
+        } catch {}
+      }
+      setMasterAdminPassMsg({ text: res.message, success: res.success });
+    } catch (err: any) {
+      setMasterAdminPassMsg({ text: `เกิดข้อผิดพลาด: ${err?.message || err}`, success: false });
+    } finally {
+      setIsSavingMasterAdminPass(false);
+      setTimeout(() => setMasterAdminPassMsg(null), 5000);
+    }
   };
 
   // Distinct recorded dates across all records
@@ -5525,7 +5576,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     รหัสผ่านเข้าใช้งานสำหรับบุคลากร
                   </h3>
                   <p className="text-[11px] text-purple-700/70">
-                    รหัสที่อาจารย์ต้องใช้กรอกเพื่อเข้าสู่หน้าเช็คชื่อ
+                    รหัสที่อาจารย์ใช้กรอกเพื่อเข้าสู่หน้าเช็คชื่อ (ซิงค์อัตโนมัติไปยังทุกอุปกรณ์ & PWA)
                   </p>
                 </div>
               </div>
@@ -5537,6 +5588,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               )}
 
               <form onSubmit={handleSaveFacultyPass} className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-purple-900 bg-white/70 p-2.5 rounded-xl border border-purple-200/60">
+                  <span>รหัสผ่านบุคลากรปัจจุบัน:</span>
+                  <span className="font-mono font-bold bg-purple-100 text-purple-950 px-2.5 py-1 rounded-lg">
+                    {facultyPass || 'edu.sdd'}
+                  </span>
+                </div>
+
                 <div>
                   <label className="text-[11px] font-bold text-purple-900 block mb-1">
                     ตั้งรหัสผ่านใหม่สำหรับบุคลากร
@@ -5549,15 +5607,95 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     className="w-full px-3.5 py-2.5 text-xs font-bold border border-purple-200 rounded-xl bg-white"
                   />
                   <div className="text-[10px] text-purple-700/80 mt-1">
-                    * รหัสตั้งต้นของระบบคือ <span className="font-mono font-bold text-purple-950">edu.sdd</span> (แอดมินสามารถเปลี่ยนได้ที่นี่)
+                    * รหัสจะถูกบันทึกลง Google Sheet และอัปเดตให้อาจารย์ที่ใช้งานผ่านมือถือ/PWA ทันที
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+                  disabled={isSavingFacultyPass}
+                  className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-60"
                 >
-                  บันทึกรหัสผ่านบุคลากรใหม่
+                  {isSavingFacultyPass ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังซิงค์ไปยัง Google Sheet & PWA...</span>
+                    </>
+                  ) : (
+                    <span>บันทึกรหัสผ่านบุคลากรใหม่ (ซิงค์ทุกอุปกรณ์)</span>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* 1B. MASTER ADMIN PASSWORD MANAGEMENT */}
+            <div className="p-5 rounded-3xl border border-purple-200/80 bg-purple-50/40 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-purple-950 text-sm">
+                    เปลี่ยนรหัสผ่านแอดมินหลัก (Master Passcode)
+                  </h3>
+                  <p className="text-[11px] text-purple-700/70">
+                    สำหรับล็อกอินเข้า Dashboard แอดมินหลักจากคอมพิวเตอร์และมือถือ (PWA)
+                  </p>
+                </div>
+              </div>
+
+              {masterAdminPassMsg && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold ${masterAdminPassMsg.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {masterAdminPassMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveMasterAdminPass} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-purple-900 block mb-1">
+                      รหัสผ่านแอดมินใหม่
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="ระบุรหัสใหม่ (อย่างน้อย 4 หลัก)"
+                      value={newMasterAdminPass}
+                      onChange={(e) => setNewMasterAdminPass(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs font-bold border border-purple-200 rounded-xl bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-purple-900 block mb-1">
+                      ยืนยันรหัสผ่านใหม่อีกครั้ง
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="ยืนยันรหัสผ่านใหม่"
+                      value={confirmMasterAdminPass}
+                      onChange={(e) => setConfirmMasterAdminPass(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs font-bold border border-purple-200 rounded-xl bg-white"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] text-purple-700/80">
+                  * รหัสตั้งต้นของระบบคือ <span className="font-mono font-bold text-purple-950">71300807</span> เมื่อเปลี่ยนแล้ว ระบบจะซิงค์ให้อุปกรณ์อื่น/PWA ล็อกอินด้วยรหัสใหม่ได้ทันที
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingMasterAdminPass}
+                  className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  {isSavingMasterAdminPass ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังซิงค์รหัสแอดมินไปยังทุกอุปกรณ์...</span>
+                    </>
+                  ) : (
+                    <span>เปลี่ยนรหัสผ่านแอดมินหลัก (ซิงค์ทุกอุปกรณ์)</span>
+                  )}
                 </button>
               </form>
             </div>

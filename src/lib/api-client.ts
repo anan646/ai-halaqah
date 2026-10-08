@@ -18,6 +18,8 @@ import {
   saveSemesterSettings,
   getFeedbacks,
   saveFeedbacks,
+  getFacultyPassword,
+  saveFacultyPassword,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from './data-store';
 import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
@@ -254,6 +256,7 @@ export async function backupAllToGoogleSheet(): Promise<{
         attendance,
         logoUrl: getSavedLogo(),
         certificateConfig: getCertificateConfig(),
+        facultyPassword: getFacultyPassword(),
       })
     });
 
@@ -299,6 +302,7 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     if (Array.isArray(d.terms) && d.terms.length) saveTermHistory(d.terms);
     if (d.semester) saveSemesterSettings({ ...getSemesterSettings(), ...d.semester });
     if (d.certificateConfig) saveCertificateConfig({ ...getCertificateConfig(), ...d.certificateConfig });
+    if (d.facultyPassword) saveFacultyPassword(d.facultyPassword);
     if (Array.isArray(d.subAdmins)) {
       // ชีตไม่เก็บรหัสจริง: คงรหัสในเครื่องไว้ถ้ามี ที่เหลือจะตรวจกับชีตตอนล็อกอิน
       const local = new Map(getSubAdmins().map((a) => [a.id, a]));
@@ -360,6 +364,7 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
   }
   if (d.majors.length) saveActiveMajors(d.majors);
   if (d.semester) saveSemesterSettings({ ...getSemesterSettings(), ...d.semester });
+  if (d.facultyPassword) saveFacultyPassword(d.facultyPassword);
   saveAnnouncements(d.announcements);
   return true;
 }
@@ -387,6 +392,7 @@ export interface PublicData {
   teachers: Teacher[];
   majors: string[];
   semester: Partial<SemesterSettings> | null;
+  facultyPassword?: string;
 }
 
 const EMPTY_PUBLIC: PublicData = { ok: false, announcements: [], roster: [], teachers: [], majors: [], semester: null };
@@ -405,9 +411,61 @@ export async function fetchPublicData(): Promise<PublicData> {
       teachers: Array.isArray(data.teachers) ? data.teachers : [],
       majors: Array.isArray(data.majors) ? data.majors : [],
       semester: data.semester || null,
+      facultyPassword: data.facultyPassword || undefined,
     };
   } catch {
     return EMPTY_PUBLIC;
+  }
+}
+
+/** บันทึกรหัสผ่านบุคลากรขึ้น Google Sheet และซิงค์ไปยังทุกอุปกรณ์ (รวมถึง PWA บนมือถือ) */
+export async function pushFacultyPassword(newPass: string): Promise<{ success: boolean; message: string }> {
+  saveFacultyPassword(newPass);
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) {
+    return { success: true, message: 'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Web App URL)' };
+  }
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'saveFacultyPassword',
+        facultyPassword: newPass,
+        adminKey: getAdminKey(),
+      }),
+    });
+    const data = await res.json();
+    return data?.success
+      ? { success: true, message: 'บันทึกและซิงค์รหัสผ่านบุคลากรไปยังทุกอุปกรณ์ (รวมถึง PWA บนมือถือ) เรียบร้อยแล้ว' }
+      : { success: false, message: data?.message || 'ส่งขึ้น Google Sheet ไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
+/** เปลี่ยนรหัสผ่านแอดมินหลักขึ้น Google Sheet เพื่อให้ทุกอุปกรณ์/PWA ใช้รหัสใหม่ได้ */
+export async function pushMasterAdminPassword(newPasscode: string): Promise<{ success: boolean; message: string }> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) {
+    return { success: false, message: 'ยังไม่ได้ตั้งค่า Web App URL' };
+  }
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'saveAdminPassword',
+        newPasscode,
+        adminKey: getAdminKey(),
+      }),
+    });
+    const data = await res.json();
+    return data?.success
+      ? { success: true, message: 'เปลี่ยนรหัสผ่านแอดมินหลักสำเร็จ ทุกอุปกรณ์และ PWA จะใช้รหัสใหม่นี้ทันที' }
+      : { success: false, message: data?.message || 'บันทึกลง Google Sheet ไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
   }
 }
 

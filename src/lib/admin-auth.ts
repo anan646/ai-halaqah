@@ -103,38 +103,64 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
   const trimmed = passcode.trim();
   if (!trimmed) return { valid: false };
 
+  // 1. ตรวจสอบกับรายการแอดมินรองในเครื่อง (ถ้ามี)
   const matched = getSubAdmins().find((a) => a.passcode === trimmed);
   if (matched) {
+    try {
+      sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+    } catch {}
     return { valid: true, user: { id: matched.id, name: matched.name + ' (แอดมินรอง)', role: 'subadmin' } };
   }
 
+  // 2. ตรวจสอบกับ Next.js API Route (ENV หรือรหัสหลักตั้งต้น 71300807)
   try {
     const res = await fetch('/api/admin-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ passcode: trimmed }),
     });
-    if (res.status === 503) {
-      return { valid: false, message: 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่ารหัสแอดมิน (ADMIN_PASSCODE) กรุณาติดต่อผู้ดูแลระบบ' };
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.valid) {
+        try {
+          sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+        } catch {}
+        return { valid: true, user: { id: 'master', name: 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)', role: 'admin' } };
+      }
     }
-    const data = await res.json().catch(() => ({}));
-    if (data?.valid) {
+  } catch {
+    // เซิร์ฟเวอร์ออฟไลน์หรือไม่สามารถติดต่อได้ ให้ข้ามไปตรวจกับ Google Apps Script ต่อไป
+  }
+
+  // 3. ตรวจสอบกับ Google Apps Script โดยตรง (รองรับทั้งแอดมินหลักที่เปลี่ยนรหัสในชีต และแอดมินรองจากอุปกรณ์อื่น/PWA)
+  try {
+    const d = await postScript({ action: 'verifyAdminPasscode', passcode: trimmed });
+    if (d?.valid) {
       try {
         sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
       } catch {}
-      return { valid: true, user: { id: 'master', name: 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)', role: 'admin' } };
+      return {
+        valid: true,
+        user: {
+          id: String(d.id || 'master'),
+          name: String(d.name || (d.role === 'subadmin' ? 'แอดมินรอง' : 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)')),
+          role: (d.role as 'admin' | 'subadmin') || 'admin',
+        },
+      };
     }
-  } catch {
-    return { valid: false, message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่' };
-  }
+  } catch {}
 
-  // แอดมินรองที่สร้างจากเครื่องอื่น: ตรวจกับชีต SubAdmins
+  // 4. Fallback ตรวจกับ verifySubAdmin เดิม
   try {
     const d = await postScript({ action: 'verifySubAdmin', passcode: trimmed });
     if (d?.valid) {
+      try {
+        sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+      } catch {}
       return { valid: true, user: { id: String(d.id), name: `${d.name} (แอดมินรอง)`, role: 'subadmin' } };
     }
   } catch {}
+
   return { valid: false };
 }
 

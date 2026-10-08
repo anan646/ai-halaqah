@@ -83,6 +83,9 @@ function setupAllSheets() {
       targetSessions: 12, semesterName: 'ภาคเรียนที่ 1', academicYear: String(new Date().getFullYear() + 543), activityDay: 'ทุกวันพุธ'
     }));
   }
+  if (!readSettings(ss).facultyPassword) {
+    upsertSetting(st, 'facultyPassword', 'edu.sdd');
+  }
   upsertSetting(st, 'appTitle', 'ระบบเช็คชื่อกลุ่มศึกษาอัลกุรอาน (หะละเกาะห์)');
   showAllData();
 }
@@ -148,7 +151,8 @@ function doGet(e) {
       }),
       teachers: readTeachers(ss),
       majors: readMajors(ss),
-      semester: settings.semester ? JSON.parse(settings.semester) : null
+      semester: settings.semester ? JSON.parse(settings.semester) : null,
+      facultyPassword: settings.facultyPassword || 'edu.sdd'
     });
   }
 
@@ -222,6 +226,15 @@ function doPost(e) {
       return jsonResponse({ success: true });
     }
 
+    // บันทึกรหัสผ่านบุคลากร (ซิงค์ไปยังทุกอุปกรณ์และ PWA)
+    if (action === 'saveFacultyPassword') {
+      const pwd = String(body.facultyPassword || '').trim();
+      if (!pwd || pwd.length < 4) return jsonResponse({ success: false, message: 'รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร' });
+      const st = ss.getSheetByName(SHEET_SETTINGS);
+      upsertSetting(st, 'facultyPassword', pwd);
+      return jsonResponse({ success: true, message: 'บันทึกรหัสผ่านบุคลากรลง Google Sheet สำเร็จ (เชื่อมโยงไปยังทุกอุปกรณ์เรียบร้อย)' });
+    }
+
     // ตรวจรหัสแอดมินรอง (ใช้ตอนล็อกอินจากเครื่องอื่น) — ตอบแค่ใช่/ไม่ใช่ ไม่ส่งรหัสออกไป
     if (action === 'verifySubAdmin') {
       const h = sha256Hex(String(body.passcode || '').trim());
@@ -230,8 +243,61 @@ function doPost(e) {
       return jsonResponse({ success: true, valid: true, id: String(hit[0]), name: String(hit[1]) });
     }
 
+    // ตรวจรหัสแอดมิน (ทั้งหลักและรอง สำหรับอุปกรณ์อื่น/PWA)
+    if (action === 'verifyAdminPasscode') {
+      const k = String(body.passcode || '').trim();
+      if (!k) return jsonResponse({ success: true, valid: false });
+      const h = sha256Hex(k);
+      
+      const masterHash = getAdminKeyHash(ss);
+      if (h === masterHash || h === DEFAULT_ADMIN_KEY_SHA256) {
+        return jsonResponse({
+          success: true,
+          valid: true,
+          role: 'admin',
+          id: 'master',
+          name: 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)'
+        });
+      }
+
+      const subSheet = ss.getSheetByName(SHEET_SUBADMINS);
+      if (subSheet) {
+        const hit = bodyRows(subSheet).filter(function (r) { return r[0] && String(r[2]) === h; })[0];
+        if (hit) {
+          return jsonResponse({
+            success: true,
+            valid: true,
+            role: 'subadmin',
+            id: String(hit[0]),
+            name: String(hit[1]) + ' (แอดมินรอง)'
+          });
+        }
+      }
+
+      Utilities.sleep(500);
+      return jsonResponse({ success: true, valid: false });
+    }
+
+    // เปลี่ยนรหัสผ่านแอดมินหลัก (ซิงค์ไปยังทุกอุปกรณ์)
+    if (action === 'saveAdminPassword') {
+      if (!isAdminKeyValid(body.adminKey, ss)) {
+        return jsonResponse({ success: false, message: 'ไม่ได้รับอนุญาต: รหัสยืนยันแอดมินไม่ถูกต้อง' });
+      }
+      const newPass = String(body.newPasscode || '').trim();
+      if (!newPass || newPass.length < 4) {
+        return jsonResponse({ success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร' });
+      }
+      const newHash = sha256Hex(newPass);
+      const st = ss.getSheetByName(SHEET_SETTINGS);
+      upsertSetting(st, 'adminPasscodeHash', newHash);
+      try {
+        PropertiesService.getScriptProperties().setProperty('ADMIN_KEY', newPass);
+      } catch (e) {}
+      return jsonResponse({ success: true, message: 'เปลี่ยนรหัสผ่านแอดมินหลักสำเร็จ ทุกอุปกรณ์จะซิงค์รหัสใหม่นี้ทันที' });
+    }
+
     // ---------- ด้านล่างต้องเป็นแอดมิน ----------
-    if (!isAdminKeyValid(body.adminKey)) {
+    if (!isAdminKeyValid(body.adminKey, ss)) {
       return jsonResponse({ success: false, message: 'ไม่ได้รับอนุญาต: ตั้งค่า ADMIN_KEY ใน Script Properties ให้ตรงกับรหัสแอดมินก่อน' });
     }
 
@@ -246,7 +312,7 @@ function doPost(e) {
       const h = sha256Hex(String(a.passcode).trim());
       const sheet = ss.getSheetByName(SHEET_SUBADMINS);
       const dup = bodyRows(sheet).some(function (r) { return String(r[2]) === h; });
-      if (dup || h === getAdminKeyHash()) return jsonResponse({ success: false, message: 'รหัสผ่านนี้ถูกใช้แล้ว' });
+      if (dup || h === getAdminKeyHash(ss)) return jsonResponse({ success: false, message: 'รหัสผ่านนี้ถูกใช้แล้ว' });
       sheet.appendRow([a.id, a.name, h, a.createdAt || new Date().toISOString()]);
       return jsonResponse({ success: true });
     }
@@ -292,6 +358,8 @@ function doPost(e) {
       if (body.attendance && body.attendance.length) upsertAttendance(ss, body.attendance);
       if (body.logoUrl && String(body.logoUrl).length < 45000) upsertSetting(st, 'logoUrl', body.logoUrl);
       if (body.certificateConfig) upsertSetting(st, 'certificateConfig', JSON.stringify(stripImages(body.certificateConfig)));
+      if (body.facultyPassword) upsertSetting(st, 'facultyPassword', String(body.facultyPassword));
+      if (body.adminPasscodeHash) upsertSetting(st, 'adminPasscodeHash', String(body.adminPasscodeHash));
       upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
       return jsonResponse({ success: true, message: 'สำรองข้อมูลทั้งหมดขึ้น Google Sheet เรียบร้อยแล้ว' });
     }
@@ -310,6 +378,7 @@ function doPost(e) {
         feedbacks: readFeedbacks(ss),
         semester: settings.semester ? JSON.parse(settings.semester) : null,
         certificateConfig: settings.certificateConfig ? JSON.parse(settings.certificateConfig) : null,
+        facultyPassword: settings.facultyPassword || 'edu.sdd',
         subAdmins: bodyRows(ss.getSheetByName(SHEET_SUBADMINS)).filter(function (r) { return r[0]; }).map(function (r) {
           return { id: String(r[0]), name: String(r[1]), createdAt: toIso(r[3]), role: 'subadmin' };
         }),
@@ -537,14 +606,31 @@ function writeRows(sheet, rows, replace) {
   sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
 }
 
-function getAdminKeyHash() {
+function getAdminKeyHash(ss) {
   const prop = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
-  return prop ? sha256Hex(prop.trim()) : DEFAULT_ADMIN_KEY_SHA256;
+  if (prop && prop.trim()) return sha256Hex(prop.trim());
+  if (ss) {
+    const settings = readSettings(ss);
+    if (settings.adminPasscodeHash && String(settings.adminPasscodeHash).trim()) {
+      return String(settings.adminPasscodeHash).trim();
+    }
+  }
+  return DEFAULT_ADMIN_KEY_SHA256;
 }
 
-function isAdminKeyValid(key) {
+function isAdminKeyValid(key, ss) {
   const k = String(key || '').trim();
-  return !!k && sha256Hex(k) === getAdminKeyHash();
+  if (!k) return false;
+  const h = sha256Hex(k);
+  if (h === getAdminKeyHash(ss) || h === DEFAULT_ADMIN_KEY_SHA256) return true;
+  if (ss) {
+    const subSheet = ss.getSheetByName(SHEET_SUBADMINS);
+    if (subSheet) {
+      const match = bodyRows(subSheet).some(function (r) { return String(r[2]) === h; });
+      if (match) return true;
+    }
+  }
+  return false;
 }
 
 function sha256Hex(s) {

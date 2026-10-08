@@ -23,17 +23,20 @@ import {
   Bell,
   X,
   HelpCircle,
-  KeyRound
+  KeyRound,
+  Loader2,
 } from 'lucide-react';
 import {
   getActiveTeachers,
   getActiveStudents,
   getFacultyPassword,
+  saveFacultyPassword,
   getAnnouncements,
   getStudentMajor,
   getStudentLevel,
   formatTermLabel,
 } from '@/lib/data-store';
+import { fetchPublicData } from '@/lib/api-client';
 import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
 import { StudentPortalView } from '@/components/StudentPortalView';
@@ -217,11 +220,19 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     }
   };
 
+  const [isVerifyingRemoteFaculty, setIsVerifyingRemoteFaculty] = useState(false);
+
   // Submit faculty login password
-  const handleFacultyLoginSubmit = (e: React.FormEvent) => {
+  const handleFacultyLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const input = facultyPassInput.trim();
+    if (!input) {
+      setFacultyAuthError('กรุณากรอกรหัสผ่าน');
+      return;
+    }
+
     const correctPass = getFacultyPassword();
-    if (facultyPassInput === correctPass) {
+    if (input === correctPass) {
       setIsFacultySessionActive(true);
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('halaqah_faculty_session', 'true');
@@ -230,9 +241,34 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       setFacultyPassInput('');
       setFacultyAuthError('');
       navigateToView('faculty');
-    } else {
-      setFacultyAuthError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง');
+      return;
     }
+
+    // หากรหัสในเครื่องไม่ตรง ให้ตรวจสอบกับ Google Sheet แบบเรียลไทม์ทันที
+    // เพื่อรองรับกรณีที่แอดมินเพิ่งเปลี่ยนรหัสผ่านจากคอมพิวเตอร์หลัก แล้วเข้าใช้งานจากมือถือ (PWA)
+    setIsVerifyingRemoteFaculty(true);
+    setFacultyAuthError('');
+    try {
+      const pub = await fetchPublicData();
+      if (pub.ok && pub.facultyPassword && input === pub.facultyPassword) {
+        saveFacultyPassword(pub.facultyPassword);
+        setIsFacultySessionActive(true);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('halaqah_faculty_session', 'true');
+        }
+        setIsFacultyAuthModalOpen(false);
+        setFacultyPassInput('');
+        setFacultyAuthError('');
+        navigateToView('faculty');
+        return;
+      }
+    } catch (err) {
+      console.warn('Realtime faculty password check error:', err);
+    } finally {
+      setIsVerifyingRemoteFaculty(false);
+    }
+
+    setFacultyAuthError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง');
   };
 
   // Year level group counts for the selected gender
@@ -554,9 +590,17 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+                  disabled={isVerifyingRemoteFaculty}
+                  className="px-5 py-2 bg-gradient-to-r from-purple-800 to-purple-900 hover:from-purple-900 hover:to-purple-950 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-60"
                 >
-                  เข้าสู่ระบบ
+                  {isVerifyingRemoteFaculty ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>กำลังตรวจสอบ...</span>
+                    </>
+                  ) : (
+                    <span>เข้าสู่ระบบ</span>
+                  )}
                 </button>
               </div>
             </form>
