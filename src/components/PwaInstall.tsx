@@ -15,7 +15,14 @@ export function usePwaRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;
     if (!('serviceWorker' in navigator)) return;
-    const onLoad = () => navigator.serviceWorker.register('/sw.js').catch(() => null);
+    const onLoad = () => {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          reg.update().catch(() => null);
+        })
+        .catch(() => null);
+    };
     if (document.readyState === 'complete') onLoad();
     else window.addEventListener('load', onLoad, { once: true });
   }, []);

@@ -549,9 +549,10 @@ export function getFacultyPassword(): string {
   }
 }
 
-export function saveFacultyPassword(newPass: string): void {
+export function saveFacultyPassword(newPass: any): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_FACULTY_PASS, newPass.trim() || 'edu.sdd');
+  const val = String(newPass ?? '').trim();
+  localStorage.setItem(STORAGE_KEY_FACULTY_PASS, val || 'edu.sdd');
 }
 
 // 6. จัดการระบบประกาศ (Announcements) สำหรับนักศึกษา

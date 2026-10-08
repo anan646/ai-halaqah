@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Lock, KeyRound, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { verifyAdminPasscode, setAdminSession } from '@/lib/admin-auth';
+import { getFacultyPassword } from '@/lib/data-store';
+import { fetchPublicData } from '@/lib/api-client';
 
 interface AdminLoginViewProps {
   onLoginSuccess: (user: { id: string; name: string; role: 'admin' | 'subadmin' }) => void;
@@ -22,16 +24,33 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const input = passcode.trim();
+    if (!input) {
+      setError('กรุณาระบุรหัสผ่าน');
+      return;
+    }
     setError('');
 
     setBusy(true);
-    const res = await verifyAdminPasscode(passcode);
+    const res = await verifyAdminPasscode(input);
     setBusy(false);
     if (res.valid && res.user) {
       setAdminSession(res.user);
       onLoginSuccess(res.user);
     } else {
-      setError(res.message || 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+      // ตรวจสอบว่าผู้ใช้เผลอนำรหัสของอาจารย์มากรอกหรือไม่
+      const localFacultyPass = String(getFacultyPassword() || '').trim();
+      let remoteFacultyPass = '';
+      try {
+        const pub = await fetchPublicData();
+        remoteFacultyPass = pub.facultyPassword ? String(pub.facultyPassword).trim() : '';
+      } catch {}
+
+      if (input === localFacultyPass || (remoteFacultyPass && input === remoteFacultyPass)) {
+        setError('รหัสที่คุณกรอกคือ "รหัสผ่านสำหรับอาจารย์/บุคลากร" หากต้องการใช้งาน ให้กดกลับหน้าหลักแล้วเข้าสู่ระบบที่ปุ่ม "สำหรับอาจารย์ผู้รับผิดชอบ" (รหัสแอดมินตั้งต้นคือ 71300807)');
+      } else {
+        setError(res.message || 'รหัสผ่านแอดมินไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง');
+      }
     }
   };
 
@@ -63,8 +82,6 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
               <KeyRound className="w-4 h-4 text-purple-400 absolute left-3.5 top-3.5" />
               <input
                 type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
                 autoFocus
                 placeholder="ระบุรหัสผ่าน..."
                 value={passcode}

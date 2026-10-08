@@ -401,7 +401,9 @@ export async function fetchPublicData(): Promise<PublicData> {
   const scriptUrl = getSavedScriptUrl();
   if (!scriptUrl) return EMPTY_PUBLIC;
   try {
-    const res = await fetch(`${scriptUrl}?action=getPublicData`);
+    const res = await fetch(`${scriptUrl}?action=getPublicData&_t=${Date.now()}`, {
+      cache: 'no-store',
+    });
     const data = await res.json();
     if (!data?.success) return EMPTY_PUBLIC;
     return {
@@ -411,7 +413,7 @@ export async function fetchPublicData(): Promise<PublicData> {
       teachers: Array.isArray(data.teachers) ? data.teachers : [],
       majors: Array.isArray(data.majors) ? data.majors : [],
       semester: data.semester || null,
-      facultyPassword: data.facultyPassword || undefined,
+      facultyPassword: data.facultyPassword ? String(data.facultyPassword).trim() : undefined,
     };
   } catch {
     return EMPTY_PUBLIC;
@@ -431,8 +433,8 @@ export async function pushFacultyPassword(newPass: string): Promise<{ success: b
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'saveFacultyPassword',
-        facultyPassword: newPass,
-        adminKey: getAdminKey(),
+        facultyPassword: String(newPass).trim(),
+        adminKey: getAdminKey() || '71300807',
       }),
     });
     const data = await res.json();
@@ -456,8 +458,8 @@ export async function pushMasterAdminPassword(newPasscode: string): Promise<{ su
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'saveAdminPassword',
-        newPasscode,
-        adminKey: getAdminKey(),
+        newPasscode: String(newPasscode).trim(),
+        adminKey: getAdminKey() || '71300807',
       }),
     });
     const data = await res.json();

@@ -41,6 +41,7 @@ import { AttendanceRecord, Student, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
 import { StudentPortalView } from '@/components/StudentPortalView';
 import { ModalPortal } from '@/components/ModalPortal';
+import { verifyAdminPasscode } from '@/lib/admin-auth';
 
 
 const STUDENT_TUTORIAL_KEY = 'halaqah_tutorial_student_dismissed_v1';
@@ -231,8 +232,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       return;
     }
 
-    const correctPass = getFacultyPassword();
-    if (input === correctPass) {
+    const localPass = String(getFacultyPassword() || '').trim();
+    if (input === localPass) {
       setIsFacultySessionActive(true);
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('halaqah_faculty_session', 'true');
@@ -245,13 +246,27 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     }
 
     // หากรหัสในเครื่องไม่ตรง ให้ตรวจสอบกับ Google Sheet แบบเรียลไทม์ทันที
-    // เพื่อรองรับกรณีที่แอดมินเพิ่งเปลี่ยนรหัสผ่านจากคอมพิวเตอร์หลัก แล้วเข้าใช้งานจากมือถือ (PWA)
     setIsVerifyingRemoteFaculty(true);
     setFacultyAuthError('');
     try {
       const pub = await fetchPublicData();
-      if (pub.ok && pub.facultyPassword && input === pub.facultyPassword) {
-        saveFacultyPassword(pub.facultyPassword);
+      const remotePass = pub.facultyPassword ? String(pub.facultyPassword).trim() : '';
+      if (pub.ok && remotePass && input === remotePass) {
+        saveFacultyPassword(remotePass);
+        setIsFacultySessionActive(true);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('halaqah_faculty_session', 'true');
+        }
+        setIsFacultyAuthModalOpen(false);
+        setFacultyPassInput('');
+        setFacultyAuthError('');
+        navigateToView('faculty');
+        return;
+      }
+
+      // หากกรอกรหัสแอดมิน ให้สามารถเข้าใช้งานหน้าอาจารย์ได้ด้วยเช่นกัน
+      const adminCheck = await verifyAdminPasscode(input);
+      if (adminCheck.valid) {
         setIsFacultySessionActive(true);
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('halaqah_faculty_session', 'true');

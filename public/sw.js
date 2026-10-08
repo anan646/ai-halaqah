@@ -3,7 +3,7 @@
  * - หน้าเว็บ: ดึงจากเน็ตก่อน ถ้าออฟไลน์ใช้หน้าที่เคยเปิดไว้ (network-first)
  * - ไม่แคช /api และการเรียก Google Apps Script (ข้อมูลต้องสดเสมอ)
  */
-const VERSION = 'halaqah-v1';
+const VERSION = 'halaqah-v2';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const PRECACHE = ['/', '/logo.png', '/icons/icon-192.png', '/icons/icon-512.png'];
