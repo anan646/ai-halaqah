@@ -10,19 +10,54 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISS_KEY = 'halaqah_pwa_install_dismissed_v1';
 
-/** ลงทะเบียน Service Worker (เฉพาะเวอร์ชันจริง เพื่อไม่ให้รบกวนตอนพัฒนา) */
+/** ลงทะเบียน Service Worker พร้อมระบบตรวจจับเวอร์ชันใหม่แบบเรียลไทม์ (ไม่ต้องลบแอปแล้วติดตั้งใหม่) */
 export function usePwaRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;
-    if (!('serviceWorker' in navigator)) return;
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        // เมื่อ Service Worker เวอร์ชันใหม่อัปเดต ให้รีเฟรชหน้าเว็บอัตโนมัติ เพื่อรับโค้ดล่าสุดทันที
+        window.location.reload();
+      }
+    });
+
+    const triggerUpdate = (reg: ServiceWorkerRegistration) => {
+      reg.update().catch(() => null);
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      if (reg.installing) {
+        reg.installing.addEventListener('statechange', (e: any) => {
+          if (e.target.state === 'installed') {
+            reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      }
+    };
+
     const onLoad = () => {
       navigator.serviceWorker
-        .register('/sw.js')
+        .register('/sw.js', { updateViaCache: 'none' })
         .then((reg) => {
-          reg.update().catch(() => null);
+          triggerUpdate(reg);
+
+          // ตรวจหาอัปเดตเมื่อผู้ใช้สลับกลับมาที่แอป
+          window.addEventListener('focus', () => triggerUpdate(reg));
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') triggerUpdate(reg);
+          });
+
+          // ตรวจหาอัปเดตอัตโนมัติทุก 30 วินาที
+          const interval = setInterval(() => triggerUpdate(reg), 30000);
+          return () => clearInterval(interval);
         })
         .catch(() => null);
     };
+
     if (document.readyState === 'complete') onLoad();
     else window.addEventListener('load', onLoad, { once: true });
   }, []);

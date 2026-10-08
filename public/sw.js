@@ -3,7 +3,7 @@
  * - หน้าเว็บ: ดึงจากเน็ตก่อน ถ้าออฟไลน์ใช้หน้าที่เคยเปิดไว้ (network-first)
  * - ไม่แคช /api และการเรียก Google Apps Script (ข้อมูลต้องสดเสมอ)
  */
-const VERSION = 'halaqah-v2';
+const VERSION = 'halaqah-v3';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const PRECACHE = ['/', '/logo.png', '/icons/icon-192.png', '/icons/icon-512.png'];
@@ -20,6 +20,12 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {

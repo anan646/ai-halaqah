@@ -69,24 +69,23 @@ export default function HomePage() {
   // Admin authentication state
   const [adminUser, setAdminUser] = useState<{ id: string; name: string; role: 'admin' | 'subadmin' } | null>(null);
 
-  // Load records & logo & admin session
-  const loadData = useCallback(async () => {
-    setIsSyncing(true);
+  // Load records & logo & admin session (supports silent background sync)
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setIsSyncing(true);
     setRecords(getLocalAttendanceRecords());
     setCustomLogo(getSavedLogo());
     setAdminUser(getAdminSession());
 
-    // เครื่องอาจารย์/นักศึกษา: ใช้รายชื่อ ภาคการศึกษา และประกาศล่าสุดจาก Google Sheet
-    if (!getAdminSession()) {
-      // รีเฟรชหน้าจอเฉพาะตอนผู้ใช้ยังอยู่หน้าเลือกประเภทผู้ใช้ เพื่อไม่ให้สิ่งที่กำลังกรอกหายไป
-      applyPublicDataToLocal().then((ok) => {
-        if (ok && idleRef.current) setDataVersion((v) => v + 1);
-      });
-    }
+    // ซิงค์ข้อมูลสาธารณะ (รหัสผ่านอาจารย์, ประกาศ, รายชื่ออาจารย์/นศ., ภาคเรียน) จาก Google Sheet
+    applyPublicDataToLocal().then((ok) => {
+      if (ok) setDataVersion((v) => v + 1);
+    });
 
     try {
       const res = await fetchAllAttendance();
-      setRecords(res.records);
+      if (res && res.records && res.records.length > 0) {
+        setRecords(res.records);
+      }
     } catch (err) {
       console.error('Error fetching records:', err);
     }
@@ -96,11 +95,37 @@ export default function HomePage() {
       console.warn('Error fetching feedbacks:', err);
     });
 
-    setIsSyncing(false);
+    if (!silent) setIsSyncing(false);
   }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+  }, [loadData]);
+
+  // ระบบเชื่อมโยงข้อมูลแบบเรียลไทม์ (Real-time PWA Sync):
+  // 1. ซิงค์ทันทีเมื่อสลับกลับมาที่แอป (focus)
+  // 2. ซิงค์เมื่อเปิดหน้าจอหรือปลดล็อกมือถือ (visibilitychange)
+  // 3. ซิงค์เมื่อเชื่อมต่อเน็ตสำเร็จ (online)
+  // 4. Heartbeat ซิงค์ข้อมูลเบื้องหลังอัตโนมัติทุก 10 วินาที
+  useEffect(() => {
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
+        loadData(true);
+      }
+    };
+
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('online', handleSync);
+
+    const interval = setInterval(handleSync, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('online', handleSync);
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   useEffect(() => {

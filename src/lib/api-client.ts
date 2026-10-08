@@ -145,9 +145,10 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
   }
 
   try {
-    const res = await fetch(`${scriptUrl}?action=getAttendance`, {
+    const res = await fetch(`${scriptUrl}?action=getAttendance&_t=${Date.now()}`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -532,9 +533,10 @@ export async function fetchAllFeedbacks(): Promise<{ feedbacks: any[]; fromRemot
   }
 
   try {
-    const res = await fetch(`${scriptUrl}?action=getFeedbacks`, {
+    const res = await fetch(`${scriptUrl}?action=getFeedbacks&_t=${Date.now()}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      cache: 'no-store',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();

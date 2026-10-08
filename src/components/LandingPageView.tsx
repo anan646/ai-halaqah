@@ -212,6 +212,15 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
 
   // Click on Faculty button: verify session or open password modal
   const handleOpenFacultyPortal = () => {
+    // ดึงรหัสผ่านและข้อมูลล่าสุดจาก Google Sheet ล่วงหน้าในพื้นหลังทันที
+    fetchPublicData()
+      .then((pub) => {
+        if (pub.ok && pub.facultyPassword) {
+          saveFacultyPassword(pub.facultyPassword);
+        }
+      })
+      .catch(() => null);
+
     if (isFacultySessionActive) {
       navigateToView('faculty');
     } else {
