@@ -412,6 +412,16 @@ export interface PublicRosterStudent {
   level?: string;
 }
 
+export interface ActivePinSession {
+  pin?: string;
+  date: string;
+  active: boolean;
+  topic?: string;
+  groupName?: string;
+  hasPin?: boolean;
+  createdAt?: string;
+}
+
 export interface PublicData {
   ok: boolean;
   announcements: Announcement[];
@@ -423,6 +433,7 @@ export interface PublicData {
   certificateConfig?: Partial<CertificateConfig> | null;
   logoUrl?: string | null;
   facultyPassword?: string;
+  activePinSession?: ActivePinSession | null;
 }
 
 const EMPTY_PUBLIC: PublicData = {
@@ -435,6 +446,7 @@ const EMPTY_PUBLIC: PublicData = {
   semester: null,
   certificateConfig: null,
   logoUrl: null,
+  activePinSession: null,
 };
 
 export async function fetchPublicData(): Promise<PublicData> {
@@ -457,6 +469,7 @@ export async function fetchPublicData(): Promise<PublicData> {
       certificateConfig: data.certificateConfig || null,
       logoUrl: data.logoUrl || null,
       facultyPassword: data.facultyPassword ? String(data.facultyPassword).trim() : undefined,
+      activePinSession: data.activePinSession || null,
     };
   } catch {
     return EMPTY_PUBLIC;
@@ -508,6 +521,103 @@ export async function pushLogo(base64: string): Promise<{ success: boolean; mess
       : { success: false, message: d?.message || 'ส่งขึ้น Google Sheet ไม่สำเร็จ' };
   } catch (err: any) {
     return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
+/** บันทึกห้องเช็คชื่อด้วย PIN สำหรับฉายจอใหญ่ (แอดมิน) */
+export async function saveActivePinSession(session: ActivePinSession): Promise<{ success: boolean; message: string }> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return { success: false, message: 'ยังไม่ได้ตั้งค่า Web App URL' };
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'saveActivePinSession',
+        adminKey: getAdminKey() || '71300807',
+        session: session,
+      }),
+    });
+    const d = await res.json();
+    return d?.success
+      ? { success: true, message: 'บันทึกและเปิดห้องเช็คชื่อด้วย PIN เรียบร้อยแล้ว' }
+      : { success: false, message: d?.message || 'ส่งขึ้น Google Sheet ไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
+/** ดึงข้อมูลห้องเช็คชื่อ PIN ปัจจุบัน (สำหรับแอดมิน) */
+export async function fetchActivePinSession(): Promise<ActivePinSession | null> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return null;
+  try {
+    const res = await fetch(`${scriptUrl}?action=getActivePinSession&_t=${Date.now()}`, { cache: 'no-store' });
+    const data = await res.json();
+    if (data?.success && data.session) return data.session;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** นักศึกษาเช็คชื่อด้วย PIN (ลงทะเบียนใหม่อัตโนมัติหากยังไม่มีข้อมูลในระบบ) */
+export async function studentSelfCheckIn(payload: {
+  studentId: string;
+  pin: string;
+  fullName?: string;
+  gender?: 'ชาย' | 'หญิง';
+  major?: string;
+  yearLevel?: string;
+  groupName?: string;
+}): Promise<{
+  success: boolean;
+  isNewStudent?: boolean;
+  student?: Student;
+  record?: AttendanceRecord;
+  message: string;
+}> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) {
+    return { success: false, message: 'ยังไม่ได้ตั้งค่า Web App URL กรุณาติดต่อแอดมิน' };
+  }
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'studentSelfCheckIn',
+        ...payload,
+      }),
+    });
+    const d = await res.json();
+    if (d?.success) {
+      // 1. ถ้ามีข้อมูล นศ. (โดยเฉพาะคนใหม่) เพิ่มลงในแคชรายชื่อเครื่องนี้ทันที
+      if (d.student) {
+        const cur = getActiveStudents();
+        if (!cur.some((s) => s.studentId === d.student.studentId)) {
+          saveActiveStudents([d.student, ...cur]);
+        }
+      }
+      // 2. เพิ่มบันทึกการเช็คชื่อลงในแคชเครื่องนี้ทันที
+      if (d.record) {
+        const curRecs = getLocalAttendanceRecords();
+        const map = new Map<string, AttendanceRecord>();
+        curRecs.forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
+        map.set(`${d.record.date}_${d.record.studentId}`, d.record);
+        saveLocalAttendanceRecords(Array.from(map.values()));
+      }
+      return {
+        success: true,
+        isNewStudent: !!d.isNewStudent,
+        student: d.student,
+        record: d.record,
+        message: d.message || 'เช็คชื่อสำเร็จ',
+      };
+    }
+    return { success: false, message: d?.message || 'เช็คชื่อไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ: ${err?.message || err}` };
   }
 }
 

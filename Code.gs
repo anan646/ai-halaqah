@@ -155,8 +155,24 @@ function doGet(e) {
       semester: settings.semester ? JSON.parse(settings.semester) : null,
       certificateConfig: settings.certificateConfig ? JSON.parse(settings.certificateConfig) : null,
       logoUrl: settings.logoUrl || null,
-      facultyPassword: settings.facultyPassword || 'edu.sdd'
+      facultyPassword: settings.facultyPassword || 'edu.sdd',
+      activePinSession: (function () {
+        if (!settings.activePinSession) return null;
+        try {
+          const parsed = JSON.parse(settings.activePinSession);
+          return { active: !!parsed.active, date: parsed.date || '', topic: parsed.topic || '', groupName: parsed.groupName || 'ส่วนกลาง (ปี 1)', hasPin: true };
+        } catch (e) { return null; }
+      })()
     });
+  }
+
+  if (action === 'getActivePinSession') {
+    const settings = readSettings(ss);
+    let s = null;
+    if (settings.activePinSession) {
+      try { s = JSON.parse(settings.activePinSession); } catch (e) {}
+    }
+    return jsonResponse({ success: true, session: s });
   }
 
   if (action === 'getSettings') {
@@ -352,6 +368,131 @@ function doPost(e) {
         return jsonResponse({ success: true, message: 'บันทึกโลโก้ขึ้น Google Sheet เรียบร้อยแล้ว' });
       }
       return jsonResponse({ success: false, message: 'โลโก้ขนาดใหญ่เกินไปหรือไม่ถูกต้อง' });
+    }
+
+    // บันทึกห้องเช็คชื่อด้วย PIN / QR Code สำหรับจอใหญ่
+    if (action === 'saveActivePinSession') {
+      if (!isAdminKeyValid(body.adminKey, ss)) {
+        return jsonResponse({ success: false, message: 'รหัสแอดมินไม่ถูกต้อง' });
+      }
+      const st = ss.getSheetByName(SHEET_SETTINGS);
+      upsertSetting(st, 'activePinSession', JSON.stringify(body.session || {}));
+      upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
+      return jsonResponse({ success: true, message: 'บันทึกและซิงค์ห้องเช็คชื่อด้วย PIN เรียบร้อยแล้ว' });
+    }
+
+    // นักศึกษาเช็คชื่อตนเองด้วย PIN (ลงทะเบียนใหม่อัตโนมัติหากยังไม่มีข้อมูลในระบบ)
+    if (action === 'studentSelfCheckIn') {
+      const studentId = String(body.studentId || '').trim();
+      const pin = String(body.pin || '').trim();
+      if (!studentId || !pin) {
+        return jsonResponse({ success: false, message: 'กรุณากรอกรหัสนักศึกษาและรหัส PIN ให้ครบถ้วน' });
+      }
+      const settings = readSettings(ss);
+      if (!settings.activePinSession) {
+        return jsonResponse({ success: false, message: 'ขณะนี้ยังไม่ได้เปิดห้องเช็คชื่อด้วย PIN' });
+      }
+      let pinSession = {};
+      try { pinSession = JSON.parse(settings.activePinSession); } catch (e) {}
+      if (!pinSession.active) {
+        return jsonResponse({ success: false, message: 'ห้องเช็คชื่อปิดรับแล้ว' });
+      }
+      if (String(pinSession.pin).trim() !== pin) {
+        return jsonResponse({ success: false, message: 'รหัส PIN 4 หลักไม่ถูกต้อง กรุณาดูรหัสบนจอแล้วลองใหม่อีกครั้ง' });
+      }
+
+      const today = pinSession.date || formatDate(new Date());
+      const now = new Date();
+      const timeStr = Utilities.formatDate(now, 'Asia/Bangkok', 'HH:mm:ss');
+      const timestampStr = now.toISOString();
+
+      // 1. ตรวจสอบว่า นศ. มีในฐานข้อมูลหรือยัง
+      const stSheet = ss.getSheetByName(SHEET_STUDENTS);
+      const stData = stSheet.getDataRange().getValues();
+      let existingStudent = null;
+      for (let i = 1; i < stData.length; i++) {
+        if (String(stData[i][0]).trim() === studentId) {
+          existingStudent = {
+            studentId: String(stData[i][0]).trim(),
+            fullName: String(stData[i][1] || ''),
+            groupName: String(stData[i][2] || 'ส่วนกลาง (ปี 1)'),
+            yearLevel: String(stData[i][3] || 'ปี 1'),
+            gender: String(stData[i][4]) === 'หญิง' ? 'หญิง' : 'ชาย',
+            teacherName: String(stData[i][5] || 'ส่วนกลาง'),
+            major: String(stData[i][6] || ''),
+            level: String(stData[i][7] || '01'),
+            groupId: ''
+          };
+          break;
+        }
+      }
+
+      let isNew = false;
+      let finalStudent = existingStudent;
+
+      if (!existingStudent) {
+        isNew = true;
+        const fullName = String(body.fullName || '').trim() || ('นักศึกษา ' + studentId);
+        const groupName = String(body.groupName || 'ส่วนกลาง (ปี 1)').trim();
+        const yearLevel = String(body.yearLevel || 'ปี 1').trim();
+        const gender = String(body.gender || 'ชาย').trim();
+        const teacherName = String(body.teacherName || 'ส่วนกลาง').trim();
+        const major = String(body.major || '').trim();
+        const level = String(body.level || '01').trim();
+
+        finalStudent = {
+          studentId: studentId,
+          fullName: fullName,
+          groupName: groupName,
+          yearLevel: yearLevel,
+          gender: gender === 'หญิง' ? 'หญิง' : 'ชาย',
+          teacherName: teacherName,
+          major: major,
+          level: level,
+          groupId: ''
+        };
+
+        stSheet.appendRow([studentId, fullName, groupName, yearLevel, gender, teacherName, major, level]);
+      }
+
+      // 2. ตรวจสอบภาคการศึกษาปัจจุบัน
+      let curTerm = '';
+      if (settings.semester) {
+        try {
+          const sem = JSON.parse(settings.semester);
+          const no = (String(sem.semesterName).match(/\d/) || ['1'])[0];
+          curTerm = sem.academicYear + '/' + no;
+        } catch (e) {}
+      }
+
+      // 3. บันทึกการเข้าเรียน (Upsert ใน Attendance)
+      const attRecord = {
+        id: 'ATT_' + today + '_' + studentId,
+        date: today,
+        recordedTime: timeStr,
+        studentId: studentId,
+        studentName: finalStudent.fullName,
+        status: 'มา',
+        teacherName: finalStudent.teacherName || 'ส่วนกลาง',
+        groupName: finalStudent.groupName || 'ส่วนกลาง (ปี 1)',
+        yearLevel: finalStudent.yearLevel || 'ปี 1',
+        gender: finalStudent.gender || 'ชาย',
+        timestamp: timestampStr,
+        term: curTerm,
+        major: finalStudent.major || '',
+        level: finalStudent.level || '01',
+        sessionTopic: pinSession.topic || ''
+      };
+
+      upsertAttendance(ss, [attRecord]);
+
+      return jsonResponse({
+        success: true,
+        isNewStudent: isNew,
+        student: finalStudent,
+        record: attRecord,
+        message: isNew ? 'ลงทะเบียนนักศึกษาใหม่และเช็คชื่อสำเร็จแล้ว' : 'เช็คชื่อสำเร็จเรียบร้อยแล้ว'
+      });
     }
 
     // สำรองทุกอย่างจากเว็บขึ้นชีต

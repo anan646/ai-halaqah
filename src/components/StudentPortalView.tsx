@@ -19,6 +19,9 @@ import {
   Sparkles,
   UserX,
   X,
+  KeyRound,
+  UserPlus,
+  QrCode,
 } from 'lucide-react';
 import { AttendanceRecord, Student, Announcement, SemesterSettings } from '@/lib/types';
 import {
@@ -37,6 +40,7 @@ import { getCertificateConfig, saveCertificateConfig, CERT_CONFIG_UPDATED_EVENT 
 import { CertificateModal } from './CertificateModal';
 import { AnnouncementBox } from './AnnouncementBox';
 import { FeedbackModal } from './FeedbackModal';
+import { StudentSelfRegisterModal } from './StudentSelfRegisterModal';
 import { fetchPublicData, PublicData, PublicRosterStudent, getLocalAttendanceRecords } from '@/lib/api-client';
 
 interface Props {
@@ -97,6 +101,34 @@ export const StudentPortalView: React.FC<Props> = ({
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ระบบเช็คชื่อด้วย PIN / ลงทะเบียน นศ. ปี 1
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [prefilledPin, setPrefilledPin] = useState('');
+  const [isNewOnlyMode, setIsNewOnlyMode] = useState(false);
+
+  // อ่าน ?checkinPin= หรือ ?pin= จาก URL เมื่อเปิดจาก QR Code
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const p = params.get('checkinPin') || params.get('pin');
+      if (p) {
+        setPrefilledPin(p);
+        setIsRegisterOpen(true);
+      }
+    }
+  }, []);
+
+  const handleSelfCheckInSuccess = (resStudent: Student, resRecord: AttendanceRecord) => {
+    setStudent(resStudent);
+    setLiveRecords((prev) => {
+      const filtered = prev.filter((r) => !(r.studentId === resRecord.studentId && r.date === resRecord.date));
+      return [resRecord, ...filtered];
+    });
+    setNotFound(false);
+    setIsRegisterOpen(false);
+    syncPublic();
+  };
 
   // ข้อมูลภาคการศึกษาและเป้าหมายชั่วโมง (อัปเดตแบบเรียลไทม์)
   const [semester, setSemester] = useState<SemesterSettings>(() => getSemesterSettings());
@@ -283,6 +315,21 @@ export const StudentPortalView: React.FC<Props> = ({
     }
   }, [stats?.passed, certOpen]);
 
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
+  const isTodayChecked = useMemo(() => {
+    if (!student) return false;
+    return liveRecords.some(
+      (r) => (r.studentId || '').trim() === student.studentId.trim() && r.date === todayStr && r.status === 'มา'
+    );
+  }, [student, liveRecords, todayStr]);
+
   const logo = customLogo || '/logo.png';
 
   /* ============================ หน้ากรอกรหัส ============================ */
@@ -348,8 +395,23 @@ export const StudentPortalView: React.FC<Props> = ({
                 }`}
               />
               {notFound && (
-                <div className="rounded-xl bg-rose-50 border border-rose-100 px-3.5 py-2.5 text-sm text-rose-700 font-semibold text-center">
-                  ไม่พบรหัสนี้ในระบบ ตรวจสอบตัวเลขอีกครั้ง หรือติดต่ออาจารย์ผู้ดูแลกลุ่ม
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-2.5 text-center animate-fadeIn">
+                  <div className="text-sm text-amber-900 font-bold">
+                    ⚠️ ไม่พบรหัสนักศึกษา <span className="font-mono text-purple-900">{input}</span> ในระบบ
+                  </div>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    หากคุณเป็น <strong>นักศึกษาชั้นปีที่ 1</strong> หรือยังไม่เคยมีรายชื่อในระบบ สามารถลงทะเบียนตนเองและเช็คชื่อด้วย PIN กิจกรรมวันนี้ได้ทันที
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNewOnlyMode(true);
+                      setIsRegisterOpen(true);
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition"
+                  >
+                    <UserPlus className="w-4 h-4" /> ลงทะเบียน นศ. ปี 1 / เช็คชื่อด้วย PIN
+                  </button>
                 </div>
               )}
               <button
@@ -360,6 +422,22 @@ export const StudentPortalView: React.FC<Props> = ({
                 ดูข้อมูลของฉัน <ArrowRight className="w-5 h-5" />
               </button>
             </form>
+
+            {/* ปุ่มทางลัดเช็คชื่อด้วย PIN กิจกรรมวันนี้ (สำหรับ นศ. ทุกคน / ปี 1) */}
+            <div className="pt-2 border-t border-purple-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNewOnlyMode(false);
+                  setIsRegisterOpen(true);
+                }}
+                className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 hover:from-purple-100 hover:to-indigo-100 text-purple-900 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-98 border border-purple-100/80 shadow-2xs"
+              >
+                <KeyRound className="w-4 h-4 text-purple-700" />
+                <span>🎯 เช็คชื่อกิจกรรมวันนี้ด้วย PIN (สำหรับ นศ. ทุกคน / ปี 1)</span>
+              </button>
+            </div>
+
             <div className="flex items-center justify-between text-[11px] text-purple-600 pt-1">
               <div className="flex items-center gap-1 text-purple-500">
                 <ShieldCheck className="w-3.5 h-3.5" /> แสดงเฉพาะข้อมูลตนเอง
@@ -379,6 +457,17 @@ export const StudentPortalView: React.FC<Props> = ({
           isOpen={feedbackOpen}
           onClose={() => setFeedbackOpen(false)}
           presetRole="student"
+        />
+
+        <StudentSelfRegisterModal
+          isOpen={isRegisterOpen}
+          onClose={() => setIsRegisterOpen(false)}
+          prefilledStudentId={input}
+          prefilledPin={prefilledPin}
+          majors={remote.majors && remote.majors.length > 0 ? remote.majors : ['อิสลามศึกษา', 'การสอนอิสลามศึกษา', 'ภาษาอาหรับ', 'การสอนภาษาอาหรับ', 'หลักสูตรและการสอน', 'นวัตกรรมดิจิทัล']}
+          isNewStudentOnly={isNewOnlyMode}
+          student={null}
+          onSuccess={handleSelfCheckInSuccess}
         />
       </div>
     );
@@ -472,6 +561,31 @@ export const StudentPortalView: React.FC<Props> = ({
           </div>
         </div>
       </div>
+
+      {/* ===== แจ้งเตือนเช็คชื่อวันนี้ด้วย PIN (หากยังไม่ได้เช็ค) ===== */}
+      {!isTodayChecked && (
+        <div className="rounded-3xl bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-purple-900/15 animate-fadeIn">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 text-amber-300">
+              <KeyRound className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="font-black text-sm sm:text-base">ยังไม่ได้เช็คชื่อกิจกรรมวันนี้ ({formatThaiDate(todayStr)})</div>
+              <div className="text-xs text-purple-200 mt-0.5">มีรหัส PIN 4 หลัก จากอาจารย์หรือจอโปรเจกเตอร์ใช่ไหม? กดเช็คชื่อได้เลย</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsNewOnlyMode(false);
+              setIsRegisterOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition shrink-0"
+          >
+            <KeyRound className="w-4 h-4" /> กรอก PIN เช็คชื่อวันนี้
+          </button>
+        </div>
+      )}
 
       {/* ===== การแจ้งเตือน (กล่องเดียว) ===== */}
       <AnnouncementBox items={announcements} readIds={readIds} onMarkRead={markRead} />
@@ -654,6 +768,19 @@ export const StudentPortalView: React.FC<Props> = ({
         onClose={() => setFeedbackOpen(false)}
         presetRole="student"
       />
+
+      {student && (
+        <StudentSelfRegisterModal
+          isOpen={isRegisterOpen}
+          onClose={() => setIsRegisterOpen(false)}
+          prefilledStudentId={student.studentId}
+          prefilledPin={prefilledPin}
+          majors={remote.majors && remote.majors.length > 0 ? remote.majors : ['อิสลามศึกษา', 'การสอนอิสลามศึกษา', 'ภาษาอาหรับ', 'การสอนภาษาอาหรับ', 'หลักสูตรและการสอน', 'นวัตกรรมดิจิทัล']}
+          isNewStudentOnly={false}
+          student={student}
+          onSuccess={handleSelfCheckInSuccess}
+        />
+      )}
     </div>
   );
 };

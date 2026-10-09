@@ -128,6 +128,7 @@ import {
 import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
 import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
+import { PinProjectorModal } from './PinProjectorModal';
 import { AdminManualModal } from './AdminManualModal';
 import { ExcelImportModal } from './ExcelImportModal';
 import { CertificateStudioModal } from './CertificateStudioModal';
@@ -1078,6 +1079,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [isAddSubAdminModalOpen, setIsAddSubAdminModalOpen] = useState(false);
   const [isAddMajorModalOpen, setIsAddMajorModalOpen] = useState(false);
   const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
+  const [isPinProjectorOpen, setIsPinProjectorOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Transfer dual-column states
@@ -2629,7 +2631,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             ))}
           </div>
 
-          <div className="pt-4">
+          <div className="pt-4 space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPinProjectorOpen(true);
+                setIsMobileSidebarOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-purple-950 text-xs font-black shadow-md transition active:scale-95"
+            >
+              <KeyRound className="w-4 h-4 text-purple-950" />
+              <span>ห้องเช็คชื่อ PIN (ฉายจอใหญ่)</span>
+            </button>
             <button
               type="button"
               onClick={() => setIsManualModalOpen(true)}
@@ -2719,6 +2732,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPinProjectorOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-amber-400 text-purple-950 font-black shadow-md active:scale-95 transition"
+                    title="เปิดห้องเช็คชื่อด้วย PIN / QR Code สำหรับฉายจอใหญ่ (กิจกรรมรวม / นศ. ปี 1)"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-purple-950" />
+                    <span>🎯 เช็คชื่อ PIN / จอใหญ่</span>
+                  </button>
+
                   <button
                     onClick={() => handleManualSync(false)}
                     disabled={isSyncing}
@@ -6425,6 +6448,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* ห้องเช็คชื่อ PIN / QR Code สำหรับฉายโปรเจกเตอร์หรือกิจกรรมรวม */}
+      {isPinProjectorOpen && (
+        <PinProjectorModal
+          isOpen={isPinProjectorOpen}
+          onClose={() => {
+            setIsPinProjectorOpen(false);
+            handleManualSync(true);
+          }}
+          records={records}
+          todayDate={new Date().toISOString().split('T')[0]}
+          defaultTopic="กิจกรรมหะละเกาะห์รวม"
+        />
       )}
 
       {/* Floating Sync Toast Notification */}
