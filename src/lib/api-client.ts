@@ -113,12 +113,13 @@ export function getLocalAttendanceRecords(): AttendanceRecord[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ATTENDANCE);
-    if (!raw) {
-      const demo = generateInitialDemoRecords();
-      localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(demo));
-      return demo;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    // กรอง demo records เก่าออก (ถ้าเคยมีติดค้างในเครื่อง)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((r: AttendanceRecord) => !(r.id && r.id.startsWith('ATT_2026-09-')));
     }
-    return JSON.parse(raw);
+    return [];
   } catch (e) {
     console.error('Error reading local attendance:', e);
     return [];
@@ -152,10 +153,24 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (data && data.success && Array.isArray(data.records) && data.records.length > 0) {
+    if (data && data.success && Array.isArray(data.records)) {
       const recordMap = new Map<string, AttendanceRecord>();
-      localRecords.forEach((r) => recordMap.set(`${r.date}_${r.studentId}`, r));
-      data.records.forEach((r: AttendanceRecord) => recordMap.set(`${r.date}_${r.studentId}`, r));
+      
+      // 1. นำข้อมูลจริงจาก Google Sheet ลงฐานข้อมูลหลัก
+      data.records.forEach((r: AttendanceRecord) => {
+        if (r && r.date && r.studentId) {
+          recordMap.set(`${r.date}_${r.studentId}`, r);
+        }
+      });
+
+      // 2. คงเฉพาะรายการที่สร้างใหม่ในเครื่องนี้ที่ยังไม่ได้ส่งขึ้นชีต (ไม่รวม demo records)
+      localRecords.forEach((r) => {
+        if (r.id && r.id.startsWith('ATT_2026-09-')) return;
+        const key = `${r.date}_${r.studentId}`;
+        if (!recordMap.has(key)) {
+          recordMap.set(key, r);
+        }
+      });
       
       const merged = Array.from(recordMap.values());
       saveLocalAttendanceRecords(merged);

@@ -16,13 +16,9 @@ export function usePwaRegister() {
     if (process.env.NODE_ENV !== 'production') return;
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
-    let refreshing = false;
+    // ดักจับเมื่อมี Service Worker เวอร์ชันใหม่ (อัปเดตแบบเบื้องหลัง ไม่รีเฟรชกะทันหันเพื่อไม่ให้ผู้ใช้เด้งออก)
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        // เมื่อ Service Worker เวอร์ชันใหม่อัปเดต ให้รีเฟรชหน้าเว็บอัตโนมัติ เพื่อรับโค้ดล่าสุดทันที
-        window.location.reload();
-      }
+      // ปล่อยให้ใช้งานต่อได้อย่างต่อเนื่อง ไม่ reload กะทันหัน
     });
 
     const triggerUpdate = (reg: ServiceWorkerRegistration) => {

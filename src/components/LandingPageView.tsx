@@ -33,11 +33,10 @@ import {
   saveFacultyPassword,
   getAnnouncements,
   getStudentMajor,
-  getStudentLevel,
   formatTermLabel,
 } from '@/lib/data-store';
 import { fetchPublicData } from '@/lib/api-client';
-import { AttendanceRecord, Student, Announcement } from '@/lib/types';
+import { AttendanceRecord, Student, Teacher, Announcement } from '@/lib/types';
 import { OnboardingTutorialModal, TutorialRole } from '@/components/OnboardingTutorialModal';
 import { StudentPortalView } from '@/components/StudentPortalView';
 import { ModalPortal } from '@/components/ModalPortal';
@@ -75,11 +74,20 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   // 'select' = Landing Screen with ONLY 2 Big Minimalist Buttons
   // 'student' = Dedicated Student Window
   // 'faculty' = Dedicated Faculty/Teacher Window
-  const [portalView, setPortalView] = useState<'select' | 'student' | 'faculty'>('select');
+  const [portalView, setPortalView] = useState<'select' | 'student' | 'faculty'>(() => {
+    if (typeof window === 'undefined') return 'select';
+    const saved = sessionStorage.getItem('halaqah_landing_portal_view') || localStorage.getItem('halaqah_landing_portal_view');
+    if (saved === 'student' || saved === 'faculty') return saved;
+    return 'select';
+  });
 
-  // Notify parent component of current portal view
+  // Notify parent component of current portal view and persist
   useEffect(() => {
     onPortalViewChange?.(portalView);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('halaqah_landing_portal_view', portalView);
+      localStorage.setItem('halaqah_landing_portal_view', portalView);
+    }
   }, [portalView, onPortalViewChange]);
 
   // Reset to 'select' screen when user clicks Home button
@@ -87,6 +95,10 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     if (landingResetSignal !== undefined && landingResetSignal > 0) {
       setPortalView('select');
       setIsFacultyAuthModalOpen(false);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('halaqah_landing_portal_view', 'select');
+        localStorage.setItem('halaqah_landing_portal_view', 'select');
+      }
     }
   }, [landingResetSignal]);
 
@@ -96,7 +108,10 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   const [facultyAuthError, setFacultyAuthError] = useState('');
   const [isFacultySessionActive, setIsFacultySessionActive] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return sessionStorage.getItem('halaqah_faculty_session') === 'true';
+    return (
+      sessionStorage.getItem('halaqah_faculty_session') === 'true' ||
+      localStorage.getItem('halaqah_faculty_session') === 'true'
+    );
   });
 
   // Faculty portal state
@@ -124,8 +139,13 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     }
   };
 
-  const allTeachers = useMemo(() => getActiveTeachers(), []);
-  const allStudents = useMemo(() => getActiveStudents(), []);
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>(() => getActiveTeachers());
+  const [allStudents, setAllStudents] = useState<Student[]>(() => getActiveStudents());
+
+  useEffect(() => {
+    setAllTeachers(getActiveTeachers());
+    setAllStudents(getActiveStudents());
+  }, [records]);
 
   // Unified student database: merges data-store with any students recorded in records
   const unifiedStudents = useMemo<Student[]>(() => {
@@ -246,6 +266,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       setIsFacultySessionActive(true);
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('halaqah_faculty_session', 'true');
+        localStorage.setItem('halaqah_faculty_session', 'true');
       }
       setIsFacultyAuthModalOpen(false);
       setFacultyPassInput('');
@@ -265,6 +286,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         setIsFacultySessionActive(true);
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('halaqah_faculty_session', 'true');
+          localStorage.setItem('halaqah_faculty_session', 'true');
         }
         setIsFacultyAuthModalOpen(false);
         setFacultyPassInput('');
@@ -279,6 +301,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         setIsFacultySessionActive(true);
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('halaqah_faculty_session', 'true');
+          localStorage.setItem('halaqah_faculty_session', 'true');
         }
         setIsFacultyAuthModalOpen(false);
         setFacultyPassInput('');

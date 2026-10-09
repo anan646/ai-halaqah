@@ -108,6 +108,7 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
   if (matched) {
     try {
       sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+      localStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
     } catch {}
     return { valid: true, user: { id: matched.id, name: matched.name + ' (แอดมินรอง)', role: 'subadmin' } };
   }
@@ -124,6 +125,7 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
       if (data?.valid) {
         try {
           sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+          localStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
         } catch {}
         return { valid: true, user: { id: 'master', name: 'แอดมินหลัก (ผู้ดูแลระบบสูงสุด)', role: 'admin' } };
       }
@@ -138,6 +140,7 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
     if (d?.valid) {
       try {
         sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+        localStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
       } catch {}
       return {
         valid: true,
@@ -156,6 +159,7 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
     if (d?.valid) {
       try {
         sessionStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
+        localStorage.setItem(ADMIN_KEY_STORAGE, trimmed);
       } catch {}
       return { valid: true, user: { id: String(d.id), name: `${d.name} (แอดมินรอง)`, role: 'subadmin' } };
     }
@@ -168,15 +172,16 @@ export async function verifyAdminPasscode(passcode: string): Promise<{
 export function getAdminKey(): string {
   if (typeof window === 'undefined') return '';
   try {
-    return sessionStorage.getItem(ADMIN_KEY_STORAGE) || '';
+    return sessionStorage.getItem(ADMIN_KEY_STORAGE) || localStorage.getItem(ADMIN_KEY_STORAGE) || '';
   } catch {
     return '';
   }
 }
+
 export function getAdminSession(): { id: string; name: string; role: 'admin' | 'subadmin' } | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_ADMIN_SESSION);
+    const raw = sessionStorage.getItem(STORAGE_KEY_ADMIN_SESSION) || localStorage.getItem(STORAGE_KEY_ADMIN_SESSION);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -187,9 +192,16 @@ export function getAdminSession(): { id: string; name: string; role: 'admin' | '
 export function setAdminSession(user: { id: string; name: string; role: 'admin' | 'subadmin' } | null): void {
   if (typeof window === 'undefined') return;
   if (!user) {
-    sessionStorage.removeItem(STORAGE_KEY_ADMIN_SESSION);
-    sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_ADMIN_SESSION);
+      sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+      localStorage.removeItem(STORAGE_KEY_ADMIN_SESSION);
+      localStorage.removeItem(ADMIN_KEY_STORAGE);
+    } catch {}
   } else {
-    sessionStorage.setItem(STORAGE_KEY_ADMIN_SESSION, JSON.stringify(user));
+    try {
+      sessionStorage.setItem(STORAGE_KEY_ADMIN_SESSION, JSON.stringify(user));
+      localStorage.setItem(STORAGE_KEY_ADMIN_SESSION, JSON.stringify(user));
+    } catch {}
   }
 }

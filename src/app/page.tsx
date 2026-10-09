@@ -77,9 +77,7 @@ export default function HomePage() {
     setAdminUser(getAdminSession());
 
     // ซิงค์ข้อมูลสาธารณะ (รหัสผ่านอาจารย์, ประกาศ, รายชื่ออาจารย์/นศ., ภาคเรียน) จาก Google Sheet
-    applyPublicDataToLocal().then((ok) => {
-      if (ok) setDataVersion((v) => v + 1);
-    });
+    applyPublicDataToLocal().catch(() => null);
 
     try {
       const res = await fetchAllAttendance();
@@ -106,7 +104,7 @@ export default function HomePage() {
   // 1. ซิงค์ทันทีเมื่อสลับกลับมาที่แอป (focus)
   // 2. ซิงค์เมื่อเปิดหน้าจอหรือปลดล็อกมือถือ (visibilitychange)
   // 3. ซิงค์เมื่อเชื่อมต่อเน็ตสำเร็จ (online)
-  // 4. Heartbeat ซิงค์ข้อมูลเบื้องหลังอัตโนมัติทุก 10 วินาที
+  // 4. Heartbeat ซิงค์ข้อมูลเบื้องหลังอัตโนมัติทุก 30 วินาที (แบบ silent ไม่รบกวนหน้าจอ)
   useEffect(() => {
     const handleSync = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
@@ -118,7 +116,7 @@ export default function HomePage() {
     document.addEventListener('visibilitychange', handleSync);
     window.addEventListener('online', handleSync);
 
-    const interval = setInterval(handleSync, 10000);
+    const interval = setInterval(handleSync, 30000);
 
     return () => {
       window.removeEventListener('focus', handleSync);
@@ -263,7 +261,7 @@ export default function HomePage() {
       >
         {currentTab === 'landing' && (
           <LandingPageView
-            key={`landing-${dataVersion}`}
+            key="landing-portal"
             records={records}
             landingResetSignal={landingResetSignal}
             onSelectTeacher={handleSelectTeacher}
@@ -278,7 +276,7 @@ export default function HomePage() {
 
         {currentTab === 'teacher' && (
           <TeacherAttendanceView
-            key={`teacher-${dataVersion}`}
+            key="teacher-attendance"
             records={records}
             onAttendanceSaved={loadData}
             activeTeacherName={activeTeacherName}

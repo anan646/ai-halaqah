@@ -23,10 +23,10 @@ import {
   BookOpen,
   MessageSquare,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AttendanceRecord, AttendanceStatus, GroupLevel } from '@/lib/types';
+import { AttendanceRecord, AttendanceStatus, GroupLevel, Teacher, Student, SemesterSettings } from '@/lib/types';
 import {
   getActiveTeachers,
   getActiveStudents,
@@ -65,12 +65,19 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   onBackToLanding,
   onOpenTutorial,
 }) => {
-  const teachers = useMemo(() => getActiveTeachers(), []);
+  const [teachers, setTeachers] = useState<Teacher[]>(() => getActiveTeachers());
+  const [semester, setSemester] = useState<SemesterSettings>(() => getSemesterSettings());
+  const [allStudents, setAllStudents] = useState<Student[]>(() => getActiveStudents());
+
+  useEffect(() => {
+    setTeachers(getActiveTeachers());
+    setSemester(getSemesterSettings());
+    setAllStudents(getActiveStudents());
+  }, [allRecords]);
+
   // เฉพาะการเช็คชื่อของภาคการศึกษาปัจจุบัน (แอดมินตั้งไว้)
-  const semester = useMemo(() => getSemesterSettings(), []);
   const termLabel = formatTermLabel(semester);
   const termRecords = useMemo(() => allRecords.filter((r) => isRecordInTerm(r, semester)), [allRecords, semester]);
-  const allStudents = useMemo(() => getActiveStudents(), []);
 
   // 1. Teacher selection
   const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
@@ -222,9 +229,22 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     return allStudents.filter((st) => st.teacherName === currentTeacher.name);
   }, [currentTeacher, allStudents, levelRefresh]);
 
+  const isDirtyRef = useRef(false);
+  const prevKeyRef = useRef('');
+
   // Load existing records or default
   useEffect(() => {
     if (!currentTeacher || groupStudents.length === 0) return;
+    const currentKey = `${currentTeacher.name}_${selectedDate}`;
+    const keyChanged = prevKeyRef.current !== currentKey;
+
+    if (keyChanged) {
+      prevKeyRef.current = currentKey;
+      isDirtyRef.current = false;
+    } else if (isDirtyRef.current) {
+      // ผู้ใช้กำลังเช็คชื่ออยู่ ไม่ให้ background sync มาเขียนทับการติ๊กที่ยังไม่ได้กดบันทึก
+      return;
+    }
 
     const newMap: Record<string, { status: AttendanceStatus; time: string }> = {};
     const newReasons: Record<string, string> = {};
@@ -277,6 +297,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
 
   // Change single status with realtime timestamp
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
+    isDirtyRef.current = true;
     const nowTimeStr = new Date().toLocaleTimeString('th-TH', { hour12: false });
     setAttendanceMap((prev) => ({
       ...prev,
@@ -296,6 +317,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
 
   // Mark all
   const handleMarkAll = (status: AttendanceStatus) => {
+    isDirtyRef.current = true;
     const nowTimeStr = new Date().toLocaleTimeString('th-TH', { hour12: false });
     const updated: Record<string, { status: AttendanceStatus; time: string }> = {};
     groupStudents.forEach((st) => {
@@ -402,6 +424,7 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           type: 'success',
           text: `บันทึกข้อมูลเรียบร้อยแล้ว (${groupStudents.length} คน)`,
         });
+        isDirtyRef.current = false;
         onAttendanceSaved();
       } else {
         setSaveMessage({
