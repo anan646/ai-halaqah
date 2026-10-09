@@ -24,6 +24,7 @@ interface StudentSelfRegisterModalProps {
   majors: string[];
   isNewStudentOnly?: boolean;
   student?: Student | null; // ถ้ามี แปลว่า นศ. มีในระบบแล้ว แค่กรอก PIN
+  freshmanPrefix?: string;
   onSuccess: (student: Student, record: AttendanceRecord) => void;
 }
 
@@ -35,6 +36,7 @@ export const StudentSelfRegisterModal: React.FC<StudentSelfRegisterModalProps> =
   majors = [],
   isNewStudentOnly = false,
   student = null,
+  freshmanPrefix = '',
   onSuccess,
 }) => {
   const [studentId, setStudentId] = useState(prefilledStudentId);
@@ -82,6 +84,10 @@ export const StudentSelfRegisterModal: React.FC<StudentSelfRegisterModalProps> =
     }
     if (!isExisting && !fullName.trim()) {
       setErrorMsg('กรุณากรอกชื่อ-นามสกุล');
+      return;
+    }
+    if (!isExisting && freshmanPrefix && cleanSid.length >= 2 && !cleanSid.startsWith(freshmanPrefix)) {
+      setErrorMsg(`ระบบลงทะเบียนตนเองนี้สำหรับนักศึกษาชั้นปีที่ 1 (รหัสนักศึกษาต้องขึ้นต้นด้วย ${freshmanPrefix}) สำหรับนักศึกษาชั้นปีอื่น อาจารย์ผู้ดูแลกลุ่มจะเป็นผู้เช็คชื่อให้ครับ`);
       return;
     }
 
@@ -166,7 +172,7 @@ export const StudentSelfRegisterModal: React.FC<StudentSelfRegisterModalProps> =
               disabled={isExisting}
               value={studentId}
               onChange={(e) => setStudentId(e.target.value.replace(/[^\d\s-]/g, ''))}
-              placeholder="เช่น 691441001"
+              placeholder={freshmanPrefix ? `เช่น ${freshmanPrefix}1441001` : 'เช่น 691441001'}
               className="w-full px-4 py-3 rounded-2xl border border-purple-200 font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:bg-purple-50"
             />
           </div>
@@ -224,7 +230,7 @@ export const StudentSelfRegisterModal: React.FC<StudentSelfRegisterModalProps> =
                   <input
                     type="text"
                     disabled
-                    value="ปี 1 (ส่วนกลาง)"
+                    value={`ปี 1 (ส่วนกลาง${freshmanPrefix ? ` - รหัส ${freshmanPrefix}` : ''})`}
                     className="w-full px-3 py-2 rounded-2xl border border-purple-100 bg-purple-50/70 text-xs font-bold text-purple-900"
                   />
                 </div>

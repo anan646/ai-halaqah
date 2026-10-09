@@ -330,6 +330,44 @@ export const StudentPortalView: React.FC<Props> = ({
     );
   }, [student, liveRecords, todayStr]);
 
+  // คำนวณรหัส 2 ตัวหน้าสำหรับนักศึกษาชั้นปีที่ 1 ตามปีการศึกษาปัจจุบัน (เช่น 2569 -> '69', 2570 -> '70')
+  // เพื่อรองรับปีการศึกษาต่อๆ ไปโดยอัตโนมัติ
+  const freshmanPrefix = useMemo(() => {
+    const yearStr = semester?.academicYear || '';
+    const match = yearStr.match(/\d{4}/);
+    if (match) {
+      return match[0].slice(-2);
+    }
+    // Fallback ใช้ปี พ.ศ. ปัจจุบัน เช่น 2026 + 543 = 2569 -> '69'
+    const currBEYear = new Date().getFullYear() + 543;
+    return String(currBEYear).slice(-2);
+  }, [semester?.academicYear]);
+
+  // ตรวจสอบว่าเป็นนักศึกษาชั้นปีที่ 1 หรือไม่ (เฉพาะปี 1 ที่ไม่มีอาจารย์ประจำกลุ่ม และต้องเช็คชื่อด้วย PIN / QR Code)
+  const isYear1 = useMemo(() => {
+    if (!student) return false;
+
+    // 1. ตรวจจากรหัสนักศึกษา: 2 ตัวหน้าตรงกับรหัสปี 1 ของปีการศึกษานั้นๆ (เช่น ปี 2569 คือ 69, ปี 2570 คือ 70)
+    const cleanId = (student.studentId || '').trim();
+    if (cleanId.length >= 2 && cleanId.startsWith(freshmanPrefix)) {
+      return true;
+    }
+
+    // 2. ตรวจจากข้อมูลชั้นปีที่บันทึกไว้ในระบบ
+    const yl = (student.yearLevel || '').trim();
+    if (yl === 'ปี 1' || yl === 'ชั้นปีที่ 1' || yl === '1' || yl.includes('ปี 1')) {
+      return true;
+    }
+
+    // 3. ตรวจจากกลุ่มว่าเป็นกลุ่มส่วนกลาง (ปี 1)
+    const grp = (student.groupName || '').trim();
+    if (grp.includes('ปี 1')) {
+      return true;
+    }
+
+    return false;
+  }, [student, freshmanPrefix]);
+
   const logo = customLogo || '/logo.png';
 
   /* ============================ หน้ากรอกรหัส ============================ */
@@ -399,19 +437,27 @@ export const StudentPortalView: React.FC<Props> = ({
                   <div className="text-sm text-amber-900 font-bold">
                     ⚠️ ไม่พบรหัสนักศึกษา <span className="font-mono text-purple-900">{input}</span> ในระบบ
                   </div>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    หากคุณเป็น <strong>นักศึกษาชั้นปีที่ 1</strong> หรือยังไม่เคยมีรายชื่อในระบบ สามารถลงทะเบียนตนเองและเช็คชื่อด้วย PIN กิจกรรมวันนี้ได้ทันที
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsNewOnlyMode(true);
-                      setIsRegisterOpen(true);
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition"
-                  >
-                    <UserPlus className="w-4 h-4" /> ลงทะเบียน นศ. ปี 1 / เช็คชื่อด้วย PIN
-                  </button>
+                  {input.trim().startsWith(freshmanPrefix) ? (
+                    <>
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        หากคุณเป็น <strong>นักศึกษาชั้นปีที่ 1 (รหัส {freshmanPrefix}...)</strong> สามารถลงทะเบียนตนเองและเช็คชื่อด้วย PIN กิจกรรมวันนี้ได้ทันที
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsNewOnlyMode(true);
+                          setIsRegisterOpen(true);
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition"
+                      >
+                        <UserPlus className="w-4 h-4" /> ลงทะเบียน นศ. ปี 1 / เช็คชื่อด้วย PIN
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-rose-700 font-semibold leading-relaxed">
+                      ไม่พบรหัสนี้ในระบบ ตรวจสอบตัวเลขอีกครั้ง หรือติดต่ออาจารย์ผู้ดูแลกลุ่มของท่าน
+                    </p>
+                  )}
                 </div>
               )}
               <button
@@ -423,18 +469,18 @@ export const StudentPortalView: React.FC<Props> = ({
               </button>
             </form>
 
-            {/* ปุ่มทางลัดเช็คชื่อด้วย PIN กิจกรรมวันนี้ (สำหรับ นศ. ทุกคน / ปี 1) */}
+            {/* ปุ่มทางลัดเช็คชื่อด้วย PIN สำหรับ นศ. ปี 1 */}
             <div className="pt-2 border-t border-purple-50">
               <button
                 type="button"
                 onClick={() => {
-                  setIsNewOnlyMode(false);
+                  setIsNewOnlyMode(true);
                   setIsRegisterOpen(true);
                 }}
                 className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 hover:from-purple-100 hover:to-indigo-100 text-purple-900 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-98 border border-purple-100/80 shadow-2xs"
               >
                 <KeyRound className="w-4 h-4 text-purple-700" />
-                <span>🎯 เช็คชื่อกิจกรรมวันนี้ด้วย PIN (สำหรับ นศ. ทุกคน / ปี 1)</span>
+                <span>🎯 เช็คชื่อด้วย PIN / ลงทะเบียน นศ. ปี 1 (รหัส {freshmanPrefix})</span>
               </button>
             </div>
 
@@ -467,6 +513,7 @@ export const StudentPortalView: React.FC<Props> = ({
           majors={remote.majors && remote.majors.length > 0 ? remote.majors : ['อิสลามศึกษา', 'การสอนอิสลามศึกษา', 'ภาษาอาหรับ', 'การสอนภาษาอาหรับ', 'หลักสูตรและการสอน', 'นวัตกรรมดิจิทัล']}
           isNewStudentOnly={isNewOnlyMode}
           student={null}
+          freshmanPrefix={freshmanPrefix}
           onSuccess={handleSelfCheckInSuccess}
         />
       </div>
@@ -562,8 +609,8 @@ export const StudentPortalView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* ===== แจ้งเตือนเช็คชื่อวันนี้ด้วย PIN (หากยังไม่ได้เช็ค) ===== */}
-      {!isTodayChecked && (
+      {/* ===== แจ้งเตือนเช็คชื่อวันนี้ด้วย PIN (เฉพาะ นศ. ปี 1 ที่ยังไม่ได้เช็คชื่อ) ===== */}
+      {isYear1 && !isTodayChecked && (
         <div className="rounded-3xl bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-purple-900/15 animate-fadeIn">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 text-amber-300">
@@ -778,6 +825,7 @@ export const StudentPortalView: React.FC<Props> = ({
           majors={remote.majors && remote.majors.length > 0 ? remote.majors : ['อิสลามศึกษา', 'การสอนอิสลามศึกษา', 'ภาษาอาหรับ', 'การสอนภาษาอาหรับ', 'หลักสูตรและการสอน', 'นวัตกรรมดิจิทัล']}
           isNewStudentOnly={false}
           student={student}
+          freshmanPrefix={freshmanPrefix}
           onSuccess={handleSelfCheckInSuccess}
         />
       )}
