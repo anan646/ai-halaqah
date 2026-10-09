@@ -126,7 +126,7 @@ import {
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
-import { setSavedLogo, pushAnnouncements, pushSemester, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword } from '@/lib/api-client';
+import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { AdminManualModal } from './AdminManualModal';
 import { ExcelImportModal } from './ExcelImportModal';
@@ -292,10 +292,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   const [semesterSavedMsg, setSemesterSavedMsg] = useState<string | null>(null);
 
-  const handleSaveSemesterConfig = () => {
+  const handleSaveSemesterConfig = async () => {
     saveSemesterSettings(semesterSettings);
-    setSemesterSavedMsg('บันทึกการตั้งค่าเป้าหมายภาคเรียนเรียบร้อย');
-    setTimeout(() => setSemesterSavedMsg(null), 3500);
+    setSemesterSavedMsg('กำลังซิงค์ขึ้นฐานข้อมูลกลาง...');
+    const res = await pushSemester(semesterSettings);
+    if (res.success) {
+      setSemesterSavedMsg('บันทึกและซิงค์เป้าหมายภาคเรียนไปยังทุกอุปกรณ์สำเร็จ');
+    } else {
+      setSemesterSavedMsg(`บันทึกในเครื่องแล้ว (${res.message || 'ยังไม่ซิงค์'})`);
+    }
+    setTimeout(() => setSemesterSavedMsg(null), 4000);
   };
 
   const uniqueRecordedDatesCount = useMemo(() => {
@@ -762,7 +768,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         if (base64) {
           setSavedLogo(base64);
           if (onLogoUpdated) onLogoUpdated(base64);
-          alert('เปลี่ยนรูปโลโก้ระบบเรียบร้อยแล้ว');
+          pushLogo(base64).catch(() => null);
+          alert('เปลี่ยนรูปโลโก้ระบบและเริ่มซิงค์ไปยังทุกอุปกรณ์เรียบร้อยแล้ว');
         }
       };
       reader.readAsDataURL(file);
@@ -773,6 +780,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (confirm('คุณต้องการรีเซ็ตโลโก้กลับเป็นรูปทางการเริ่มต้นหรือไม่?')) {
       setSavedLogo('');
       if (onLogoUpdated) onLogoUpdated('/logo.png');
+      pushLogo('').catch(() => null);
       alert('รีเซ็ตโลโก้กลับเป็นรูปทางการเริ่มต้นเรียบร้อยแล้ว');
     }
   };

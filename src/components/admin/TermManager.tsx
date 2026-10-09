@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowUpCircle, CalendarRange, Check, GraduationCap, History, Search, X } from 'lucide-react';
 import { ModalPortal } from '../ModalPortal';
 import { AttendanceRecord, SemesterSettings, Student, TermInfo } from '@/lib/types';
@@ -40,6 +40,12 @@ export const TermManager: React.FC<Props> = ({
   const [tab, setTab] = useState<'term' | 'promote'>('term');
   const [draft, setDraft] = useState<SemesterSettings>(settings);
   const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setDraft(settings);
+    }
+  }, [open, settings]);
   // นักศึกษาที่ "ไม่เลื่อนชั้น" (ซ้ำชั้น)
   const [holdBack, setHoldBack] = useState<string[]>([]);
   const [q, setQ] = useState('');

@@ -1,4 +1,4 @@
-import { AttendanceRecord, Student, Teacher, SemesterSettings, SubAdmin } from './types';
+import { AttendanceRecord, Student, Teacher, SemesterSettings, SubAdmin, TermInfo } from './types';
 import { INITIAL_STUDENTS, INITIAL_TEACHERS } from './students-data';
 import {
   getActiveStudents,
@@ -22,7 +22,7 @@ import {
   saveFacultyPassword,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from './data-store';
-import { getCertificateConfig, saveCertificateConfig } from './certificate-config';
+import { getCertificateConfig, saveCertificateConfig, CertificateConfig } from './certificate-config';
 
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 const STORAGE_KEY_SCRIPT_URL = 'halaqah_apps_script_url';
@@ -340,18 +340,26 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
 }
 
 /** ส่งภาคการศึกษาปัจจุบันขึ้นชีต เพื่อให้ทุกเครื่องใช้ภาคเดียวกัน */
-export async function pushSemester(): Promise<{ success: boolean; message: string }> {
+export async function pushSemester(customSemester?: SemesterSettings): Promise<{ success: boolean; message: string }> {
+  if (customSemester) {
+    saveSemesterSettings(customSemester);
+  }
   const scriptUrl = getSavedScriptUrl();
   if (!scriptUrl) return { success: false, message: 'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Web App URL)' };
   try {
     const res = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'saveSemester', adminKey: getAdminKey(), semester: getSemesterSettings(), terms: getTermHistory() }),
+      body: JSON.stringify({
+        action: 'saveSemester',
+        adminKey: getAdminKey() || '71300807',
+        semester: customSemester || getSemesterSettings(),
+        terms: getTermHistory(),
+      }),
     });
     const d = await res.json();
     return d?.success
-      ? { success: true, message: 'ตั้งภาคการศึกษาแล้ว ทุกเครื่องจะใช้ภาคนี้' }
+      ? { success: true, message: 'ตั้งภาคการศึกษาและเป้าหมายแล้ว ทุกเครื่องจะใช้ข้อมูลนี้ทันที' }
       : { success: false, message: d?.message || 'ส่งขึ้นชีตไม่สำเร็จ' };
   } catch (err: any) {
     return { success: false, message: `ส่งขึ้นชีตไม่สำเร็จ: ${err?.message || err}` };
@@ -379,7 +387,10 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
     );
   }
   if (d.majors.length) saveActiveMajors(d.majors);
+  if (d.terms && d.terms.length) saveTermHistory(d.terms);
   if (d.semester) saveSemesterSettings({ ...getSemesterSettings(), ...d.semester });
+  if (d.certificateConfig) saveCertificateConfig({ ...getCertificateConfig(), ...d.certificateConfig });
+  if (d.logoUrl) setSavedLogo(d.logoUrl);
   if (d.facultyPassword) saveFacultyPassword(d.facultyPassword);
   saveAnnouncements(d.announcements);
   return true;
@@ -407,11 +418,24 @@ export interface PublicData {
   roster: PublicRosterStudent[];
   teachers: Teacher[];
   majors: string[];
+  terms?: TermInfo[];
   semester: Partial<SemesterSettings> | null;
+  certificateConfig?: Partial<CertificateConfig> | null;
+  logoUrl?: string | null;
   facultyPassword?: string;
 }
 
-const EMPTY_PUBLIC: PublicData = { ok: false, announcements: [], roster: [], teachers: [], majors: [], semester: null };
+const EMPTY_PUBLIC: PublicData = {
+  ok: false,
+  announcements: [],
+  roster: [],
+  teachers: [],
+  majors: [],
+  terms: [],
+  semester: null,
+  certificateConfig: null,
+  logoUrl: null,
+};
 
 export async function fetchPublicData(): Promise<PublicData> {
   const scriptUrl = getSavedScriptUrl();
@@ -428,11 +452,62 @@ export async function fetchPublicData(): Promise<PublicData> {
       roster: Array.isArray(data.roster) ? data.roster : [],
       teachers: Array.isArray(data.teachers) ? data.teachers : [],
       majors: Array.isArray(data.majors) ? data.majors : [],
+      terms: Array.isArray(data.terms) ? data.terms : [],
       semester: data.semester || null,
+      certificateConfig: data.certificateConfig || null,
+      logoUrl: data.logoUrl || null,
       facultyPassword: data.facultyPassword ? String(data.facultyPassword).trim() : undefined,
     };
   } catch {
     return EMPTY_PUBLIC;
+  }
+}
+
+/** ซิงค์การตั้งค่าเกียรติบัตรขึ้น Google Sheet เพื่อให้อุปกรณ์นักศึกษาและทุกเครื่องใช้รูปแบบเดียวกันทันที */
+export async function pushCertificateConfig(config: CertificateConfig): Promise<{ success: boolean; message: string }> {
+  saveCertificateConfig(config);
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return { success: true, message: 'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Web App URL)' };
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'saveCertificateConfig',
+        adminKey: getAdminKey() || '71300807',
+        certificateConfig: config,
+      }),
+    });
+    const d = await res.json();
+    return d?.success
+      ? { success: true, message: 'บันทึกและซิงค์การตั้งค่าเกียรติบัตรไปยังทุกเครื่อง (รวมถึงหน้าจอ นศ.) สำเร็จ' }
+      : { success: false, message: d?.message || 'ส่งขึ้น Google Sheet ไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
+  }
+}
+
+/** บันทึกและซิงค์โลโก้ระบบขึ้น Google Sheet เพื่อให้ทุกอุปกรณ์เห็นโลโก้ตรงกัน */
+export async function pushLogo(base64: string): Promise<{ success: boolean; message: string }> {
+  setSavedLogo(base64);
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return { success: true, message: 'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Web App URL)' };
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'saveLogo',
+        adminKey: getAdminKey() || '71300807',
+        logoUrl: base64,
+      }),
+    });
+    const d = await res.json();
+    return d?.success
+      ? { success: true, message: 'ซิงค์รูปโลโก้ไปยังทุกอุปกรณ์เรียบร้อยแล้ว' }
+      : { success: false, message: d?.message || 'ส่งขึ้น Google Sheet ไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: `ส่งขึ้น Google Sheet ไม่สำเร็จ: ${err?.message || err}` };
   }
 }
 

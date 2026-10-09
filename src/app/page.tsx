@@ -76,8 +76,12 @@ export default function HomePage() {
     setCustomLogo(getSavedLogo());
     setAdminUser(getAdminSession());
 
-    // ซิงค์ข้อมูลสาธารณะ (รหัสผ่านอาจารย์, ประกาศ, รายชื่ออาจารย์/นศ., ภาคเรียน) จาก Google Sheet
-    applyPublicDataToLocal().catch(() => null);
+    // ซิงค์ข้อมูลสาธารณะ (รหัสผ่านอาจารย์, ประกาศ, รายชื่ออาจารย์/นศ., ภาคเรียน, เกียรติบัตร, โลโก้) จาก Google Sheet
+    applyPublicDataToLocal()
+      .then(() => {
+        setCustomLogo(getSavedLogo());
+      })
+      .catch(() => null);
 
     try {
       const res = await fetchAllAttendance();

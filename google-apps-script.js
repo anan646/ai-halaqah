@@ -140,7 +140,7 @@ function doGet(e) {
     return jsonResponse({ success: true, feedbacks: readFeedbacks(ss) });
   }
 
-  // ข้อมูลสาธารณะ: ประกาศ รายชื่อสำหรับค้นหารหัส อาจารย์ และภาคการศึกษาปัจจุบัน (ไม่ต้องล็อกอิน)
+  // ข้อมูลสาธารณะ: ประกาศ รายชื่อสำหรับค้นหารหัส อาจารย์ ภาคการศึกษา เกียรติบัตร โลโก้ (ไม่ต้องล็อกอิน)
   if (action === 'getPublicData') {
     const settings = readSettings(ss);
     return jsonResponse({
@@ -151,7 +151,10 @@ function doGet(e) {
       }),
       teachers: readTeachers(ss),
       majors: readMajors(ss),
+      terms: readTerms(ss),
       semester: settings.semester ? JSON.parse(settings.semester) : null,
+      certificateConfig: settings.certificateConfig ? JSON.parse(settings.certificateConfig) : null,
+      logoUrl: settings.logoUrl || null,
       facultyPassword: settings.facultyPassword || 'edu.sdd'
     });
   }
@@ -328,7 +331,27 @@ function doPost(e) {
 
     if (action === 'saveSemester') {
       saveSemester(ss, body.semester, body.terms || []);
-      return jsonResponse({ success: true });
+      return jsonResponse({ success: true, message: 'บันทึกข้อมูลภาคการศึกษาและเป้าหมายเรียบร้อยแล้ว' });
+    }
+
+    if (action === 'saveCertificateConfig') {
+      if (body.certificateConfig) {
+        const st = ss.getSheetByName(SHEET_SETTINGS);
+        upsertSetting(st, 'certificateConfig', JSON.stringify(stripImages(body.certificateConfig)));
+        upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
+        return jsonResponse({ success: true, message: 'บันทึกการตั้งค่าเกียรติบัตรขึ้น Google Sheet เรียบร้อยแล้ว' });
+      }
+      return jsonResponse({ success: false, message: 'ไม่มีข้อมูล certificateConfig' });
+    }
+
+    if (action === 'saveLogo') {
+      if (body.logoUrl && String(body.logoUrl).length < 45000) {
+        const st = ss.getSheetByName(SHEET_SETTINGS);
+        upsertSetting(st, 'logoUrl', String(body.logoUrl));
+        upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
+        return jsonResponse({ success: true, message: 'บันทึกโลโก้ขึ้น Google Sheet เรียบร้อยแล้ว' });
+      }
+      return jsonResponse({ success: false, message: 'โลโก้ขนาดใหญ่เกินไปหรือไม่ถูกต้อง' });
     }
 
     // สำรองทุกอย่างจากเว็บขึ้นชีต

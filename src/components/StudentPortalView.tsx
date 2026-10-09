@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,14 +27,17 @@ import {
   getStudentLevel,
   isRecordInTerm,
   getSemesterSettings,
+  saveSemesterSettings,
+  saveTermHistory,
   formatTermLabel,
   SEMESTER_SETTINGS_UPDATED_EVENT,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from '@/lib/data-store';
+import { getCertificateConfig, saveCertificateConfig, CERT_CONFIG_UPDATED_EVENT } from '@/lib/certificate-config';
 import { CertificateModal } from './CertificateModal';
 import { AnnouncementBox } from './AnnouncementBox';
 import { FeedbackModal } from './FeedbackModal';
-import { fetchPublicData, PublicRosterStudent, getLocalAttendanceRecords } from '@/lib/api-client';
+import { fetchPublicData, PublicData, PublicRosterStudent, getLocalAttendanceRecords } from '@/lib/api-client';
 
 interface Props {
   records: AttendanceRecord[];
@@ -144,16 +147,53 @@ export const StudentPortalView: React.FC<Props> = ({
     };
   }, []);
 
-  // ข้อมูลกลางจาก Google Sheet (ประกาศและรายชื่อ) ทำให้นักศึกษาเห็นตรงกันทุกเครื่อง
-  const [remote, setRemote] = useState<{ ok: boolean; announcements: Announcement[]; roster: PublicRosterStudent[] }>({
+  // ข้อมูลกลางจาก Google Sheet (ประกาศ, รายชื่อ, ภาคเรียน, เกียรติบัตร) ทำให้นักศึกษาเห็นตรงกันทุกเครื่อง
+  const [remote, setRemote] = useState<PublicData>({
     ok: false,
     announcements: [],
     roster: [],
+    teachers: [],
+    majors: [],
+    semester: null,
   });
 
-  useEffect(() => {
-    fetchPublicData().then(setRemote);
+  const syncPublic = useCallback(async () => {
+    try {
+      const pub = await fetchPublicData();
+      if (pub && pub.ok) {
+        setRemote(pub);
+        if (pub.semester) {
+          saveSemesterSettings({ ...getSemesterSettings(), ...pub.semester });
+          setSemester(getSemesterSettings());
+        }
+        if (pub.certificateConfig) {
+          saveCertificateConfig({ ...getCertificateConfig(), ...pub.certificateConfig });
+        }
+        if (pub.terms && pub.terms.length) {
+          saveTermHistory(pub.terms);
+        }
+      }
+    } catch {
+      // Background sync silently
+    }
   }, []);
+
+  useEffect(() => {
+    syncPublic();
+    const timer = setInterval(syncPublic, 15000);
+    const onFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        syncPublic();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [syncPublic]);
 
   useEffect(() => {
     if (resetSignal) {

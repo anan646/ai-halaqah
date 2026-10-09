@@ -11,6 +11,7 @@ import {
   RotateCcw,
   CheckCircle2,
   Loader2,
+  Cloud,
   Palette,
   Type,
   PenLine,
@@ -27,6 +28,7 @@ import {
   DEFAULT_CERTIFICATE_CONFIG,
   SignatureSize,
 } from '@/lib/certificate-config';
+import { pushCertificateConfig } from '@/lib/api-client';
 import { saveCertificatePdf, printCertificate } from '@/lib/certificate-export';
 import { fileToResizedDataUrl } from '@/lib/image-utils';
 import {
@@ -89,7 +91,7 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
   const [config, setConfig] = useState<CertificateConfig>(() => getCertificateConfig());
   const [tab, setTab] = useState<StudioTab>('template');
   const [sampleName, setSampleName] = useState(SAMPLE_CERT_STUDENT.fullName);
-  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'local-only' | 'error'>('idle');
   const [busy, setBusy] = useState<'print' | 'pdf' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const loadedRef = useRef(false);
@@ -106,16 +108,27 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
     }
   }, [isOpen, isEmbedded]);
 
-  // บันทึกอัตโนมัติทุกครั้งที่แก้ไข (ไม่ต้องกดปุ่มบันทึก)
+  // บันทึกอัตโนมัติในเครื่องทันที และซิงค์ขึ้นฐานข้อมูลกลาง (Google Sheet) เพื่อให้อุปกรณ์ นศ. อัปเดตตรงกัน
   useEffect(() => {
     if (!loadedRef.current) {
       loadedRef.current = true;
       return;
     }
+    const ok = saveCertificateConfig(config);
+    if (!ok) {
+      setSaveState('error');
+      return;
+    }
+    setSaveState('saving');
     const timer = setTimeout(() => {
-      const ok = saveCertificateConfig(config);
-      setSaveState(ok ? 'saved' : 'error');
-    }, 350);
+      pushCertificateConfig(config)
+        .then((res) => {
+          setSaveState(res.success ? 'saved' : 'local-only');
+        })
+        .catch(() => {
+          setSaveState('local-only');
+        });
+    }, 1200);
     return () => clearTimeout(timer);
   }, [config]);
 
@@ -273,18 +286,43 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
                   บันทึกไม่สำเร็จ (รูปใหญ่เกินพื้นที่เก็บข้อมูล) ลองลดขนาดรูป
                 </>
+              ) : saveState === 'saving' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-300" />
+                  กำลังซิงค์ขึ้นฐานข้อมูลกลาง...
+                </>
               ) : saveState === 'saved' ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-                  บันทึกอัตโนมัติแล้ว
+                  บันทึกและซิงค์ไปยังอุปกรณ์ นศ. แล้ว
+                </>
+              ) : saveState === 'local-only' ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-300" />
+                  บันทึกในเครื่องแล้ว
                 </>
               ) : (
-                'ทุกการแก้ไขบันทึกให้อัตโนมัติ'
+                'ทุกการแก้ไขบันทึกและซิงค์ให้อัตโนมัติ'
               )}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setSaveState('saving');
+              pushCertificateConfig(config).then((res) => {
+                setSaveState(res.success ? 'saved' : 'local-only');
+                flash(res.message);
+              });
+            }}
+            className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-purple-950 text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition"
+            title="ซิงค์การตั้งค่าเกียรติบัตรขึ้น Google Sheet ทันที"
+          >
+            <Cloud className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">ซิงค์ไปยัง นศ.</span>
+          </button>
           <button
             type="button"
             onClick={handleReset}
@@ -296,7 +334,10 @@ export const CertificateStudioModal: React.FC<CertificateStudioModalProps> = ({
           {!isEmbedded && onClose && (
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                pushCertificateConfig(config).catch(() => null);
+                onClose();
+              }}
               className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
               aria-label="ปิด"
             >

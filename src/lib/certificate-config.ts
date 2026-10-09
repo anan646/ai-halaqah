@@ -289,6 +289,7 @@ export function saveCertificateConfig(config: CertificateConfig): boolean {
   try {
     localStorage.setItem(CERT_STORAGE_KEY, JSON.stringify(config));
     window.dispatchEvent(new CustomEvent(CERT_CONFIG_UPDATED_EVENT, { detail: config }));
+    window.dispatchEvent(new Event('storage'));
     return true;
   } catch (err) {
     console.error('Failed to save certificate config:', err);
