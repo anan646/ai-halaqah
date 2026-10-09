@@ -315,73 +315,7 @@ function doPost(e) {
       return jsonResponse({ success: true, message: 'เปลี่ยนรหัสผ่านแอดมินหลักสำเร็จ ทุกอุปกรณ์จะซิงค์รหัสใหม่นี้ทันที' });
     }
 
-    // ---------- ด้านล่างต้องเป็นแอดมิน ----------
-    if (!isAdminKeyValid(body.adminKey, ss)) {
-      return jsonResponse({ success: false, message: 'ไม่ได้รับอนุญาต: ตั้งค่า ADMIN_KEY ใน Script Properties ให้ตรงกับรหัสแอดมินก่อน' });
-    }
-
-    if (action === 'saveAnnouncements') {
-      writeAnnouncements(ss, body.announcements || []);
-      return jsonResponse({ success: true });
-    }
-
-    if (action === 'addSubAdmin') {
-      const a = body.subAdmin || {};
-      if (!a.id || !a.name || !a.passcode) return jsonResponse({ success: false, message: 'ข้อมูลแอดมินรองไม่ครบ' });
-      const h = sha256Hex(String(a.passcode).trim());
-      const sheet = ss.getSheetByName(SHEET_SUBADMINS);
-      const dup = bodyRows(sheet).some(function (r) { return String(r[2]) === h; });
-      if (dup || h === getAdminKeyHash(ss)) return jsonResponse({ success: false, message: 'รหัสผ่านนี้ถูกใช้แล้ว' });
-      sheet.appendRow([a.id, a.name, h, a.createdAt || new Date().toISOString()]);
-      return jsonResponse({ success: true });
-    }
-
-    if (action === 'deleteSubAdmin') {
-      const sheet = ss.getSheetByName(SHEET_SUBADMINS);
-      const data = sheet.getDataRange().getValues();
-      for (let i = data.length - 1; i >= 1; i--) {
-        if (String(data[i][0]) === String(body.id)) sheet.deleteRow(i + 1);
-      }
-      return jsonResponse({ success: true });
-    }
-
-    if (action === 'saveSemester') {
-      saveSemester(ss, body.semester, body.terms || []);
-      return jsonResponse({ success: true, message: 'บันทึกข้อมูลภาคการศึกษาและเป้าหมายเรียบร้อยแล้ว' });
-    }
-
-    if (action === 'saveCertificateConfig') {
-      if (body.certificateConfig) {
-        const st = ss.getSheetByName(SHEET_SETTINGS);
-        upsertSetting(st, 'certificateConfig', JSON.stringify(stripImages(body.certificateConfig)));
-        upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
-        return jsonResponse({ success: true, message: 'บันทึกการตั้งค่าเกียรติบัตรขึ้น Google Sheet เรียบร้อยแล้ว' });
-      }
-      return jsonResponse({ success: false, message: 'ไม่มีข้อมูล certificateConfig' });
-    }
-
-    if (action === 'saveLogo') {
-      if (body.logoUrl && String(body.logoUrl).length < 45000) {
-        const st = ss.getSheetByName(SHEET_SETTINGS);
-        upsertSetting(st, 'logoUrl', String(body.logoUrl));
-        upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
-        return jsonResponse({ success: true, message: 'บันทึกโลโก้ขึ้น Google Sheet เรียบร้อยแล้ว' });
-      }
-      return jsonResponse({ success: false, message: 'โลโก้ขนาดใหญ่เกินไปหรือไม่ถูกต้อง' });
-    }
-
-    // บันทึกห้องเช็คชื่อด้วย PIN / QR Code สำหรับจอใหญ่
-    if (action === 'saveActivePinSession') {
-      if (!isAdminKeyValid(body.adminKey, ss)) {
-        return jsonResponse({ success: false, message: 'รหัสแอดมินไม่ถูกต้อง' });
-      }
-      const st = ss.getSheetByName(SHEET_SETTINGS);
-      upsertSetting(st, 'activePinSession', JSON.stringify(body.session || {}));
-      upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
-      return jsonResponse({ success: true, message: 'บันทึกและซิงค์ห้องเช็คชื่อด้วย PIN เรียบร้อยแล้ว' });
-    }
-
-    // นักศึกษาเช็คชื่อตนเองด้วย PIN (ลงทะเบียนใหม่อัตโนมัติหากยังไม่มีข้อมูลในระบบ)
+    // นักศึกษาเช็คชื่อตนเองด้วย PIN (ลงทะเบียนใหม่อัตโนมัติหากยังไม่มีข้อมูลในระบบ — ไม่ต้องใช้รหัสแอดมิน)
     if (action === 'studentSelfCheckIn') {
       const studentId = String(body.studentId || '').trim();
       const pin = String(body.pin || '').trim();
@@ -390,7 +324,7 @@ function doPost(e) {
       }
       const settings = readSettings(ss);
       if (!settings.activePinSession) {
-        return jsonResponse({ success: false, message: 'ขณะนี้ยังไม่ได้เปิดห้องเช็คชื่อด้วย PIN' });
+        return jsonResponse({ success: false, message: 'ขณะนี้ยังไม่ได้เปิดห้องเช็คชื่อด้วย PIN (ให้อาจารย์เปิดห้องที่จอใหญ่ก่อน)' });
       }
       let pinSession = {};
       try { pinSession = JSON.parse(settings.activePinSession); } catch (e) {}
@@ -493,6 +427,69 @@ function doPost(e) {
         record: attRecord,
         message: isNew ? 'ลงทะเบียนนักศึกษาใหม่และเช็คชื่อสำเร็จแล้ว' : 'เช็คชื่อสำเร็จเรียบร้อยแล้ว'
       });
+    }
+
+    // ---------- ด้านล่างต้องเป็นแอดมิน ----------
+    if (!isAdminKeyValid(body.adminKey, ss)) {
+      return jsonResponse({ success: false, message: 'ไม่ได้รับอนุญาต: ตั้งค่า ADMIN_KEY ใน Script Properties ให้ตรงกับรหัสแอดมินก่อน' });
+    }
+
+    if (action === 'saveAnnouncements') {
+      writeAnnouncements(ss, body.announcements || []);
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'addSubAdmin') {
+      const a = body.subAdmin || {};
+      if (!a.id || !a.name || !a.passcode) return jsonResponse({ success: false, message: 'ข้อมูลแอดมินรองไม่ครบ' });
+      const h = sha256Hex(String(a.passcode).trim());
+      const sheet = ss.getSheetByName(SHEET_SUBADMINS);
+      const dup = bodyRows(sheet).some(function (r) { return String(r[2]) === h; });
+      if (dup || h === getAdminKeyHash(ss)) return jsonResponse({ success: false, message: 'รหัสผ่านนี้ถูกใช้แล้ว' });
+      sheet.appendRow([a.id, a.name, h, a.createdAt || new Date().toISOString()]);
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'deleteSubAdmin') {
+      const sheet = ss.getSheetByName(SHEET_SUBADMINS);
+      const data = sheet.getDataRange().getValues();
+      for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][0]) === String(body.id)) sheet.deleteRow(i + 1);
+      }
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'saveSemester') {
+      saveSemester(ss, body.semester, body.terms || []);
+      return jsonResponse({ success: true, message: 'บันทึกข้อมูลภาคการศึกษาและเป้าหมายเรียบร้อยแล้ว' });
+    }
+
+    if (action === 'saveCertificateConfig') {
+      if (body.certificateConfig) {
+        const st = ss.getSheetByName(SHEET_SETTINGS);
+        upsertSetting(st, 'certificateConfig', JSON.stringify(stripImages(body.certificateConfig)));
+        upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
+        return jsonResponse({ success: true, message: 'บันทึกการตั้งค่าเกียรติบัตรขึ้น Google Sheet เรียบร้อยแล้ว' });
+      }
+      return jsonResponse({ success: false, message: 'ไม่มีข้อมูล certificateConfig' });
+    }
+
+    if (action === 'saveLogo') {
+      if (body.logoUrl && String(body.logoUrl).length < 45000) {
+        const st = ss.getSheetByName(SHEET_SETTINGS);
+        upsertSetting(st, 'logoUrl', String(body.logoUrl));
+        upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
+        return jsonResponse({ success: true, message: 'บันทึกโลโก้ขึ้น Google Sheet เรียบร้อยแล้ว' });
+      }
+      return jsonResponse({ success: false, message: 'โลโก้ขนาดใหญ่เกินไปหรือไม่ถูกต้อง' });
+    }
+
+    // บันทึกห้องเช็คชื่อด้วย PIN / QR Code สำหรับจอใหญ่
+    if (action === 'saveActivePinSession') {
+      const st = ss.getSheetByName(SHEET_SETTINGS);
+      upsertSetting(st, 'activePinSession', JSON.stringify(body.session || {}));
+      upsertSetting(st, 'lastSyncTime', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
+      return jsonResponse({ success: true, message: 'บันทึกและซิงค์ห้องเช็คชื่อด้วย PIN เรียบร้อยแล้ว' });
     }
 
     // สำรองทุกอย่างจากเว็บขึ้นชีต
