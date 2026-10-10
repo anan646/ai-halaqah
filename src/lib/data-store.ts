@@ -24,6 +24,56 @@ const STORAGE_KEY_SESSIONS = 'halaqah_sessions_metadata_v1';
 const STORAGE_KEY_SEMESTER = 'halaqah_semester_settings_v1';
 const STORAGE_KEY_ATTENDANCE = 'halaqah_attendance_records_v1';
 const STORAGE_KEY_FEEDBACKS = 'halaqah_anonymous_feedbacks_v1';
+const STORAGE_KEY_DELETED_STUDENTS = 'halaqah_deleted_student_ids_v1';
+const STORAGE_KEY_DELETED_TEACHERS = 'halaqah_deleted_teacher_names_v1';
+
+export function getDeletedStudentIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DELETED_STUDENTS);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addDeletedStudentId(studentId: string): void {
+  if (typeof window === 'undefined' || !studentId) return;
+  const set = getDeletedStudentIds();
+  set.add(studentId.trim());
+  localStorage.setItem(STORAGE_KEY_DELETED_STUDENTS, JSON.stringify(Array.from(set)));
+}
+
+export function removeDeletedStudentId(studentId: string): void {
+  if (typeof window === 'undefined' || !studentId) return;
+  const set = getDeletedStudentIds();
+  set.delete(studentId.trim());
+  localStorage.setItem(STORAGE_KEY_DELETED_STUDENTS, JSON.stringify(Array.from(set)));
+}
+
+export function getDeletedTeacherNames(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DELETED_TEACHERS);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addDeletedTeacherName(teacherName: string): void {
+  if (typeof window === 'undefined' || !teacherName) return;
+  const set = getDeletedTeacherNames();
+  set.add(teacherName.trim());
+  localStorage.setItem(STORAGE_KEY_DELETED_TEACHERS, JSON.stringify(Array.from(set)));
+}
+
+export function removeDeletedTeacherName(teacherName: string): void {
+  if (typeof window === 'undefined' || !teacherName) return;
+  const set = getDeletedTeacherNames();
+  set.delete(teacherName.trim());
+  localStorage.setItem(STORAGE_KEY_DELETED_TEACHERS, JSON.stringify(Array.from(set)));
+}
 
 export const SEMESTER_SETTINGS_UPDATED_EVENT = 'halaqah_semester_settings_updated_v1';
 export const ATTENDANCE_RECORDS_UPDATED_EVENT = 'halaqah_attendance_records_updated_v1';
@@ -221,7 +271,13 @@ const hydrateTeacher = (t: Teacher): Teacher => ({
 });
 
 export function getActiveStudents(): Student[] {
-  if (typeof window === 'undefined') return INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+  const deletedIds = getDeletedStudentIds();
+  const filterDeleted = (list: Student[]) => {
+    if (deletedIds.size === 0) return list;
+    return list.filter((s) => !deletedIds.has((s.studentId || '').trim()));
+  };
+
+  if (typeof window === 'undefined') return filterDeleted(INITIAL_STUDENTS.map(hydrateStudentWithMajor));
   try {
     let raw = localStorage.getItem(STORAGE_KEY_STUDENTS);
     if (!raw) {
@@ -231,7 +287,7 @@ export function getActiveStudents(): Student[] {
         try {
           const prevList = JSON.parse(prevRaw);
           if (Array.isArray(prevList)) {
-            const remapped = prevList.map(hydrateStudentWithMajor);
+            const remapped = filterDeleted(prevList.map(hydrateStudentWithMajor));
             localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(remapped));
             return remapped;
           }
@@ -239,29 +295,37 @@ export function getActiveStudents(): Student[] {
           // fallback
         }
       }
-      const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+      const initHydrated = filterDeleted(INITIAL_STUDENTS.map(hydrateStudentWithMajor));
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
       return initHydrated;
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) {
-      const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+      const initHydrated = filterDeleted(INITIAL_STUDENTS.map(hydrateStudentWithMajor));
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
       return initHydrated;
     }
-    return parsed.map(hydrateStudentWithMajor);
+    return filterDeleted(parsed.map(hydrateStudentWithMajor));
   } catch {
-    return INITIAL_STUDENTS.map(hydrateStudentWithMajor);
+    return filterDeleted(INITIAL_STUDENTS.map(hydrateStudentWithMajor));
   }
 }
 
 export function saveActiveStudents(students: Student[]): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(students));
+  const deletedIds = getDeletedStudentIds();
+  const filtered = deletedIds.size > 0 ? students.filter((s) => !deletedIds.has((s.studentId || '').trim())) : students;
+  localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(filtered));
 }
 
 export function getActiveTeachers(): Teacher[] {
-  if (typeof window === 'undefined') return INITIAL_TEACHERS.map(hydrateTeacher);
+  const deletedNames = getDeletedTeacherNames();
+  const filterDeleted = (list: Teacher[]) => {
+    if (deletedNames.size === 0) return list;
+    return list.filter((t) => !deletedNames.has((t.name || '').trim()));
+  };
+
+  if (typeof window === 'undefined') return filterDeleted(INITIAL_TEACHERS.map(hydrateTeacher));
   try {
     let raw = localStorage.getItem(STORAGE_KEY_TEACHERS);
     if (!raw) {
@@ -270,29 +334,31 @@ export function getActiveTeachers(): Teacher[] {
         try {
           const prevList = JSON.parse(prevRaw);
           if (Array.isArray(prevList)) {
-            const remapped = prevList.map(hydrateTeacher);
+            const remapped = filterDeleted(prevList.map(hydrateTeacher));
             localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(remapped));
             return remapped;
           }
         } catch {}
       }
-      const initHydrated = INITIAL_TEACHERS.map(hydrateTeacher);
+      const initHydrated = filterDeleted(INITIAL_TEACHERS.map(hydrateTeacher));
       localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(initHydrated));
       return initHydrated;
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map(hydrateTeacher);
+      return filterDeleted(parsed.map(hydrateTeacher));
     }
-    return INITIAL_TEACHERS.map(hydrateTeacher);
+    return filterDeleted(INITIAL_TEACHERS.map(hydrateTeacher));
   } catch {
-    return INITIAL_TEACHERS.map(hydrateTeacher);
+    return filterDeleted(INITIAL_TEACHERS.map(hydrateTeacher));
   }
 }
 
 export function saveActiveTeachers(teachers: Teacher[]): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(teachers));
+  const deletedNames = getDeletedTeacherNames();
+  const filtered = deletedNames.size > 0 ? teachers.filter((t) => !deletedNames.has((t.name || '').trim())) : teachers;
+  localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(filtered));
 }
 
 // 1. โยกย้ายนักศึกษาจากอาจารย์กลุ่มเดิม ไปกลุ่มอาจารย์คนใหม่
@@ -414,6 +480,9 @@ export function updateStudentInfo(
     studentId: newId,
   };
 
+  removeDeletedStudentId(newId);
+  if (targetOldId !== newId) removeDeletedStudentId(targetOldId);
+
   students[sIdx] = updated;
   saveActiveStudents(students);
 
@@ -482,6 +551,9 @@ export function updateTeacherInfo(
     gender: newData.gender,
   };
 
+  removeDeletedTeacherName(newTeacherName);
+  if (targetOldTeacherName !== newTeacherName) removeDeletedTeacherName(targetOldTeacherName);
+
   teachers[tIdx] = updatedTeacher;
   saveActiveTeachers(teachers);
 
@@ -533,6 +605,8 @@ export function updateTeacherInfo(
 // 4. รีเซ็ตกลับเป็นข้อมูลเริ่มต้น
 export function resetToInitialData(): void {
   if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_KEY_DELETED_STUDENTS);
+  localStorage.removeItem(STORAGE_KEY_DELETED_TEACHERS);
   const initHydrated = INITIAL_STUDENTS.map(hydrateStudentWithMajor);
   localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
   localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(INITIAL_TEACHERS));
@@ -620,6 +694,7 @@ export function addStudentsBatch(newStudents: Student[]): {
       continue;
     }
     idSet.add(cleanId);
+    removeDeletedStudentId(cleanId);
     toAdd.push({
       studentId: cleanId,
       fullName: (item.fullName || '').trim() || `นักศึกษา (${cleanId})`,
@@ -672,6 +747,7 @@ export function addTeachersBatch(newTeachers: Teacher[]): {
       continue;
     }
     nameSet.add(cleanName);
+    removeDeletedTeacherName(cleanName);
     toAdd.push({
       name: cleanName,
       groupId: item.groupId || `t_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -696,13 +772,20 @@ export function addTeachersBatch(newTeachers: Teacher[]): {
 
 // 9. ลบนักศึกษา
 export function deleteStudent(studentId: string): { success: boolean; message: string } {
+  const cleanId = (studentId || '').trim();
+  addDeletedStudentId(cleanId);
   const current = getActiveStudents();
-  const updated = current.filter((s) => s.studentId !== studentId);
-  if (updated.length === current.length) {
-    return { success: false, message: 'ไม่พบรหัสนักศึกษาที่จะลบ' };
-  }
+  const updated = current.filter((s) => (s.studentId || '').trim() !== cleanId);
   saveActiveStudents(updated);
-  return { success: true, message: `ลบรหัสนักศึกษา ${studentId} เรียบร้อยแล้ว` };
+
+  // ลบประวัติการเช็คชื่อของ นศ. คนนี้ออกจากหน่วยความจำเครื่องด้วย เพื่อไม่ให้ฟื้นคืนชีพกลับมา
+  try {
+    const curRecs = getLocalAttendance();
+    const filteredRecs = curRecs.filter((r) => (r.studentId || '').trim() !== cleanId);
+    saveLocalAttendance(filteredRecs);
+  } catch {}
+
+  return { success: true, message: `ลบรหัสนักศึกษา ${cleanId} เรียบร้อยแล้ว` };
 }
 
 // 9.1 ลบนักศึกษาหลายคนพร้อมกัน (Batch Delete)
@@ -712,30 +795,38 @@ export function deleteStudentsBatch(
   if (!studentIds || studentIds.length === 0) {
     return { success: false, message: 'กรุณาเลือกนักศึกษาที่ต้องการลบ', count: 0 };
   }
+  const cleanIds = studentIds.map((id) => (id || '').trim()).filter(Boolean);
+  cleanIds.forEach((id) => addDeletedStudentId(id));
+  const toDeleteSet = new Set(cleanIds);
+
   const current = getActiveStudents();
-  const toDeleteSet = new Set(studentIds);
-  const updated = current.filter((s) => !toDeleteSet.has(s.studentId));
+  const updated = current.filter((s) => !toDeleteSet.has((s.studentId || '').trim()));
   const count = current.length - updated.length;
-  if (count === 0) {
-    return { success: false, message: 'ไม่พบรายชื่อนักศึกษาที่จะลบในระบบ', count: 0 };
-  }
+
   saveActiveStudents(updated);
+
+  // ลบประวัติการเช็คชื่อของกลุ่ม นศ. นี้ออกจากหน่วยความจำเครื่อง
+  try {
+    const curRecs = getLocalAttendance();
+    const filteredRecs = curRecs.filter((r) => !toDeleteSet.has((r.studentId || '').trim()));
+    saveLocalAttendance(filteredRecs);
+  } catch {}
+
   return {
     success: true,
-    message: `ลบข้อมูลนักศึกษาจำนวน ${count} คน เรียบร้อยแล้ว`,
-    count,
+    message: `ลบข้อมูลนักศึกษาจำนวน ${count || cleanIds.length} คน เรียบร้อยแล้ว`,
+    count: count || cleanIds.length,
   };
 }
 
 // 10. ลบอาจารย์
 export function deleteTeacher(teacherName: string): { success: boolean; message: string } {
+  const cleanName = (teacherName || '').trim();
+  addDeletedTeacherName(cleanName);
   const current = getActiveTeachers();
-  const updated = current.filter((t) => t.name !== teacherName);
-  if (updated.length === current.length) {
-    return { success: false, message: 'ไม่พบอาจารย์ที่จะลบ' };
-  }
+  const updated = current.filter((t) => (t.name || '').trim() !== cleanName);
   saveActiveTeachers(updated);
-  return { success: true, message: `ลบอาจารย์ ${teacherName} เรียบร้อยแล้ว` };
+  return { success: true, message: `ลบอาจารย์ ${cleanName} เรียบร้อยแล้ว` };
 }
 
 // ----------------------------------------------------

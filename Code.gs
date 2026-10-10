@@ -459,6 +459,76 @@ function doPost(e) {
       return jsonResponse({ success: true });
     }
 
+    if (action === 'deleteStudent') {
+      const studentId = String(body.studentId || '').trim();
+      if (!studentId) return jsonResponse({ success: false, message: 'ไม่ระบุรหัสนักศึกษา' });
+      const sheet = ss.getSheetByName(SHEET_STUDENTS);
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = data.length - 1; i >= 1; i--) {
+          if (String(data[i][0]).trim() === studentId) {
+            sheet.deleteRow(i + 1);
+          }
+        }
+      }
+      if (body.deleteAttendance) {
+        const attSheet = ss.getSheetByName(SHEET_ATTENDANCE);
+        if (attSheet) {
+          const attData = attSheet.getDataRange().getValues();
+          for (let i = attData.length - 1; i >= 1; i--) {
+            if (String(attData[i][3]).trim() === studentId) {
+              attSheet.deleteRow(i + 1);
+            }
+          }
+        }
+      }
+      return jsonResponse({ success: true, message: 'ลบนักศึกษาจาก Google Sheet เรียบร้อยแล้ว' });
+    }
+
+    if (action === 'deleteStudentsBatch') {
+      const ids = Array.isArray(body.studentIds) ? body.studentIds.map(function(x) { return String(x).trim(); }) : [];
+      if (!ids.length) return jsonResponse({ success: false, message: 'ไม่พบรายการรหัสนักศึกษา' });
+      const idSet = {};
+      ids.forEach(function(id) { idSet[id] = true; });
+
+      const sheet = ss.getSheetByName(SHEET_STUDENTS);
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = data.length - 1; i >= 1; i--) {
+          if (idSet[String(data[i][0]).trim()]) {
+            sheet.deleteRow(i + 1);
+          }
+        }
+      }
+      if (body.deleteAttendance) {
+        const attSheet = ss.getSheetByName(SHEET_ATTENDANCE);
+        if (attSheet) {
+          const attData = attSheet.getDataRange().getValues();
+          for (let i = attData.length - 1; i >= 1; i--) {
+            if (idSet[String(attData[i][3]).trim()]) {
+              attSheet.deleteRow(i + 1);
+            }
+          }
+        }
+      }
+      return jsonResponse({ success: true, message: 'ลบนักศึกษาจำนวน ' + ids.length + ' คน จาก Google Sheet เรียบร้อยแล้ว' });
+    }
+
+    if (action === 'deleteTeacher') {
+      const teacherName = String(body.teacherName || '').trim();
+      if (!teacherName) return jsonResponse({ success: false, message: 'ไม่ระบุชื่ออาจารย์' });
+      const sheet = ss.getSheetByName(SHEET_TEACHERS);
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = data.length - 1; i >= 1; i--) {
+          if (String(data[i][0]).trim() === teacherName) {
+            sheet.deleteRow(i + 1);
+          }
+        }
+      }
+      return jsonResponse({ success: true, message: 'ลบอาจารย์จาก Google Sheet เรียบร้อยแล้ว' });
+    }
+
     if (action === 'saveSemester') {
       saveSemester(ss, body.semester, body.terms || []);
       return jsonResponse({ success: true, message: 'บันทึกข้อมูลภาคการศึกษาและเป้าหมายเรียบร้อยแล้ว' });

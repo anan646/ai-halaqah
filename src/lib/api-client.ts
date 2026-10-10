@@ -20,6 +20,8 @@ import {
   saveFeedbacks,
   getFacultyPassword,
   saveFacultyPassword,
+  getDeletedStudentIds,
+  getDeletedTeacherNames,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from './data-store';
 import { getCertificateConfig, saveCertificateConfig, CertificateConfig } from './certificate-config';
@@ -309,8 +311,14 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     });
     const d = await res.json();
     if (!d?.success) return { success: false, message: d?.message || 'ดึงข้อมูลไม่สำเร็จ' };
-    if (Array.isArray(d.students) && d.students.length) saveActiveStudents(d.students);
-    if (Array.isArray(d.teachers) && d.teachers.length) saveActiveTeachers(d.teachers);
+    const deletedStudents = getDeletedStudentIds();
+    const deletedTeachers = getDeletedTeacherNames();
+    if (Array.isArray(d.students) && d.students.length) {
+      saveActiveStudents(d.students.filter((s: Student) => !deletedStudents.has((s.studentId || '').trim())));
+    }
+    if (Array.isArray(d.teachers) && d.teachers.length) {
+      saveActiveTeachers(d.teachers.filter((t: Teacher) => !deletedTeachers.has((t.name || '').trim())));
+    }
     if (Array.isArray(d.majors) && d.majors.length) saveActiveMajors(d.majors);
     if (Array.isArray(d.announcements)) saveAnnouncements(d.announcements);
     if (Array.isArray(d.sessions)) saveAllSessionMetadata(d.sessions);
@@ -373,11 +381,18 @@ export async function pushSemester(customSemester?: SemesterSettings): Promise<{
 export async function applyPublicDataToLocal(): Promise<boolean> {
   const d = await fetchPublicData();
   if (!d.ok) return false;
-  if (d.teachers.length) saveActiveTeachers(d.teachers);
+  const deletedStudents = getDeletedStudentIds();
+  const deletedTeachers = getDeletedTeacherNames();
+
+  if (d.teachers.length) {
+    const filteredTeachers = d.teachers.filter((t) => !deletedTeachers.has((t.name || '').trim()));
+    saveActiveTeachers(filteredTeachers);
+  }
   if (d.roster.length) {
+    const filteredRoster = d.roster.filter((r) => !deletedStudents.has((r.studentId || '').trim()));
     const local = new Map(getActiveStudents().map((s) => [s.studentId, s]));
     saveActiveStudents(
-      d.roster.map((r) => ({
+      filteredRoster.map((r) => ({
         ...(local.get(r.studentId) || {}),
         ...r,
         major: r.major || local.get(r.studentId)?.major,
@@ -786,5 +801,76 @@ export async function deleteFeedbackFromGoogleSheet(id: string): Promise<boolean
     return !!d?.success;
   } catch {
     return false;
+  }
+}
+
+/** ลบนักศึกษาใน Google Sheet ทันที (ลบแถวออกจากชีต Students และประวัติการเช็คชื่อถ้ามี) */
+export async function pushDeleteStudent(studentId: string, deleteAttendance: boolean = true): Promise<{ success: boolean; message: string }> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return { success: false, message: 'ไม่ได้ตั้งค่า Web App URL' };
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'deleteStudent',
+        studentId: String(studentId).trim(),
+        deleteAttendance,
+        adminKey: getAdminKey(),
+      }),
+    });
+    const d = await res.json();
+    return d?.success
+      ? { success: true, message: d.message || 'ลบนักศึกษาใน Google Sheet สำเร็จ' }
+      : { success: false, message: d?.message || 'ลบไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ Google Sheet' };
+  }
+}
+
+/** ลบนักศึกษาหลายคนใน Google Sheet พร้อมกัน (Batch Delete) */
+export async function pushDeleteStudentsBatch(studentIds: string[], deleteAttendance: boolean = true): Promise<{ success: boolean; message: string }> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return { success: false, message: 'ไม่ได้ตั้งค่า Web App URL' };
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'deleteStudentsBatch',
+        studentIds: studentIds.map((id) => String(id).trim()),
+        deleteAttendance,
+        adminKey: getAdminKey(),
+      }),
+    });
+    const d = await res.json();
+    return d?.success
+      ? { success: true, message: d.message || 'ลบนักศึกษาใน Google Sheet สำเร็จ' }
+      : { success: false, message: d?.message || 'ลบไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ Google Sheet' };
+  }
+}
+
+/** ลบอาจารย์ใน Google Sheet ทันที (ลบแถวออกจากชีต Teachers) */
+export async function pushDeleteTeacher(teacherName: string): Promise<{ success: boolean; message: string }> {
+  const scriptUrl = getSavedScriptUrl();
+  if (!scriptUrl) return { success: false, message: 'ไม่ได้ตั้งค่า Web App URL' };
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'deleteTeacher',
+        teacherName: String(teacherName).trim(),
+        adminKey: getAdminKey(),
+      }),
+    });
+    const d = await res.json();
+    return d?.success
+      ? { success: true, message: d.message || 'ลบอาจารย์ใน Google Sheet สำเร็จ' }
+      : { success: false, message: d?.message || 'ลบไม่สำเร็จ' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ Google Sheet' };
   }
 }

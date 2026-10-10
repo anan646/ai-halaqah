@@ -107,14 +107,21 @@ export const StudentPortalView: React.FC<Props> = ({
   const [prefilledPin, setPrefilledPin] = useState('');
   const [isNewOnlyMode, setIsNewOnlyMode] = useState(false);
 
-  // อ่าน ?checkinPin= หรือ ?pin= จาก URL เมื่อเปิดจาก QR Code
+  // อ่าน ?checkinPin= หรือ ?pin= จาก URL เมื่อเปิดจาก QR Code (บันทึกไว้ใน prefilledPin เพื่อความสะดวกเมื่อกดปุ่ม แต่ไม่เด้งเปิดโมดอลอัตโนมัติ)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const p = params.get('checkinPin') || params.get('pin');
       if (p) {
         setPrefilledPin(p);
-        setIsRegisterOpen(true);
+        // ล้าง ?pin= หรือ ?checkinPin= ออกจาก URL เพื่อไม่ให้ค้างในประวัติเบราว์เซอร์มือถือ
+        try {
+          params.delete('checkinPin');
+          params.delete('pin');
+          const newSearch = params.toString();
+          const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+          window.history.replaceState(null, '', newUrl);
+        } catch {}
       }
     }
   }, []);

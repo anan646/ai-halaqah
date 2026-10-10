@@ -34,6 +34,7 @@ import {
   getAnnouncements,
   getStudentMajor,
   formatTermLabel,
+  getDeletedStudentIds,
 } from '@/lib/data-store';
 import { fetchPublicData } from '@/lib/api-client';
 import { AttendanceRecord, Student, Teacher, Announcement } from '@/lib/types';
@@ -150,18 +151,20 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   // Unified student database: merges data-store with any students recorded in records
   const unifiedStudents = useMemo<Student[]>(() => {
     const studentMap = new Map<string, Student>();
+    const deletedIds = getDeletedStudentIds();
 
     // 1. From database
     allStudents.forEach((st) => {
-      if (st.studentId) {
-        studentMap.set(st.studentId.trim(), st);
+      const id = (st.studentId || '').trim();
+      if (id && !deletedIds.has(id)) {
+        studentMap.set(id, st);
       }
     });
 
-    // 2. From sheet records (to guarantee any recorded student is found)
+    // 2. From sheet records (to guarantee any recorded student is found, but never resurrect deleted ones)
     records.forEach((r) => {
       const id = (r.studentId || '').trim();
-      if (id && !studentMap.has(id)) {
+      if (id && !studentMap.has(id) && !deletedIds.has(id)) {
         studentMap.set(id, {
           studentId: id,
           fullName: r.studentName || `นักศึกษา (${id})`,

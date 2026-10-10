@@ -126,7 +126,7 @@ import {
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
-import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword } from '@/lib/api-client';
+import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword, pushDeleteStudent, pushDeleteStudentsBatch, pushDeleteTeacher } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { PinProjectorModal } from './PinProjectorModal';
 import { AdminManualModal } from './AdminManualModal';
@@ -824,7 +824,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลนักศึกษา "${studentName}" (${studentId})?`)) {
       const res = deleteStudent(studentId);
       setEditorMsg({ text: res.message, success: res.success });
-      if (res.success) reloadDataStore();
+      if (res.success) {
+        reloadDataStore();
+        // ส่งคำสั่งลบไปยัง Google Sheet ทันที (พร้อมลบประวัติการเช็คชื่อถ้ามี)
+        pushDeleteStudent(studentId, true).catch(() => null);
+      }
     }
   };
 
@@ -833,7 +837,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบอาจารย์ "${teacherName}"? (ข้อมูลนักศึกษาในกลุ่มเดิมจะยังคงอยู่)`)) {
       const res = deleteTeacher(teacherName);
       setEditorMsg({ text: res.message, success: res.success });
-      if (res.success) reloadDataStore();
+      if (res.success) {
+        reloadDataStore();
+        // ส่งคำสั่งลบไปยัง Google Sheet ทันที
+        pushDeleteTeacher(teacherName).catch(() => null);
+      }
     }
   };
 
@@ -1046,11 +1054,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       return;
     }
 
-    const res = deleteStudentsBatch(selectedStudentIds);
+    const toDeleteIds = [...selectedStudentIds];
+    const res = deleteStudentsBatch(toDeleteIds);
     setEditorMsg({ text: res.message, success: res.success });
     if (res.success) {
       setSelectedStudentIds([]);
       reloadDataStore();
+      pushDeleteStudentsBatch(toDeleteIds, true).catch(() => null);
     }
     setTimeout(() => setEditorMsg(null), 5000);
   };
