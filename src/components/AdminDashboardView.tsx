@@ -126,7 +126,7 @@ import {
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
-import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword, pushDeleteStudent, pushDeleteStudentsBatch, pushDeleteTeacher } from '@/lib/api-client';
+import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword, pushDeleteStudent, pushDeleteStudentsBatch, pushDeleteTeacher, backupAllToGoogleSheet } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { PinProjectorModal } from './PinProjectorModal';
 import { AdminManualModal } from './AdminManualModal';
@@ -826,8 +826,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setEditorMsg({ text: res.message, success: res.success });
       if (res.success) {
         reloadDataStore();
-        // ส่งคำสั่งลบไปยัง Google Sheet ทันที (พร้อมลบประวัติการเช็คชื่อถ้ามี)
+        // ส่งคำสั่งลบไปยัง Google Sheet และสำรองข้อมูลที่ตัดรายชื่อนี้ออกขึ้นชีตทันทีอัตโนมัติ
         pushDeleteStudent(studentId, true).catch(() => null);
+        backupAllToGoogleSheet().catch(() => null);
       }
     }
   };
@@ -839,8 +840,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setEditorMsg({ text: res.message, success: res.success });
       if (res.success) {
         reloadDataStore();
-        // ส่งคำสั่งลบไปยัง Google Sheet ทันที
+        // ส่งคำสั่งลบไปยัง Google Sheet และสำรองข้อมูลที่ตัดอาจารย์นี้ออกขึ้นชีตทันทีอัตโนมัติ
         pushDeleteTeacher(teacherName).catch(() => null);
+        backupAllToGoogleSheet().catch(() => null);
       }
     }
   };
@@ -1061,6 +1063,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setSelectedStudentIds([]);
       reloadDataStore();
       pushDeleteStudentsBatch(toDeleteIds, true).catch(() => null);
+      backupAllToGoogleSheet().catch(() => null);
     }
     setTimeout(() => setEditorMsg(null), 5000);
   };
