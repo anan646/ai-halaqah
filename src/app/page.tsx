@@ -309,6 +309,7 @@ export default function HomePage() {
               onOpenSettings={() => setIsSettingsOpen(true)}
               onBackupAll={handleBackupAll}
               isBackingUp={isBackingUp}
+              onRefreshData={loadData}
             />
           ) : (
             <AdminLoginView

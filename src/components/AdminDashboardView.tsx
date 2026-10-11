@@ -126,7 +126,7 @@ import {
   downloadStudentImportTemplate,
 } from '@/lib/export-utils';
 import { getSubAdmins, addSubAdmin, deleteSubAdmin, pushSubAdminAdd, pushSubAdminDelete } from '@/lib/admin-auth';
-import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword, pushDeleteStudent, pushDeleteStudentsBatch, pushDeleteTeacher, backupAllToGoogleSheet } from '@/lib/api-client';
+import { setSavedLogo, pushAnnouncements, pushSemester, pushLogo, restoreFromGoogleSheet, pushFacultyPassword, pushMasterAdminPassword, pushDeleteStudent, pushDeleteStudentsBatch, pushDeleteTeacher, backupAllToGoogleSheet, getGoogleSheetUrl, applyPublicDataToLocal, fetchAllAttendance } from '@/lib/api-client';
 import { ModalPortal } from './ModalPortal';
 import { PinProjectorModal } from './PinProjectorModal';
 import { AdminManualModal } from './AdminManualModal';
@@ -151,6 +151,7 @@ interface AdminDashboardViewProps {
   onOpenSettings?: () => void;
   onBackupAll?: () => void;
   isBackingUp?: boolean;
+  onRefreshData?: () => void;
 }
 
 type TabType =
@@ -180,6 +181,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onOpenSettings,
   onBackupAll,
   isBackingUp,
+  onRefreshData,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
@@ -1409,14 +1411,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (isSyncing) return;
     setIsSyncing(true);
     if (!isSilent) {
-      setSyncToast('⏳ กำลังเชื่อมต่อและซิงค์ข้อมูลสด...');
+      setSyncToast('⏳ กำลังเชื่อมต่อและซิงค์ข้อมูลสดจาก Google Sheet...');
     }
     try {
+      await applyPublicDataToLocal();
+      await fetchAllAttendance();
+      if (onRefreshData) {
+        onRefreshData();
+      }
       reloadDataStore();
+      setSemesterSettings(getSemesterSettings());
+      setTermHistory(getTermHistory());
+      setAnnouncementsList(getAnnouncements());
+      setSubAdminsList(getSubAdmins());
       const now = new Date();
       const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' น.';
       setLastUpdatedTime(timeStr);
-      setSyncToast(`✅ ซิงค์ข้อมูลสดเรียบร้อยแล้ว (${timeStr})`);
+      setSyncToast(`✅ ซิงค์ข้อมูลสดจาก Google Sheet เรียบร้อยแล้ว (${timeStr})`);
     } catch {
       reloadDataStore();
       setSyncToast('เชื่อมต่อเสร็จสิ้น (ใช้ข้อมูลที่บันทึกในระบบล่าสุด)');
@@ -1434,24 +1445,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }, autoRefreshInterval * 1000);
     return () => clearInterval(interval);
   }, [autoRefreshInterval]);
-
-  const GOOGLE_SHEETS_SOURCES = [
-    {
-      id: 'male',
-      name: 'ชาย (ทุกชั้นปี) - 12 กลุ่ม',
-      url: 'https://docs.google.com/spreadsheets/d/12RUrWwlRFCOITwt3wyYwjxYGsgrJ_P-a8P4UGf_H0_U/edit?gid=1686068478',
-    },
-    {
-      id: 'female2',
-      name: 'หญิง (ปี 2) - 15 กลุ่ม',
-      url: 'https://docs.google.com/spreadsheets/d/1iCFV5-NCUk3lexSj9VSkKH8WyFTV3523hbskrgOuonQ/edit?gid=456483790',
-    },
-    {
-      id: 'female3',
-      name: 'หญิง (ปี 3) - 13 กลุ่ม',
-      url: 'https://docs.google.com/spreadsheets/d/1-8VN0z99DCRdI-wY5rzPFYVQieXNvY0tEpcSB1LRnaQ/edit?gid=841705446',
-    },
-  ];
 
   // ==================== ภาคการศึกษาที่กำลังดู (ค่าเริ่มต้น = ภาคปัจจุบันที่แอดมินตั้งไว้) ====================
   const [termFilter, setTermFilter] = useState<string>('current');
@@ -2866,17 +2859,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           ดึงข้อมูลล่าสุดจากชีต
                         </button>
                         <div className="border-t border-purple-100 my-1" />
-                        {GOOGLE_SHEETS_SOURCES.map((s) => (
-                          <a
-                            key={s.id}
-                            href={s.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block px-3 py-2 text-xs rounded-xl hover:bg-purple-50 font-medium"
-                          >
-                            {s.name}
-                          </a>
-                        ))}
+                        <a
+                          href={getGoogleSheetUrl()}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full text-left px-3 py-2 text-xs rounded-xl hover:bg-purple-50 font-bold flex items-center justify-between text-purple-900 transition"
+                        >
+                          <span className="flex items-center gap-2">
+                            <ExternalLink className="w-4 h-4 text-emerald-600" />
+                            เปิด Google Sheet ฐานข้อมูลปัจจุบัน
+                          </span>
+                        </a>
                       </div>
                     )}
                   </div>

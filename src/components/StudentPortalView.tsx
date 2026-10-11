@@ -259,12 +259,25 @@ export const StudentPortalView: React.FC<Props> = ({
     const q = raw.trim().replace(/[\s-]/g, '').toLowerCase();
     if (!q) return;
     const norm = (id: string) => (id || '').replace(/[\s-]/g, '').toLowerCase();
-    const local = students.find((s) => norm(s.studentId) === q);
-    const fromSheet = remote.roster.find((s) => norm(s.studentId) === q);
-    // ข้อมูลจาก Google Sheet ใหม่กว่าข้อมูลที่ฝังในแอป จึงใช้ทับ แต่คงสาขา/ระดับจากข้อมูลในเครื่องถ้ามี
-    const found: Student | undefined = fromSheet
-      ? ({ ...local, ...fromSheet, level: fromSheet.level || local?.level || '01', groupId: local?.groupId || '' } as Student)
-      : local;
+    
+    // ข้อมูลจาก Google Sheet เป็นความถูกต้องสูงสุด (Single Source of Truth)
+    let found: Student | undefined = undefined;
+    if (remote.ok && remote.roster && remote.roster.length > 0) {
+      const fromSheet = remote.roster.find((s) => norm(s.studentId) === q);
+      if (fromSheet) {
+        const local = students.find((s) => norm(s.studentId) === q);
+        found = {
+          ...local,
+          ...fromSheet,
+          level: (fromSheet.level as Student['level']) || local?.level || '01',
+          groupId: local?.groupId || '',
+        } as Student;
+      }
+    } else {
+      // กรณีออฟไลน์หรือก่อนที่ชีตจะโหลดเสร็จ ให้ค้นหาจากแคชในเครื่อง
+      found = students.find((s) => norm(s.studentId) === q);
+    }
+
     if (found) {
       setStudent(found);
       setNotFound(false);
@@ -278,6 +291,17 @@ export const StudentPortalView: React.FC<Props> = ({
       setNotFound(true);
     }
   };
+
+  // หากนักศึกษาที่กำลังดูอยู่ถูกลบออกจากระบบ/Google Sheet ให้เคลียร์หน้าจอทันที
+  useEffect(() => {
+    if (student && remote.ok && remote.roster && remote.roster.length > 0) {
+      const stillInSheet = remote.roster.some((s) => (s.studentId || '').trim() === student.studentId.trim());
+      if (!stillInSheet) {
+        setStudent(null);
+        setNotFound(true);
+      }
+    }
+  }, [remote, student]);
 
   const onChange = (v: string) => {
     const clean = v.replace(/[^\d\s-]/g, '');

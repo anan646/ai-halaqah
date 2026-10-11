@@ -35,6 +35,8 @@ import {
   getStudentMajor,
   formatTermLabel,
   getDeletedStudentIds,
+  STUDENTS_UPDATED_EVENT,
+  TEACHERS_UPDATED_EVENT,
 } from '@/lib/data-store';
 import { fetchPublicData } from '@/lib/api-client';
 import { AttendanceRecord, Student, Teacher, Announcement } from '@/lib/types';
@@ -148,12 +150,27 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
     setAllStudents(getActiveStudents());
   }, [records]);
 
-  // Unified student database: merges data-store with any students recorded in records
+  // ซิงค์รายชื่ออาจารย์และนักศึกษาแบบเรียลไทม์ทันทีที่มีการอัปเดตจาก Google Sheet หรือการลบในระบบ
+  useEffect(() => {
+    const handleSync = () => {
+      setAllTeachers(getActiveTeachers());
+      setAllStudents(getActiveStudents());
+    };
+    window.addEventListener(STUDENTS_UPDATED_EVENT, handleSync);
+    window.addEventListener(TEACHERS_UPDATED_EVENT, handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener(STUDENTS_UPDATED_EVENT, handleSync);
+      window.removeEventListener(TEACHERS_UPDATED_EVENT, handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
+
+  // ฐานข้อมูลนักศึกษาที่แท้จริง: อ้างอิงจากฐานข้อมูลรายชื่อปัจจุบัน (ไม่ฟื้นคืนชีพรายชื่อที่ถูกลบออกไปแล้ว)
   const unifiedStudents = useMemo<Student[]>(() => {
     const studentMap = new Map<string, Student>();
     const deletedIds = getDeletedStudentIds();
 
-    // 1. From database
     allStudents.forEach((st) => {
       const id = (st.studentId || '').trim();
       if (id && !deletedIds.has(id)) {
@@ -161,24 +178,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
       }
     });
 
-    // 2. From sheet records (to guarantee any recorded student is found, but never resurrect deleted ones)
-    records.forEach((r) => {
-      const id = (r.studentId || '').trim();
-      if (id && !studentMap.has(id) && !deletedIds.has(id)) {
-        studentMap.set(id, {
-          studentId: id,
-          fullName: r.studentName || `นักศึกษา (${id})`,
-          teacherName: r.teacherName || 'ไม่ระบุอาจารย์',
-          groupName: r.groupName || 'ไม่ระบุกลุ่ม',
-          yearLevel: r.yearLevel || 'ไม่ระบุชั้นปี',
-          gender: r.gender || 'ชาย',
-          groupId: '',
-        });
-      }
-    });
-
     return Array.from(studentMap.values());
-  }, [allStudents, records]);
+  }, [allStudents]);
 
   // Handle hardware / browser back button within landing page
   useEffect(() => {

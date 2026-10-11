@@ -43,6 +43,8 @@ import {
   isRecordInTerm,
   getSemesterSettings,
   formatTermLabel,
+  STUDENTS_UPDATED_EVENT,
+  TEACHERS_UPDATED_EVENT,
 } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
 import { FeedbackModal } from './FeedbackModal';
@@ -74,6 +76,23 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
     setSemester(getSemesterSettings());
     setAllStudents(getActiveStudents());
   }, [allRecords]);
+
+  // ซิงค์รายชื่ออาจารย์และนักศึกษาแบบเรียลไทม์ทันทีที่มีการเปลี่ยนแปลงจาก Google Sheet หรือการลบในระบบ
+  useEffect(() => {
+    const handleSync = () => {
+      setTeachers(getActiveTeachers());
+      setSemester(getSemesterSettings());
+      setAllStudents(getActiveStudents());
+    };
+    window.addEventListener(STUDENTS_UPDATED_EVENT, handleSync);
+    window.addEventListener(TEACHERS_UPDATED_EVENT, handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener(STUDENTS_UPDATED_EVENT, handleSync);
+      window.removeEventListener(TEACHERS_UPDATED_EVENT, handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
 
   // เฉพาะการเช็คชื่อของภาคการศึกษาปัจจุบัน (แอดมินตั้งไว้)
   const termLabel = formatTermLabel(semester);

@@ -184,13 +184,20 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
         }
       });
 
-      // 2. คงเฉพาะรายการที่สร้างใหม่ในเครื่องนี้ที่ยังไม่ได้ส่งขึ้นชีต (ไม่รวม demo records)
+      // 2. คงเฉพาะรายการที่สร้างใหม่สดๆ ในเครื่องนี้ที่ยังไม่ได้ส่งขึ้นชีต (ไม่รวม demo records และไม่รวม นศ. ที่ถูกลบ)
+      const deletedIds = getDeletedStudentIds();
+      const now = Date.now();
       localRecords.forEach((r) => {
         if (r.id && r.id.startsWith('ATT_2026-09-')) return;
+        const sId = (r.studentId || '').trim();
+        if (deletedIds.has(sId)) return;
         const key = `${r.date}_${r.studentId}`;
         if (!recordMap.has(key)) {
-          if (r.term) r.term = normalizeTermKey(r.term);
-          recordMap.set(key, r);
+          const recTime = r.timestamp ? new Date(r.timestamp).getTime() : 0;
+          if (recTime && (now - recTime < 3600000)) {
+            if (r.term) r.term = normalizeTermKey(r.term);
+            recordMap.set(key, r);
+          }
         }
       });
       
@@ -371,10 +378,22 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
       saveSubAdmins(d.subAdmins.map((a: SubAdmin) => ({ ...a, passcode: local.get(a.id)?.passcode || '' })));
     }
     if (Array.isArray(d.attendance) && d.attendance.length) {
-      const map = new Map<string, AttendanceRecord>();
-      getLocalAttendanceRecords().forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
-      d.attendance.forEach((r: AttendanceRecord) => map.set(`${r.date}_${r.studentId}`, r));
-      saveLocalAttendanceRecords(Array.from(map.values()));
+      const currentSem = getSemesterSettings();
+      const termHist = getTermHistory();
+      const normAtt: AttendanceRecord[] = d.attendance.map((r: AttendanceRecord) => {
+        let term = r.term ? normalizeTermKey(r.term) : inferTermFromDate(r.date, currentSem, termHist);
+        let recTime = r.recordedTime;
+        if (recTime) {
+          const tm = String(recTime).match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+          if (tm) recTime = tm[1];
+        }
+        return {
+          ...r,
+          term,
+          recordedTime: recTime,
+        };
+      });
+      saveLocalAttendanceRecords(normAtt);
     }
     return {
       success: true,

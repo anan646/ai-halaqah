@@ -78,6 +78,8 @@ export function removeDeletedTeacherName(teacherName: string): void {
 export const SEMESTER_SETTINGS_UPDATED_EVENT = 'halaqah_semester_settings_updated_v1';
 export const ATTENDANCE_RECORDS_UPDATED_EVENT = 'halaqah_attendance_records_updated_v1';
 export const FEEDBACKS_UPDATED_EVENT = 'halaqah_feedbacks_updated_v1';
+export const STUDENTS_UPDATED_EVENT = 'halaqah_students_updated_v1';
+export const TEACHERS_UPDATED_EVENT = 'halaqah_teachers_updated_v1';
 
 function getLocalAttendance(): any[] {
   if (typeof window === 'undefined') return [];
@@ -300,7 +302,7 @@ export function getActiveStudents(): Student[] {
       return initHydrated;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+    if (!Array.isArray(parsed)) {
       const initHydrated = filterDeleted(INITIAL_STUDENTS.map(hydrateStudentWithMajor));
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(initHydrated));
       return initHydrated;
@@ -316,6 +318,8 @@ export function saveActiveStudents(students: Student[]): void {
   const deletedIds = getDeletedStudentIds();
   const filtered = deletedIds.size > 0 ? students.filter((s) => !deletedIds.has((s.studentId || '').trim())) : students;
   localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(filtered));
+  window.dispatchEvent(new CustomEvent(STUDENTS_UPDATED_EVENT, { detail: filtered }));
+  window.dispatchEvent(new Event('storage'));
 }
 
 export function getActiveTeachers(): Teacher[] {
@@ -345,7 +349,7 @@ export function getActiveTeachers(): Teacher[] {
       return initHydrated;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       return filterDeleted(parsed.map(hydrateTeacher));
     }
     return filterDeleted(INITIAL_TEACHERS.map(hydrateTeacher));
@@ -359,6 +363,8 @@ export function saveActiveTeachers(teachers: Teacher[]): void {
   const deletedNames = getDeletedTeacherNames();
   const filtered = deletedNames.size > 0 ? teachers.filter((t) => !deletedNames.has((t.name || '').trim())) : teachers;
   localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(filtered));
+  window.dispatchEvent(new CustomEvent(TEACHERS_UPDATED_EVENT, { detail: filtered }));
+  window.dispatchEvent(new Event('storage'));
 }
 
 // 1. โยกย้ายนักศึกษาจากอาจารย์กลุ่มเดิม ไปกลุ่มอาจารย์คนใหม่
