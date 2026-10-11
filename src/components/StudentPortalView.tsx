@@ -41,7 +41,7 @@ import { CertificateModal } from './CertificateModal';
 import { AnnouncementBox } from './AnnouncementBox';
 import { FeedbackModal } from './FeedbackModal';
 import { StudentSelfRegisterModal } from './StudentSelfRegisterModal';
-import { fetchPublicData, PublicData, PublicRosterStudent, getLocalAttendanceRecords } from '@/lib/api-client';
+import { fetchPublicData, PublicData, PublicRosterStudent, getLocalAttendanceRecords, fetchAllAttendance } from '@/lib/api-client';
 
 interface Props {
   records: AttendanceRecord[];
@@ -211,6 +211,15 @@ export const StudentPortalView: React.FC<Props> = ({
         if (pub.terms && pub.terms.length) {
           saveTermHistory(pub.terms);
         }
+      }
+    } catch {
+      // Background sync silently
+    }
+
+    try {
+      const att = await fetchAllAttendance();
+      if (att && att.records && att.records.length > 0) {
+        setLiveRecords(att.records);
       }
     } catch {
       // Background sync silently

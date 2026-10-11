@@ -23,6 +23,9 @@ import {
   getDeletedStudentIds,
   getDeletedTeacherNames,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
+  getTermKey,
+  normalizeTermKey,
+  inferTermFromDate,
 } from './data-store';
 import { getCertificateConfig, saveCertificateConfig, CertificateConfig } from './certificate-config';
 
@@ -157,10 +160,26 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
     const data = await res.json();
     if (data && data.success && Array.isArray(data.records)) {
       const recordMap = new Map<string, AttendanceRecord>();
+      const currentSem = getSemesterSettings();
+      const termHist = getTermHistory();
       
-      // 1. นำข้อมูลจริงจาก Google Sheet ลงฐานข้อมูลหลัก
+      // 1. นำข้อมูลจริงจาก Google Sheet ลงฐานข้อมูลหลัก พร้อมทำความสะอาด term และ recordedTime
       data.records.forEach((r: AttendanceRecord) => {
         if (r && r.date && r.studentId) {
+          // Normalize term
+          if (r.term) {
+            r.term = normalizeTermKey(r.term);
+          }
+          if (!r.term) {
+            r.term = inferTermFromDate(r.date, currentSem, termHist);
+          }
+          // Normalize recordedTime (แปลงจาก Date string ของ Google Sheets หรือเวลาดิบให้เป็น HH:mm:ss สม่ำเสมอ)
+          if (r.recordedTime) {
+            const timeMatch = String(r.recordedTime).match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+            if (timeMatch) {
+              r.recordedTime = timeMatch[1];
+            }
+          }
           recordMap.set(`${r.date}_${r.studentId}`, r);
         }
       });
@@ -170,6 +189,7 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
         if (r.id && r.id.startsWith('ATT_2026-09-')) return;
         const key = `${r.date}_${r.studentId}`;
         if (!recordMap.has(key)) {
+          if (r.term) r.term = normalizeTermKey(r.term);
           recordMap.set(key, r);
         }
       });
@@ -188,11 +208,29 @@ export async function fetchAllAttendance(): Promise<{ records: AttendanceRecord[
 export async function saveAttendanceBatch(
   newRecords: AttendanceRecord[]
 ): Promise<{ success: boolean; syncedWithSheet: boolean; message: string }> {
+  const currentSem = getSemesterSettings();
+  const currentTermKey = getTermKey(currentSem);
+
+  // Normalize new records (term และ recordedTime) เพื่อให้ทุกเครื่องที่ดึงไปได้รูปแบบตรงกันเสมอ
+  const normalizedRecords: AttendanceRecord[] = newRecords.map((r) => {
+    let term = r.term ? normalizeTermKey(r.term) : currentTermKey;
+    let recTime = r.recordedTime;
+    if (recTime) {
+      const tm = String(recTime).match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+      if (tm) recTime = tm[1];
+    }
+    return {
+      ...r,
+      term: term || currentTermKey,
+      recordedTime: recTime,
+    };
+  });
+
   // Update local storage first
   const current = getLocalAttendanceRecords();
   const map = new Map<string, AttendanceRecord>();
   current.forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
-  newRecords.forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
+  normalizedRecords.forEach((r) => map.set(`${r.date}_${r.studentId}`, r));
 
   const updated = Array.from(map.values());
   saveLocalAttendanceRecords(updated);
@@ -212,7 +250,7 @@ export async function saveAttendanceBatch(
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'saveAttendance',
-        records: newRecords
+        records: normalizedRecords
       })
     });
 

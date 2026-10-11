@@ -632,10 +632,18 @@ function readAttendance(ss) {
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
     if (!r[1] && !r[3]) continue;
+    let recTime = '';
+    if (r[2] instanceof Date) {
+      recTime = Utilities.formatDate(r[2], 'Asia/Bangkok', 'HH:mm:ss');
+    } else {
+      recTime = String(r[2] || '');
+      const tm = recTime.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+      if (tm) recTime = tm[1];
+    }
     const rec = {
       id: String(r[0] || ''),
       date: formatDate(r[1]),
-      recordedTime: String(r[2] || ''),
+      recordedTime: recTime,
       studentId: String(r[3] || ''),
       studentName: String(r[4] || ''),
       status: String(r[5] || 'มา'),
@@ -645,7 +653,24 @@ function readAttendance(ss) {
       gender: String(r[9] || ''),
       timestamp: String(r[10] || '')
     };
-    if (r[11]) rec.term = String(r[11]);
+    if (r[11]) {
+      let termVal = '';
+      if (r[11] instanceof Date) {
+        let yr = r[11].getFullYear();
+        if (yr < 2400) yr += 543;
+        const mo = r[11].getMonth() + 1;
+        termVal = yr + '/' + mo;
+      } else {
+        termVal = String(r[11]);
+        const m = termVal.match(/(\d{4})\s*\/\s*(\d+)/);
+        if (m) {
+          let yr = parseInt(m[1], 10);
+          if (yr < 2400) yr += 543;
+          termVal = yr + '/' + m[2];
+        }
+      }
+      rec.term = termVal;
+    }
     if (r[12]) rec.major = String(r[12]);
     if (r[13]) rec.level = String(r[13]);
     if (r[14]) rec.leaveReason = String(r[14]);
@@ -668,12 +693,20 @@ function upsertAttendance(ss, records) {
   const fresh = [];
   let updated = 0;
   records.forEach(function (r) {
+    let termStr = r.term ? String(r.term) : '';
+    if (termStr && !termStr.startsWith("'")) {
+      termStr = "'" + termStr;
+    }
+    let recTimeStr = r.recordedTime || Utilities.formatDate(now, 'Asia/Bangkok', 'HH:mm:ss');
+    if (recTimeStr && !recTimeStr.startsWith("'")) {
+      recTimeStr = "'" + recTimeStr;
+    }
     const row = [
       r.id || ('ATT_' + r.date + '_' + r.studentId), r.date,
-      r.recordedTime || Utilities.formatDate(now, 'Asia/Bangkok', 'HH:mm:ss'),
+      recTimeStr,
       String(r.studentId), r.studentName, r.status, r.teacherName, r.groupName, r.yearLevel, r.gender,
       r.timestamp || now.toISOString(),
-      r.term || '', r.major || '', r.level || '', r.leaveReason || '', r.sessionTopic || '', r.notes || ''
+      termStr, r.major || '', r.level || '', r.leaveReason || '', r.sessionTopic || '', r.notes || ''
     ];
     const key = r.date + '_' + r.studentId;
     if (map[key]) {

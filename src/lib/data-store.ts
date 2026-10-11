@@ -1299,13 +1299,122 @@ export function setCurrentTerm(settings: SemesterSettings): TermInfo {
   return info;
 }
 
-/** บันทึกนี้อยู่ในภาคการศึกษาที่กำหนดหรือไม่ (บันทึกเก่าที่ไม่มี term จะเทียบจากช่วงวันที่) */
+/**
+ * แปลงค่า term ให้เป็นรูปแบบมาตรฐานเสมอ เช่น "2569/1"
+ * รองรับทั้งค่าที่ Google Sheets แปลงเป็นข้อความ Date อัตโนมัติ (เช่น "Sun Jan 01 2569...")
+ * และข้อความภาษาไทย หรือ ค.ศ.
+ */
+export function normalizeTermKey(termRaw?: string | null): string {
+  if (!termRaw) return '';
+  const s = String(termRaw).trim();
+  if (!s) return '';
+
+  // 1. ตรวจสอบรูปแบบ "YYYY/term" มาตรฐาน เช่น "2569/1" หรือ "2568/2"
+  const cleanMatch = s.match(/(?:^|[^\d])(\d{4})\s*\/\s*(\d+)/);
+  if (cleanMatch) {
+    let y = parseInt(cleanMatch[1], 10);
+    if (y < 2400) y += 543; // แปลง ค.ศ. เป็น พ.ศ.
+    return `${y}/${cleanMatch[2]}`;
+  }
+
+  // 2. ดึงปี พ.ศ. หรือ ค.ศ.
+  let year = '';
+  const bYearMatch = s.match(/(25\d{2})/);
+  if (bYearMatch) {
+    year = bYearMatch[1];
+  } else {
+    const adYearMatch = s.match(/(20\d{2})/);
+    if (adYearMatch) {
+      year = String(parseInt(adYearMatch[1], 10) + 543);
+    }
+  }
+
+  if (year) {
+    // แยกเทอมจากเดือน หรือข้อความ
+    let sem = '1';
+    if (/feb|ก\.?พ\.?|-02-|\/02\/|\b02\b/i.test(s)) sem = '2';
+    else if (/mar|มี\.?ค\.?|-03-|\/03\/|\b03\b/i.test(s)) sem = '3';
+    else if (/ภาค(?:เรียนที่)?\s*2/i.test(s)) sem = '2';
+    else if (/ภาค(?:เรียนที่)?\s*3|ฤดูร้อน/i.test(s)) sem = '3';
+    else if (/ภาค(?:เรียนที่)?\s*1/i.test(s)) sem = '1';
+    return `${year}/${sem}`;
+  }
+
+  return s;
+}
+
+/**
+ * คาดการณ์ภาคการศึกษาจากวันที่บันทึก (สำหรับบันทึกที่ไม่มี term ระบุไว้)
+ */
+export function inferTermFromDate(
+  dateStr: string,
+  s: SemesterSettings = getSemesterSettings(),
+  history: TermInfo[] = getTermHistory()
+): string {
+  if (!dateStr) return getTermKey(s);
+
+  // 1. ตรวจสอบกับประวัติเทอมต่างๆ
+  for (const t of history) {
+    if (t.startDate && t.endDate && dateStr >= t.startDate && dateStr <= t.endDate) {
+      return normalizeTermKey(t.key);
+    }
+  }
+
+  // 2. ตรวจสอบกับเทอมปัจจุบัน
+  if (s.startDate && dateStr >= s.startDate) {
+    const newerTerm = history.find((t) => t.startDate && t.startDate > s.startDate! && t.startDate <= dateStr);
+    if (!newerTerm) return getTermKey(s);
+  }
+
+  // 3. คาดการณ์จากปี พ.ศ. ของวันที่
+  const yr = parseInt(dateStr.substring(0, 4), 10);
+  const mo = parseInt(dateStr.substring(5, 7), 10);
+  if (yr) {
+    const bYear = yr > 2500 ? yr : yr + 543;
+    const academicYear = mo >= 5 ? bYear : bYear - 1;
+    const semNo = (mo >= 5 && mo <= 10) ? '1' : (mo >= 11 || mo <= 3) ? '2' : '3';
+    return `${academicYear}/${semNo}`;
+  }
+
+  return getTermKey(s);
+}
+
+/** บันทึกนี้อยู่ในภาคการศึกษาที่กำหนดหรือไม่ */
 export function isRecordInTerm(r: AttendanceRecord, s: SemesterSettings = getSemesterSettings()): boolean {
-  if (r.term) return r.term === getTermKey(s);
-  // ยังไม่เคยตั้งภาคการศึกษาด้วยระบบใหม่ = แสดงบันทึกเก่าทั้งหมดเหมือนเดิม
-  if (getTermHistory().length === 0) return true;
+  const currentKey = getTermKey(s);
+  if (r.term) {
+    const norm = normalizeTermKey(r.term);
+    if (norm === currentKey) return true;
+    if (norm && norm.includes('/')) return false;
+  }
+
+  // ถ้ายังไม่เคยตั้งภาคการศึกษาเลย ให้แสดงบันทึกทั้งหมด
+  if (getTermHistory().length === 0 && !s.startDate) return true;
+
   if (s.startDate && r.date < s.startDate) return false;
-  if (s.endDate && r.date > s.endDate) return false;
+
+  // ตรวจสอบกับเทอมอื่นๆ ในประวัติ หากมีเทอมอื่นที่มีช่วงวันที่ตรงกับบันทึกนี้มากกว่า
+  const history = getTermHistory();
+  const matchedOther = history.find(
+    (t) => t.key !== currentKey && t.startDate && t.endDate && r.date >= t.startDate && r.date <= t.endDate
+  );
+  if (matchedOther) return false;
+
+  // ตรวจสอบปีการศึกษา: วันที่ในปี ค.ศ. เดียวกันถือว่าอยู่ในปีการศึกษานี้
+  const recYear = parseInt((r.date || '').substring(0, 4), 10);
+  const semYear = parseInt(s.academicYear, 10);
+  const adSemYear = semYear > 2500 ? semYear - 543 : semYear;
+  if (recYear && Math.abs(recYear - adSemYear) <= 1) {
+    return true;
+  }
+
+  if (s.endDate && r.date > s.endDate) {
+    const newerTerm = history.find(
+      (t) => t.key !== currentKey && t.startDate && t.startDate > (s.endDate || '') && t.startDate <= r.date
+    );
+    if (newerTerm) return false;
+  }
+
   return true;
 }
 

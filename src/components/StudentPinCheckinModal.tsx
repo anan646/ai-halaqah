@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { KeyRound, X, CheckCircle2, AlertCircle, Sparkles, User, Hash } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { getActiveStudents, findSessionByPin, getStudentMajor, getStudentLevel } from '@/lib/data-store';
+import { getActiveStudents, findSessionByPin, getStudentMajor, getStudentLevel, getTermKey } from '@/lib/data-store';
 import { AttendanceRecord } from '@/lib/types';
 import { saveAttendanceBatch } from '@/lib/api-client';
 
@@ -84,6 +84,7 @@ export const StudentPinCheckinModal: React.FC<StudentPinCheckinModalProps> = ({
         level: getStudentLevel(student),
         sessionTopic: session.topic,
         notes: 'เช็คชื่อด้วย PIN / QR Code',
+        term: getTermKey(),
       };
 
       await saveAttendanceBatch([record]);
