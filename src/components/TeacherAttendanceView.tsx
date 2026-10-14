@@ -46,6 +46,9 @@ import {
   formatTermLabel,
   STUDENTS_UPDATED_EVENT,
   TEACHERS_UPDATED_EVENT,
+  EASY_MODE_CHANGED_EVENT,
+  getEasyMode,
+  saveEasyMode,
 } from '@/lib/data-store';
 import { saveAttendanceBatch } from '@/lib/api-client';
 import { FeedbackModal } from './FeedbackModal';
@@ -84,13 +87,16 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       setTeachers(getActiveTeachers());
       setSemester(getSemesterSettings());
       setAllStudents(getActiveStudents());
+      setIsEasyMode(getEasyMode());
     };
     window.addEventListener(STUDENTS_UPDATED_EVENT, handleSync);
     window.addEventListener(TEACHERS_UPDATED_EVENT, handleSync);
+    window.addEventListener(EASY_MODE_CHANGED_EVENT, handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
       window.removeEventListener(STUDENTS_UPDATED_EVENT, handleSync);
       window.removeEventListener(TEACHERS_UPDATED_EVENT, handleSync);
+      window.removeEventListener(EASY_MODE_CHANGED_EVENT, handleSync);
       window.removeEventListener('storage', handleSync);
     };
   }, []);
@@ -105,21 +111,12 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
 
   // Senior / Easy Mode (โหมดตัวใหญ่ สบายตา สำหรับอาจารย์)
-  const [isEasyMode, setIsEasyMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('teacher_easy_mode') === 'true';
-    }
-    return false;
-  });
+  const [isEasyMode, setIsEasyMode] = useState<boolean>(() => getEasyMode());
 
   const toggleEasyMode = () => {
-    setIsEasyMode((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('teacher_easy_mode', String(next));
-      }
-      return next;
-    });
+    const next = !isEasyMode;
+    setIsEasyMode(next);
+    saveEasyMode(next);
   };
 
   // Reassurance Success Modal State

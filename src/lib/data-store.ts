@@ -80,6 +80,30 @@ export const ATTENDANCE_RECORDS_UPDATED_EVENT = 'halaqah_attendance_records_upda
 export const FEEDBACKS_UPDATED_EVENT = 'halaqah_feedbacks_updated_v1';
 export const STUDENTS_UPDATED_EVENT = 'halaqah_students_updated_v1';
 export const TEACHERS_UPDATED_EVENT = 'halaqah_teachers_updated_v1';
+export const EASY_MODE_CHANGED_EVENT = 'halaqah_easy_mode_changed_v1';
+
+const STORAGE_KEY_EASY_MODE = 'halaqah_easy_mode';
+
+export function getEasyMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const val = localStorage.getItem(STORAGE_KEY_EASY_MODE);
+    if (val !== null) return val === 'true';
+    return localStorage.getItem('teacher_easy_mode') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function saveEasyMode(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_EASY_MODE, String(enabled));
+    localStorage.setItem('teacher_easy_mode', String(enabled));
+    window.dispatchEvent(new CustomEvent(EASY_MODE_CHANGED_EVENT, { detail: enabled }));
+    window.dispatchEvent(new Event('storage'));
+  } catch {}
+}
 
 function getLocalAttendance(): any[] {
   if (typeof window === 'undefined') return [];
