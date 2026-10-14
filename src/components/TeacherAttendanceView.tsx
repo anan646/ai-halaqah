@@ -24,6 +24,7 @@ import {
   MessageSquare,
   ArrowUp,
   ArrowDown,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttendanceRecord, AttendanceStatus, GroupLevel, Teacher, Student, SemesterSettings } from '@/lib/types';
@@ -102,6 +103,36 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
   const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
+
+  // Senior / Easy Mode (โหมดตัวใหญ่ สบายตา สำหรับอาจารย์)
+  const [isEasyMode, setIsEasyMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('teacher_easy_mode') === 'true';
+    }
+    return false;
+  });
+
+  const toggleEasyMode = () => {
+    setIsEasyMode((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('teacher_easy_mode', String(next));
+      }
+      return next;
+    });
+  };
+
+  // Reassurance Success Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [savedSummary, setSavedSummary] = useState<{
+    date: string;
+    teacher: string;
+    group: string;
+    present: number;
+    absent: number;
+    leave: number;
+    total: number;
+  } | null>(null);
 
   useEffect(() => {
     const updateClock = () => {
@@ -443,6 +474,16 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           type: 'success',
           text: `บันทึกข้อมูลเรียบร้อยแล้ว (${groupStudents.length} คน)`,
         });
+        setSavedSummary({
+          date: formatThaiDate(selectedDate),
+          teacher: currentTeacher?.name || '',
+          group: currentTeacher?.groupName || '',
+          present: counts.present,
+          absent: counts.absent,
+          leave: counts.leave,
+          total: groupStudents.length,
+        });
+        setShowSuccessModal(true);
         isDirtyRef.current = false;
         onAttendanceSaved();
       } else {
@@ -514,33 +555,76 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
             <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
             <span>ข้อเสนอแนะ</span>
           </button>
+
+          {/* Toggle Easy / Senior Mode */}
+          <button
+            type="button"
+            onClick={toggleEasyMode}
+            className={`inline-flex items-center space-x-1.5 text-xs sm:text-sm font-black px-3.5 py-2 rounded-full border shadow-2xs transition-all active:scale-95 ${
+              isEasyMode
+                ? 'bg-amber-400 text-purple-950 border-amber-500 ring-2 ring-amber-300 shadow-amber-300/50'
+                : 'bg-white text-purple-900 border-purple-200 hover:bg-purple-50'
+            }`}
+            title="สลับโหมดตัวหนังสือใหญ่และปุ่มกดขนาดใหญ่ เพื่อความสบายตาในการใช้งาน"
+          >
+            <Sparkles className={`w-4 h-4 ${isEasyMode ? 'text-purple-950' : 'text-amber-600'}`} />
+            <span>{isEasyMode ? 'โหมดสบายตา (เปิดอยู่)' : '👓 โหมดตัวใหญ่ สบายตา'}</span>
+          </button>
         </div>
 
-        {/* Real-time Clock with Pulsing Dot */}
+        {/* Real-time Clock */}
         <div className="inline-flex items-center space-x-2 bg-white/90 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold text-purple-950 border border-purple-200/80 shadow-card ml-auto">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
+          {!isEasyMode && (
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          )}
           <Timer className="w-3.5 h-3.5 text-purple-700" />
           <span className="tabular-nums">{currentTime} น.</span>
         </div>
       </div>
 
+      {/* Easy Mode Welcome Banner */}
+      {isEasyMode && (
+        <div className="bg-gradient-to-r from-amber-100 via-amber-50 to-orange-50 border-2 border-amber-400 text-purple-950 p-4 sm:p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-fadeIn">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <span className="text-3xl sm:text-4xl shrink-0">👓</span>
+            <div className="min-w-0">
+              <div className="text-base sm:text-lg font-black text-purple-950 flex items-center gap-2">
+                <span>เปิดใช้งาน: โหมดตัวใหญ่ สบายตา (Easy Mode)</span>
+              </div>
+              <div className="text-xs sm:text-sm font-semibold text-purple-900/80 mt-0.5">
+                ขยายขนาดตัวหนังสือและปุ่มกดใหญ่พิเศษ ลดสิ่งรบกวนตา เช็คชื่อได้สะดวกใน 3 ขั้นตอน
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={toggleEasyMode}
+            className="px-4 py-2 bg-white border-2 border-amber-300 rounded-2xl text-xs sm:text-sm font-black text-purple-950 hover:bg-amber-50 shrink-0 shadow-sm self-end sm:self-auto"
+          >
+            กลับโหมดปกติ
+          </button>
+        </div>
+      )}
+
       {/* 2. หัวกลุ่ม + เลือกวันที่ (รวมไว้ในการ์ดเดียว) */}
-      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white shadow-xl shadow-purple-900/20">
+      <div className={`relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-purple-800 via-purple-900 to-indigo-950 text-white shadow-xl shadow-purple-900/20 ${isEasyMode ? 'ring-4 ring-amber-300/40' : ''}`}>
         <div className="absolute -top-16 -right-16 w-56 h-56 bg-fuchsia-400/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative p-5 sm:p-7 space-y-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
             <div className="min-w-0 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
-                <span className="px-2.5 py-0.5 rounded-full bg-white/15">{currentTeacher?.gender === 'ชาย' ? 'กลุ่มชาย' : 'กลุ่มหญิง'}</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-white/15">{currentTeacher?.yearLevel}</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-white/15">{termLabel}</span>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs font-bold">
+                <span className="px-3 py-1 rounded-full bg-white/15">{currentTeacher?.gender === 'ชาย' ? 'กลุ่มชาย' : 'กลุ่มหญิง'}</span>
+                <span className="px-3 py-1 rounded-full bg-white/15">{currentTeacher?.yearLevel}</span>
+                <span className="px-3 py-1 rounded-full bg-white/15">{termLabel}</span>
               </div>
-              <h1 className="text-xl sm:text-3xl font-black tracking-tight leading-snug">{currentTeacher?.name}</h1>
-              <p className="text-sm text-purple-200 flex items-center gap-1.5">
-                <Users className="w-4 h-4" /> {currentTeacher?.groupName} • {groupStudents.length} คน
+              <h1 className={`${isEasyMode ? 'text-2xl sm:text-4xl font-black text-amber-200' : 'text-xl sm:text-3xl font-black tracking-tight'} leading-snug`}>
+                {currentTeacher?.name}
+              </h1>
+              <p className={`${isEasyMode ? 'text-base font-bold text-white' : 'text-sm text-purple-200'} flex items-center gap-2`}>
+                <Users className={isEasyMode ? 'w-5 h-5 text-amber-300' : 'w-4 h-4'} /> {currentTeacher?.groupName} • นักศึกษา {groupStudents.length} คน
               </p>
             </div>
 
@@ -558,39 +642,51 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
           </div>
 
           {/* ตัวเลือกวัน */}
-          <div className="rounded-2xl bg-white text-purple-950 p-3 sm:p-4 flex flex-col md:flex-row md:items-center gap-3 shadow-lg">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <button type="button" onClick={() => changeDay(-1)} title="วันก่อนหน้า" className="w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
-                <ChevronLeft className="w-5 h-5" />
+          <div className={`rounded-2xl bg-white text-purple-950 p-3 sm:p-5 flex flex-col md:flex-row md:items-center gap-3 shadow-lg ${isEasyMode ? 'border-2 border-purple-200' : ''}`}>
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={() => changeDay(-1)}
+                title="วันก่อนหน้า"
+                className={`${isEasyMode ? 'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-purple-100 hover:bg-purple-200 text-purple-950' : 'w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800'} flex items-center justify-center shrink-0 transition active:scale-95`}
+              >
+                <ChevronLeft className={isEasyMode ? 'w-6 h-6 stroke-[2.5]' : 'w-5 h-5'} />
               </button>
               <button
                 type="button"
                 onClick={handleOpenCalendar}
-                className="flex-1 min-w-0 text-left px-3 py-1.5 rounded-xl hover:bg-purple-50 transition"
+                className="flex-1 min-w-0 text-left px-3 py-2 rounded-2xl hover:bg-purple-50 transition"
                 title="เลือกวันจากปฏิทิน"
               >
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5 text-purple-600 shrink-0" />
-                  <span className="text-lg sm:text-xl font-black truncate">{formatThaiDate(selectedDate)}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CalendarDays className={`${isEasyMode ? 'w-6 h-6 text-purple-800' : 'w-5 h-5 text-purple-600'} shrink-0`} />
+                  <span className={`${isEasyMode ? 'text-xl sm:text-2xl font-black' : 'text-lg sm:text-xl font-black'} truncate text-purple-950`}>
+                    {formatThaiDate(selectedDate)}
+                  </span>
                   {selectedDate === getTodayString() ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">วันนี้</span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">วันนี้</span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800">ย้อนหลัง</span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">ย้อนหลัง</span>
                   )}
                 </div>
-                <div className={`text-xs font-semibold mt-0.5 ${isDateAlreadySaved ? 'text-emerald-600' : 'text-purple-500'}`}>
-                  {isDateAlreadySaved ? '● บันทึกแล้ว แก้ไขและบันทึกซ้ำได้' : '○ ยังไม่ได้บันทึกวันนี้'}
+                <div className={`mt-1 font-bold ${isEasyMode ? 'text-sm' : 'text-xs'} ${isDateAlreadySaved ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {isDateAlreadySaved ? '● บันทึกแล้ว (สามารถแก้ไขและบันทึกซ้ำได้)' : '○ ยังไม่ได้บันทึกวันนี้'}
                 </div>
               </button>
-              <button type="button" onClick={() => changeDay(1)} title="วันถัดไป" className="w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
-                <ChevronRight className="w-5 h-5" />
+              <button
+                type="button"
+                onClick={() => changeDay(1)}
+                title="วันถัดไป"
+                className={`${isEasyMode ? 'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-purple-100 hover:bg-purple-200 text-purple-950' : 'w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800'} flex items-center justify-center shrink-0 transition active:scale-95`}
+              >
+                <ChevronRight className={isEasyMode ? 'w-6 h-6 stroke-[2.5]' : 'w-5 h-5'} />
               </button>
             </div>
             {selectedDate !== getTodayString() && (
               <button
                 type="button"
                 onClick={() => setSelectedDate(getTodayString())}
-                className="px-4 py-2.5 rounded-xl bg-purple-800 hover:bg-purple-900 text-white text-sm font-bold shrink-0"
+                className={`px-5 py-3 rounded-2xl bg-purple-800 hover:bg-purple-900 text-white font-black shrink-0 transition active:scale-95 ${isEasyMode ? 'text-base' : 'text-sm'}`}
               >
                 กลับวันนี้
               </button>
@@ -700,142 +796,220 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
       )}
 
       {/* 4. STUDENTS LIST HEADER & QUICK MARK ALL */}
-      <div className="flex items-center justify-between px-1">
-        <span className="text-xs sm:text-sm font-extrabold text-purple-950">
-          รายชื่อนักศึกษาในกลุ่ม ({groupStudents.length} คน)
-        </span>
-        <div className="flex items-center gap-1.5">
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 ${isEasyMode ? 'bg-purple-50/90 p-4 sm:p-5 rounded-3xl border-2 border-purple-200 shadow-sm' : ''}`}>
+        <div className="min-w-0">
+          <span className={`${isEasyMode ? 'text-base sm:text-xl font-black text-purple-950' : 'text-xs sm:text-sm font-extrabold text-purple-950'}`}>
+            รายชื่อนักศึกษาในกลุ่ม ({groupStudents.length} คน)
+          </span>
+          {isEasyMode && (
+            <p className="text-xs sm:text-sm text-purple-800 font-semibold mt-1">
+              💡 แนะนำ: กดปุ่มสีเขียว &ldquo;มาทุกคน&rdquo; แล้วแตะเปลี่ยนเฉพาะคนที่ &ldquo;ขาด&rdquo; หรือ &ldquo;ลา&rdquo; เพื่อความสะดวกรวดเร็ว
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => handleMarkAll('มา')}
-            className="text-xs font-bold px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 transition-all active:scale-95 shadow-sm"
+            className={`${
+              isEasyMode
+                ? 'text-sm sm:text-base font-black px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-700/25 active:scale-95 flex items-center gap-2'
+                : 'text-xs font-bold px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-900 transition-all active:scale-95 shadow-sm'
+            }`}
           >
-            มาทุกคน
+            <Check className={`${isEasyMode ? 'w-5 h-5 stroke-[3]' : 'w-3.5 h-3.5'}`} />
+            <span>{isEasyMode ? 'มาทุกคน (คลิกเดียว)' : 'มาทุกคน'}</span>
           </button>
           <button
             type="button"
             onClick={() => handleMarkAll('ขาด')}
-            className="text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 shadow-sm"
+            className={`${
+              isEasyMode
+                ? 'text-sm sm:text-base font-bold px-4 py-3 rounded-2xl bg-gray-200 hover:bg-gray-300 text-gray-800 transition-all active:scale-95'
+                : 'text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 shadow-sm'
+            }`}
           >
-            ขาดหมด
+            <span>{isEasyMode ? 'ขาดทั้งหมด' : 'ขาดหมด'}</span>
           </button>
         </div>
       </div>
 
       {/* 5. STUDENT CARDS (Finger-friendly Tactile Toggle) */}
-      <div className="space-y-2.5">
+      <div className={`space-y-${isEasyMode ? '3.5' : '2.5'}`}>
         {groupStudents.map((st, idx) => {
           const entry = attendanceMap[st.studentId] || { status: 'มา', time: currentTime };
           return (
             <div
               key={st.studentId}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-white border transition-all duration-200 shadow-card hover:shadow-card-hover ${
+              className={`transition-all duration-200 ${
+                isEasyMode
+                  ? 'p-4 sm:p-5 rounded-3xl bg-white border-2 shadow-card hover:shadow-card-hover'
+                  : 'p-3.5 sm:p-4 rounded-2xl bg-white border shadow-card hover:shadow-card-hover'
+              } ${
                 entry.status === 'ขาด'
-                  ? 'border-rose-300 bg-rose-50/20'
+                  ? 'border-rose-400 bg-rose-50/25'
                   : entry.status === 'ลา'
-                  ? 'border-amber-300 bg-amber-50/20'
+                  ? 'border-amber-400 bg-amber-50/25'
+                  : isEasyMode
+                  ? 'border-purple-200/90'
                   : 'border-purple-100/90'
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 {/* Student Info */}
-                <div className="flex items-start space-x-3 min-w-0">
-                  <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-900 text-xs font-mono font-extrabold flex items-center justify-center shrink-0 mt-0.5 border border-purple-200/60">
+                <div className="flex items-start space-x-3 sm:space-x-4 min-w-0">
+                  <span
+                    className={`${
+                      isEasyMode
+                        ? 'w-11 h-11 text-base font-black rounded-2xl bg-purple-100 text-purple-950 border-2 border-purple-200'
+                        : 'w-7 h-7 text-xs font-mono font-extrabold rounded-full bg-purple-100 text-purple-900 border border-purple-200/60'
+                    } flex items-center justify-center shrink-0 mt-0.5`}
+                  >
                     {idx + 1}
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-extrabold text-purple-950 truncate flex items-center gap-2 flex-wrap">
-                      <span>{st.fullName}</span>
-                      {/* Student Level Badge & Quick Steppers */}
-                      <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/90 px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-900 shadow-2xs">
-                        <Award className="w-3 h-3 text-amber-600" />
-                        <span>ระดับ {getStudentLevel(st)}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePromoteStudent(st.studentId);
-                          }}
-                          title="เลื่อนระดับนักศึกษา (01 -> 02 -> 03)"
-                          className="hover:text-emerald-700 hover:bg-emerald-100 rounded px-0.5 transition cursor-pointer"
-                        >
-                          <ArrowUp className="w-2.5 h-2.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDemoteStudent(st.studentId);
-                          }}
-                          title="ลดระดับนักศึกษา (03 -> 02 -> 01)"
-                          className="hover:text-rose-700 hover:bg-rose-100 rounded px-0.5 transition cursor-pointer"
-                        >
-                          <ArrowDown className="w-2.5 h-2.5" />
-                        </button>
+                    <div className="truncate flex items-center gap-2 flex-wrap">
+                      <span className={`${isEasyMode ? 'text-lg sm:text-2xl font-black text-purple-950' : 'text-sm font-extrabold text-purple-950'}`}>
+                        {st.fullName}
                       </span>
-                    </div>
-                    <div className="text-[11px] font-mono text-purple-800/70 flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span>รหัส {st.studentId}</span>
-                      <span>•</span>
-                      <span className="text-purple-700 font-semibold flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-purple-500" />
-                        <span className="tabular-nums">{entry.time || '-'}</span>
-                      </span>
-                      <span>•</span>
-                      <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-sans font-bold border border-purple-200">
-                        🎓 {getStudentMajor(st)}
-                      </span>
-                      {entry.status === 'ลา' && (
-                        <span
-                          onClick={() => {
-                            const newR = window.prompt('แก้ไขเหตุผลการลา:', leaveReasonMap[st.studentId] || 'ลากิจ');
-                            if (newR) setLeaveReasonMap((prev) => ({ ...prev, [st.studentId]: newR.trim() }));
-                          }}
-                          className="px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-sans font-bold border border-amber-300 cursor-pointer"
-                          title="คลิกเพื่อแก้ไขเหตุผลการลา"
-                        >
-                          📝 เหตุผล: {leaveReasonMap[st.studentId] || 'ลากิจ'}
+                      {/* In standard mode, show small stepper badge */}
+                      {!isEasyMode && (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/90 px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-900 shadow-2xs">
+                          <Award className="w-3 h-3 text-amber-600" />
+                          <span>ระดับ {getStudentLevel(st)}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePromoteStudent(st.studentId);
+                            }}
+                            title="เลื่อนระดับนักศึกษา (01 -> 02 -> 03)"
+                            className="hover:text-emerald-700 hover:bg-emerald-100 rounded px-0.5 transition cursor-pointer"
+                          >
+                            <ArrowUp className="w-2.5 h-2.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDemoteStudent(st.studentId);
+                            }}
+                            title="ลดระดับนักศึกษา (03 -> 02 -> 01)"
+                            className="hover:text-rose-700 hover:bg-rose-100 rounded px-0.5 transition cursor-pointer"
+                          >
+                            <ArrowDown className="w-2.5 h-2.5" />
+                          </button>
                         </span>
                       )}
                     </div>
+
+                    {/* Subtitle details */}
+                    {isEasyMode ? (
+                      <div className="text-xs sm:text-sm font-bold text-purple-800 flex items-center gap-2.5 mt-1 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-xl bg-purple-100 text-purple-900 border border-purple-200">
+                          รหัส {st.studentId}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-xl bg-amber-100 text-amber-950 border border-amber-300">
+                          ระดับ {getStudentLevel(st)}
+                        </span>
+                        {entry.status === 'ลา' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newR = window.prompt('แก้ไขเหตุผลการลา:', leaveReasonMap[st.studentId] || 'ลากิจ');
+                              if (newR) setLeaveReasonMap((prev) => ({ ...prev, [st.studentId]: newR.trim() }));
+                            }}
+                            className="px-3 py-1 rounded-xl bg-amber-200 hover:bg-amber-300 text-amber-950 font-black border-2 border-amber-400 text-xs sm:text-sm cursor-pointer shadow-2xs"
+                            title="คลิกเพื่อแก้ไขเหตุผลการลา"
+                          >
+                            📝 เหตุผล: {leaveReasonMap[st.studentId] || 'ลากิจ'} (แตะแก้ไข)
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-mono text-purple-800/70 flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span>รหัส {st.studentId}</span>
+                        <span>•</span>
+                        <span className="text-purple-700 font-semibold flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-purple-500" />
+                          <span className="tabular-nums">{entry.time || '-'}</span>
+                        </span>
+                        <span>•</span>
+                        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-sans font-bold border border-purple-200">
+                          🎓 {getStudentMajor(st)}
+                        </span>
+                        {entry.status === 'ลา' && (
+                          <span
+                            onClick={() => {
+                              const newR = window.prompt('แก้ไขเหตุผลการลา:', leaveReasonMap[st.studentId] || 'ลากิจ');
+                              if (newR) setLeaveReasonMap((prev) => ({ ...prev, [st.studentId]: newR.trim() }));
+                            }}
+                            className="px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-sans font-bold border border-amber-300 cursor-pointer"
+                            title="คลิกเพื่อแก้ไขเหตุผลการลา"
+                          >
+                            📝 เหตุผล: {leaveReasonMap[st.studentId] || 'ลากิจ'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-
-                {/* Big Segmented Status Buttons (Min 44px touch target) */}
-                <div className="flex items-center space-x-1.5 w-full sm:w-auto pt-1 sm:pt-0">
+                {/* Big Segmented Status Buttons */}
+                <div className={`flex items-center ${isEasyMode ? 'space-x-2 sm:space-x-3 pt-2 sm:pt-0' : 'space-x-1.5 pt-1 sm:pt-0'} w-full sm:w-auto`}>
                   <button
                     type="button"
                     onClick={() => handleStatusChange(st.studentId, 'มา')}
-                    className={`flex-1 sm:w-16 h-11 rounded-xl text-xs font-extrabold transition-all duration-200 flex items-center justify-center active:scale-95 ${
+                    className={`flex-1 ${
+                      isEasyMode
+                        ? 'sm:w-24 sm:min-w-[96px] h-14 sm:h-16 rounded-2xl text-base sm:text-lg font-black'
+                        : 'sm:w-16 h-11 rounded-xl text-xs font-extrabold'
+                    } transition-all duration-200 flex items-center justify-center active:scale-95 ${
                       entry.status === 'มา'
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-700/25 ring-2 ring-emerald-500/20'
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-700/25 ring-4 ring-emerald-500/25'
+                        : isEasyMode
+                        ? 'bg-purple-50 text-purple-950 border-2 border-purple-200 hover:bg-emerald-50 hover:text-emerald-800'
                         : 'bg-purple-50/80 text-purple-900 hover:bg-emerald-50 hover:text-emerald-700'
                     }`}
                   >
-                    มา
+                    {isEasyMode && <Check className="w-5 h-5 mr-1 stroke-[3]" />}
+                    <span>มา</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleStatusChange(st.studentId, 'ขาด')}
-                    className={`flex-1 sm:w-16 h-11 rounded-xl text-xs font-extrabold transition-all duration-200 flex items-center justify-center active:scale-95 ${
+                    className={`flex-1 ${
+                      isEasyMode
+                        ? 'sm:w-24 sm:min-w-[96px] h-14 sm:h-16 rounded-2xl text-base sm:text-lg font-black'
+                        : 'sm:w-16 h-11 rounded-xl text-xs font-extrabold'
+                    } transition-all duration-200 flex items-center justify-center active:scale-95 ${
                       entry.status === 'ขาด'
-                        ? 'bg-rose-600 text-white shadow-md shadow-rose-700/25 ring-2 ring-rose-500/20'
+                        ? 'bg-rose-600 text-white shadow-lg shadow-rose-700/25 ring-4 ring-rose-500/25'
+                        : isEasyMode
+                        ? 'bg-purple-50 text-purple-950 border-2 border-purple-200 hover:bg-rose-50 hover:text-rose-800'
                         : 'bg-purple-50/80 text-purple-900 hover:bg-rose-50 hover:text-rose-700'
                     }`}
                   >
-                    ขาด
+                    {isEasyMode && <XCircle className="w-5 h-5 mr-1 stroke-[2.5]" />}
+                    <span>ขาด</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleStatusChange(st.studentId, 'ลา')}
-                    className={`flex-1 sm:w-16 h-11 rounded-xl text-xs font-extrabold transition-all duration-200 flex items-center justify-center active:scale-95 ${
+                    className={`flex-1 ${
+                      isEasyMode
+                        ? 'sm:w-24 sm:min-w-[96px] h-14 sm:h-16 rounded-2xl text-base sm:text-lg font-black'
+                        : 'sm:w-16 h-11 rounded-xl text-xs font-extrabold'
+                    } transition-all duration-200 flex items-center justify-center active:scale-95 ${
                       entry.status === 'ลา'
-                        ? 'bg-amber-500 text-white shadow-md shadow-amber-600/25 ring-2 ring-amber-500/20'
+                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-600/25 ring-4 ring-amber-500/25'
+                        : isEasyMode
+                        ? 'bg-purple-50 text-purple-950 border-2 border-purple-200 hover:bg-amber-50 hover:text-amber-800'
                         : 'bg-purple-50/80 text-purple-900 hover:bg-amber-50 hover:text-amber-700'
                     }`}
                   >
-                    ลา
+                    {isEasyMode && <Clock className="w-5 h-5 mr-1 stroke-[2.5]" />}
+                    <span>ลา</span>
                   </button>
                 </div>
               </div>
@@ -844,27 +1018,81 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
         })}
       </div>
 
-
       {/* 7. FLOATING ISLAND SAVE ACTION BAR (Mobile-First Thumb-Friendly) */}
       <div className="fixed bottom-20 sm:bottom-4 left-0 right-0 px-3 sm:px-4 z-30 pointer-events-none">
-        <div className="max-w-xl mx-auto bg-white/95 backdrop-blur-xl border border-purple-200/90 shadow-[0_12px_40px_rgba(126,34,206,0.18)] rounded-full p-2 sm:p-2.5 flex items-center justify-between gap-3 pointer-events-auto transition-all">
-          <div className="pl-3 sm:pl-4 text-xs font-extrabold text-purple-950 hidden sm:block">
-            มา <span className="text-emerald-700 font-black">{counts.present}</span> • ขาด <span className="text-rose-700 font-black">{counts.absent}</span> • ลา <span className="text-amber-700 font-black">{counts.leave}</span>
+        <div
+          className={`max-w-xl mx-auto bg-white/95 backdrop-blur-xl border border-purple-200/90 shadow-[0_12px_40px_rgba(126,34,206,0.18)] rounded-full p-2 sm:p-2.5 flex items-center justify-between gap-3 pointer-events-auto transition-all ${
+            isEasyMode ? 'ring-4 ring-purple-300/60 p-3 sm:p-3.5 max-w-2xl' : ''
+          }`}
+        >
+          <div className={`pl-3 sm:pl-4 font-black text-purple-950 hidden sm:block ${isEasyMode ? 'text-sm sm:text-base' : 'text-xs'}`}>
+            มา <span className="text-emerald-700 font-black">{counts.present}</span> • ขาด{' '}
+            <span className="text-rose-700 font-black">{counts.absent}</span> • ลา{' '}
+            <span className="text-amber-700 font-black">{counts.leave}</span>
           </div>
 
           <button
             type="button"
             onClick={handleSaveAttendance}
             disabled={isSaving}
-            className="w-full sm:w-auto h-12 px-7 bg-gradient-to-r from-purple-800 to-purple-700 hover:from-purple-900 hover:to-purple-800 text-white font-extrabold text-xs sm:text-sm rounded-full shadow-md shadow-purple-900/25 transition-all duration-200 flex items-center justify-center space-x-2 active:scale-95 disabled:opacity-50 ml-auto group"
+            className={`w-full sm:w-auto px-7 bg-gradient-to-r from-purple-800 to-purple-700 hover:from-purple-900 hover:to-purple-800 text-white font-black rounded-full shadow-md shadow-purple-900/25 transition-all duration-200 flex items-center justify-center space-x-2.5 active:scale-95 disabled:opacity-50 ml-auto group ${
+              isEasyMode ? 'h-14 sm:h-16 px-8 sm:px-10 text-base sm:text-lg ring-2 ring-purple-400' : 'h-12 text-xs sm:text-sm'
+            }`}
           >
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-              <Save className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : 'group-hover:scale-110 transition-transform'}`} />
+            <div className={`rounded-full bg-white/20 flex items-center justify-center ${isEasyMode ? 'w-8 h-8' : 'w-6 h-6'}`}>
+              <Save
+                className={`${isEasyMode ? 'w-5 h-5' : 'w-3.5 h-3.5'} ${
+                  isSaving ? 'animate-spin' : 'group-hover:scale-110 transition-transform'
+                }`}
+              />
             </div>
             <span>{isSaving ? 'กำลังบันทึกข้อมูล...' : 'บันทึกผลการเช็คชื่อ'}</span>
           </button>
         </div>
       </div>
+
+      {/* Success Reassurance Modal for Teachers */}
+      {showSuccessModal && savedSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-purple-950/75 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border-4 border-emerald-500 text-center space-y-5 animate-scaleUp">
+            <div className="w-20 h-20 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+            <div>
+              <h3 className="text-2xl sm:text-3xl font-black text-purple-950">บันทึกข้อมูลสำเร็จแล้ว!</h3>
+              <p className="text-sm sm:text-base font-bold text-purple-800 mt-1">ประจำ{savedSummary.date}</p>
+              <p className="text-xs sm:text-sm text-purple-600 mt-0.5">{savedSummary.teacher} ({savedSummary.group})</p>
+            </div>
+
+            <div className="bg-purple-50/80 rounded-2xl p-4 grid grid-cols-3 gap-2.5 border border-purple-200">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5">
+                <div className="text-xs font-bold text-emerald-800">มา</div>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-700">{savedSummary.present}</div>
+              </div>
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-2.5">
+                <div className="text-xs font-bold text-rose-800">ขาด</div>
+                <div className="text-2xl sm:text-3xl font-black text-rose-700">{savedSummary.absent}</div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-2.5">
+                <div className="text-xs font-bold text-amber-800">ลา</div>
+                <div className="text-2xl sm:text-3xl font-black text-amber-700">{savedSummary.leave}</div>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-purple-700 font-semibold bg-emerald-50/80 border border-emerald-200 p-2.5 rounded-xl">
+              ✓ ข้อมูลส่งเข้าสู่ระบบฐานข้อมูลกลางเรียบร้อย อาจารย์สามารถปิดหน้าต่างนี้ได้ทันที
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-base sm:text-lg shadow-lg shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
+            >
+              ตกลง / ปิดหน้าต่างนี้
+            </button>
+          </div>
+        </div>
+      )}
 
       <FeedbackModal
         isOpen={isFeedbackOpen}
