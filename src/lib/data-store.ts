@@ -61,6 +61,35 @@ export function getDeletedTeacherNames(): Set<string> {
   }
 }
 
+/**
+ * ฟังก์ชันจัดรูปแบบชื่ออาจารย์สำหรับเปรียบเทียบ (กำจัดปัญหาช่องว่างซ้ำ, ไม่เว้นวรรคหลัง อ./อาจารย์, ตัวพิมพ์)
+ */
+export function normalizeTeacherName(name: string): string {
+  if (!name) return '';
+  return name
+    .replace(/[\s\u00a0]+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/^(อาจารย์|อ\.)\s*/i, 'อาจารย์ ');
+}
+
+/**
+ * ตัดรายชื่ออาจารย์ที่ซ้ำกันออก ให้เหลือเพียงรายการเดียว
+ */
+export function deduplicateTeachers(teachers: Teacher[]): Teacher[] {
+  if (!Array.isArray(teachers)) return [];
+  const seen = new Set<string>();
+  const result: Teacher[] = [];
+  for (const t of teachers) {
+    if (!t || !t.name) continue;
+    const k = normalizeTeacherName(t.name);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    result.push(t);
+  }
+  return result;
+}
+
 export function addDeletedTeacherName(teacherName: string): void {
   if (typeof window === 'undefined' || !teacherName) return;
   const set = getDeletedTeacherNames();
@@ -71,9 +100,9 @@ export function addDeletedTeacherName(teacherName: string): void {
 export function removeDeletedTeacherName(teacherName: string): void {
   if (typeof window === 'undefined' || !teacherName) return;
   const set = getDeletedTeacherNames();
-  const clean = teacherName.trim().toLowerCase();
+  const cleanNorm = normalizeTeacherName(teacherName);
   for (const item of Array.from(set)) {
-    if (item.trim().toLowerCase() === clean) {
+    if (normalizeTeacherName(item) === cleanNorm || item.trim().toLowerCase() === teacherName.trim().toLowerCase()) {
       set.delete(item);
     }
   }
@@ -353,9 +382,12 @@ export function saveActiveStudents(students: Student[]): void {
 
 export function getActiveTeachers(): Teacher[] {
   const deletedNames = getDeletedTeacherNames();
+  const deletedSetNorm = new Set(Array.from(deletedNames).map(normalizeTeacherName));
   const filterDeleted = (list: Teacher[]) => {
-    if (deletedNames.size === 0) return list;
-    return list.filter((t) => !deletedNames.has((t.name || '').trim()));
+    const nonDeleted = deletedNames.size === 0
+      ? list
+      : list.filter((t) => !deletedSetNorm.has(normalizeTeacherName(t.name)));
+    return deduplicateTeachers(nonDeleted);
   };
 
   if (typeof window === 'undefined') return filterDeleted(INITIAL_TEACHERS.map(hydrateTeacher));
@@ -390,9 +422,13 @@ export function getActiveTeachers(): Teacher[] {
 export function saveActiveTeachers(teachers: Teacher[]): void {
   if (typeof window === 'undefined') return;
   const deletedNames = getDeletedTeacherNames();
-  const filtered = deletedNames.size > 0 ? teachers.filter((t) => !deletedNames.has((t.name || '').trim())) : teachers;
-  localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(filtered));
-  window.dispatchEvent(new CustomEvent(TEACHERS_UPDATED_EVENT, { detail: filtered }));
+  const deletedSetNorm = new Set(Array.from(deletedNames).map(normalizeTeacherName));
+  const nonDeleted = deletedNames.size > 0
+    ? teachers.filter((t) => !deletedSetNorm.has(normalizeTeacherName(t.name)))
+    : teachers;
+  const deduped = deduplicateTeachers(nonDeleted);
+  localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(deduped));
+  window.dispatchEvent(new CustomEvent(TEACHERS_UPDATED_EVENT, { detail: deduped }));
   window.dispatchEvent(new Event('storage'));
 }
 
@@ -555,48 +591,84 @@ export function updateStudentInfo(
 // 3. แก้ไขข้อมูลอาจารย์ (ชื่อ, กลุ่ม, ชั้นปี, เพศ)
 export function updateTeacherInfo(
   oldTeacherName: string,
-  newData: { name: string; groupName: string; yearLevel: string; gender: 'ชาย' | 'หญิง' }
-): { success: boolean; message: string } {
+  newData: { name: string; groupName: string; yearLevel: string; gender: 'ชาย' | 'หญิง'; groupId?: string }
+): { success: boolean; message: string; oldName?: string; newName?: string } {
   const teachers = getActiveTeachers();
-  let tIdx = teachers.findIndex((t) => t.name === oldTeacherName);
-  if (tIdx === -1 && newData.name) {
-    tIdx = teachers.findIndex((t) => t.name === newData.name.trim());
+  const oldNorm = normalizeTeacherName(oldTeacherName);
+  const newNorm = normalizeTeacherName(newData.name);
+  const targetGroupId = newData.groupId ? newData.groupId.trim() : '';
+
+  let tIdx = -1;
+  if (targetGroupId) {
+    tIdx = teachers.findIndex((t) => t.groupId && t.groupId.trim() === targetGroupId);
+  }
+  if (tIdx === -1 && oldNorm) {
+    tIdx = teachers.findIndex((t) => normalizeTeacherName(t.name) === oldNorm);
+  }
+  if (tIdx === -1 && newNorm) {
+    tIdx = teachers.findIndex((t) => normalizeTeacherName(t.name) === newNorm);
   }
 
   if (tIdx === -1) {
     return { success: false, message: 'ไม่พบอาจารย์ที่จะแก้ไขในระบบ' };
   }
 
-  const targetOldTeacherName = teachers[tIdx].name;
+  const targetOldTeacher = teachers[tIdx];
+  const targetOldTeacherName = targetOldTeacher.name;
   const newTeacherName = newData.name.trim();
 
-  // If name changed, check duplicate
-  if (newTeacherName !== targetOldTeacherName) {
-    const isDup = teachers.some((t, idx) => idx !== tIdx && t.name === newTeacherName);
+  // If name changed to another existing teacher, check duplicate
+  if (newNorm !== normalizeTeacherName(targetOldTeacherName)) {
+    const isDup = teachers.some((t, idx) => idx !== tIdx && normalizeTeacherName(t.name) === newNorm);
     if (isDup) {
       return { success: false, message: `ชื่ออาจารย์ "${newTeacherName}" มีอยู่ในระบบแล้ว` };
     }
   }
 
   const updatedTeacher: Teacher = {
-    ...teachers[tIdx],
+    ...targetOldTeacher,
     name: newTeacherName,
     groupName: newData.groupName.trim(),
     yearLevel: newData.yearLevel.trim(),
     gender: newData.gender,
+    groupId: targetGroupId || targetOldTeacher.groupId || `t_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
   };
 
   removeDeletedTeacherName(newTeacherName);
-  if (targetOldTeacherName !== newTeacherName) removeDeletedTeacherName(targetOldTeacherName);
+  if (normalizeTeacherName(targetOldTeacherName) !== newNorm) {
+    addDeletedTeacherName(targetOldTeacherName);
+  }
 
-  teachers[tIdx] = updatedTeacher;
-  saveActiveTeachers(teachers);
+  // Replace target teacher and clean any duplicates in the list
+  const updatedList: Teacher[] = [];
+  const seenKeys = new Set<string>();
+  for (let i = 0; i < teachers.length; i++) {
+    if (i === tIdx) {
+      seenKeys.add(newNorm);
+      updatedList.push(updatedTeacher);
+    } else {
+      const cur = teachers[i];
+      const curNorm = normalizeTeacherName(cur.name);
+      if (curNorm === oldNorm || curNorm === newNorm) continue;
+      if (targetGroupId && cur.groupId && cur.groupId.trim() === targetGroupId) continue;
+      if (!seenKeys.has(curNorm)) {
+        seenKeys.add(curNorm);
+        updatedList.push(cur);
+      }
+    }
+  }
+
+  saveActiveTeachers(updatedList);
 
   // Cascade to all students assigned to this teacher
   const students = getActiveStudents();
   let affectedStudentsCount = 0;
   const updatedStudents = students.map((s) => {
-    if (s.teacherName === targetOldTeacherName) {
+    if (
+      normalizeTeacherName(s.teacherName) === oldNorm ||
+      normalizeTeacherName(s.teacherName) === newNorm ||
+      (s.teacherName && s.teacherName.trim() === targetOldTeacherName.trim())
+    ) {
       affectedStudentsCount++;
       return {
         ...s,
@@ -604,6 +676,7 @@ export function updateTeacherInfo(
         groupName: updatedTeacher.groupName,
         yearLevel: updatedTeacher.yearLevel,
         gender: updatedTeacher.gender,
+        groupId: updatedTeacher.groupId,
       };
     }
     return s;
@@ -616,7 +689,11 @@ export function updateTeacherInfo(
     const records = getLocalAttendance();
     let hasUpdate = false;
     const updatedRecords = records.map((r) => {
-      if (r.teacherName === targetOldTeacherName) {
+      if (
+        normalizeTeacherName(r.teacherName) === oldNorm ||
+        normalizeTeacherName(r.teacherName) === newNorm ||
+        (r.teacherName && r.teacherName.trim() === targetOldTeacherName.trim())
+      ) {
         hasUpdate = true;
         return {
           ...r,
@@ -634,6 +711,8 @@ export function updateTeacherInfo(
   return {
     success: true,
     message: `แก้ไขข้อมูลอาจารย์ "${updatedTeacher.name}" และอัปเดตนักศึกษาในกลุ่ม ${affectedStudentsCount} คน สำเร็จแล้ว`,
+    oldName: targetOldTeacherName,
+    newName: newTeacherName,
   };
 }
 
@@ -767,21 +846,22 @@ export function addTeachersBatch(newTeachers: Teacher[]): {
   }
 
   const current = getActiveTeachers();
-  const nameSet = new Set(current.map((t) => (t.name || '').trim()));
+  const nameSet = new Set(current.map((t) => normalizeTeacherName(t.name)));
   const toAdd: Teacher[] = [];
   let skipped = 0;
 
   for (const item of newTeachers) {
     const cleanName = (item.name || '').trim();
-    if (!cleanName) {
+    const normKey = normalizeTeacherName(cleanName);
+    if (!cleanName || !normKey) {
       skipped++;
       continue;
     }
-    if (nameSet.has(cleanName)) {
+    if (nameSet.has(normKey)) {
       skipped++;
       continue;
     }
-    nameSet.add(cleanName);
+    nameSet.add(normKey);
     removeDeletedTeacherName(cleanName);
     toAdd.push({
       name: cleanName,
@@ -858,9 +938,10 @@ export function deleteStudentsBatch(
 // 10. ลบอาจารย์
 export function deleteTeacher(teacherName: string): { success: boolean; message: string } {
   const cleanName = (teacherName || '').trim();
+  const normKey = normalizeTeacherName(cleanName);
   addDeletedTeacherName(cleanName);
   const current = getActiveTeachers();
-  const updated = current.filter((t) => (t.name || '').trim() !== cleanName);
+  const updated = current.filter((t) => normalizeTeacherName(t.name) !== normKey);
   saveActiveTeachers(updated);
   return { success: true, message: `ลบอาจารย์ ${cleanName} เรียบร้อยแล้ว` };
 }

@@ -75,6 +75,7 @@ import {
   moveStudentToTeacher,
   updateStudentInfo,
   updateTeacherInfo,
+  normalizeTeacherName,
   resetToInitialData,
   getFacultyPassword,
   saveFacultyPassword,
@@ -812,12 +813,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       groupName: editingTeacher.groupName,
       yearLevel: editingTeacher.yearLevel,
       gender: editingTeacher.gender,
+      groupId: editingTeacher.groupId,
     });
     setEditorMsg({ text: res.message, success: res.success });
     if (res.success) {
       reloadDataStore();
       setEditingTeacher(null);
       setOriginalTeacherName('');
+      if (res.oldName && res.newName && normalizeTeacherName(res.oldName) !== normalizeTeacherName(res.newName)) {
+        pushDeleteTeacher(res.oldName).catch(() => null);
+      }
       backupAllToGoogleSheet().catch(() => null);
     }
   };
@@ -4610,7 +4615,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setOriginalTeacherName(t.name);
-                                  setEditingTeacher(t);
+                                  setEditingTeacher({ ...t });
                                 }}
                                 className="inline-flex items-center space-x-1 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold text-[11px] transition-all"
                               >

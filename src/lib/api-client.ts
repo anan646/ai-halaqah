@@ -22,6 +22,7 @@ import {
   saveFacultyPassword,
   getDeletedStudentIds,
   getDeletedTeacherNames,
+  normalizeTeacherName,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
   getTermKey,
   normalizeTermKey,
@@ -362,12 +363,11 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
       saveActiveStudents(d.students.filter((s: Student) => !deletedStudents.has((s.studentId || '').trim())));
     }
     if (Array.isArray(d.teachers) && d.teachers.length) {
-      const cleanLower = (s: string) => (s || '').trim().toLowerCase();
-      const deletedSetLower = new Set(Array.from(deletedTeachers).map(cleanLower));
-      const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetLower.has(cleanLower(t.name)));
-      const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => cleanLower(t.name)));
+      const deletedSetNorm = new Set(Array.from(deletedTeachers).map(normalizeTeacherName));
+      const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetNorm.has(normalizeTeacherName(t.name)));
+      const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => normalizeTeacherName(t.name)));
       const localTeachers = getActiveTeachers().filter(
-        (t) => !deletedSetLower.has(cleanLower(t.name)) && !remoteNames.has(cleanLower(t.name))
+        (t) => !deletedSetNorm.has(normalizeTeacherName(t.name)) && !remoteNames.has(normalizeTeacherName(t.name))
       );
       saveActiveTeachers([...filteredRemoteTeachers, ...localTeachers]);
     }
@@ -449,12 +449,11 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
   const deletedTeachers = getDeletedTeacherNames();
 
   if (d.teachers && Array.isArray(d.teachers) && d.teachers.length) {
-    const cleanLower = (s: string) => (s || '').trim().toLowerCase();
-    const deletedSetLower = new Set(Array.from(deletedTeachers).map(cleanLower));
-    const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetLower.has(cleanLower(t.name)));
-    const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => cleanLower(t.name)));
+    const deletedSetNorm = new Set(Array.from(deletedTeachers).map(normalizeTeacherName));
+    const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetNorm.has(normalizeTeacherName(t.name)));
+    const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => normalizeTeacherName(t.name)));
     const localTeachers = getActiveTeachers().filter(
-      (t) => !deletedSetLower.has(cleanLower(t.name)) && !remoteNames.has(cleanLower(t.name))
+      (t) => !deletedSetNorm.has(normalizeTeacherName(t.name)) && !remoteNames.has(normalizeTeacherName(t.name))
     );
     saveActiveTeachers([...filteredRemoteTeachers, ...localTeachers]);
   }
