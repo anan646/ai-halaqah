@@ -818,6 +818,7 @@ export function addStudentsBatch(newStudents: Student[]): {
   const current = getActiveStudents();
   const idSet = new Set(current.map((s) => (s.studentId || '').trim()));
   const toAdd: Student[] = [];
+  let updatedCount = 0;
   let skipped = 0;
 
   for (const item of newStudents) {
@@ -826,13 +827,26 @@ export function addStudentsBatch(newStudents: Student[]): {
       skipped++;
       continue;
     }
+    removeDeletedStudentId(cleanId);
+
     if (idSet.has(cleanId)) {
-      // อัปเดตข้อมูลหรือข้าม
-      skipped++;
+      const idx = current.findIndex((s) => (s.studentId || '').trim() === cleanId);
+      if (idx !== -1) {
+        current[idx] = {
+          ...current[idx],
+          fullName: (item.fullName || '').trim() || current[idx].fullName,
+          gender: item.gender || current[idx].gender,
+          yearLevel: (item.yearLevel || '').trim() || current[idx].yearLevel,
+          groupName: (item.groupName || '').trim() || current[idx].groupName,
+          teacherName: (item.teacherName || '').trim() || current[idx].teacherName,
+          groupId: item.groupId || current[idx].groupId,
+          major: (item.major || '').trim() || current[idx].major,
+        };
+        updatedCount++;
+      }
       continue;
     }
     idSet.add(cleanId);
-    removeDeletedStudentId(cleanId);
     toAdd.push({
       studentId: cleanId,
       fullName: (item.fullName || '').trim() || `นักศึกษา (${cleanId})`,
@@ -845,14 +859,15 @@ export function addStudentsBatch(newStudents: Student[]): {
     });
   }
 
-  if (toAdd.length > 0) {
-    const updated = [...current, ...toAdd];
-    saveActiveStudents(updated);
-  }
+  const updated = [...current, ...toAdd];
+  saveActiveStudents(updated);
 
+  const totalHandled = toAdd.length + updatedCount;
   return {
-    success: toAdd.length > 0,
-    message: `เพิ่มนักศึกษาสำเร็จ ${toAdd.length} คน (ข้ามรหัสที่ซ้ำ/ไม่ถูกต้อง ${skipped} คน)`,
+    success: totalHandled > 0,
+    message: toAdd.length > 0
+      ? `เพิ่มนักศึกษาสำเร็จ ${toAdd.length} คน` + (updatedCount > 0 ? ` (อัปเดตข้อมูลเดิม ${updatedCount} คน)` : '')
+      : (updatedCount > 0 ? `อัปเดตข้อมูลนักศึกษา ${updatedCount} คน เรียบร้อยแล้ว` : 'ไม่มีข้อมูลใหม่ที่จะเพิ่ม'),
     addedCount: toAdd.length,
     skippedCount: skipped,
   };

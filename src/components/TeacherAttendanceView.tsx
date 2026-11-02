@@ -44,6 +44,7 @@ import {
   isRecordInTerm,
   getSemesterSettings,
   formatTermLabel,
+  normalizeTeacherName,
   STUDENTS_UPDATED_EVENT,
   TEACHERS_UPDATED_EVENT,
   EASY_MODE_CHANGED_EVENT,
@@ -273,7 +274,15 @@ export const TeacherAttendanceView: React.FC<TeacherAttendanceViewProps> = ({
 
   const groupStudents = useMemo(() => {
     if (!currentTeacher) return [];
-    return allStudents.filter((st) => st.teacherName === currentTeacher.name);
+    const tNorm = normalizeTeacherName(currentTeacher.name);
+    return allStudents.filter((st) => {
+      if (!st) return false;
+      if (st.teacherName === currentTeacher.name) return true;
+      if (normalizeTeacherName(st.teacherName) === tNorm) return true;
+      if (currentTeacher.groupId && st.groupId && st.groupId === currentTeacher.groupId) return true;
+      if (currentTeacher.groupName && st.groupName && st.groupName.trim() === currentTeacher.groupName.trim()) return true;
+      return false;
+    });
   }, [currentTeacher, allStudents, levelRefresh]);
 
   const isDirtyRef = useRef(false);

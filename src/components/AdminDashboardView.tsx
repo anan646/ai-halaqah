@@ -1145,14 +1145,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     major: '',
   });
 
-  const handleCreateStudent = (e: React.FormEvent) => {
+  const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudentData.studentId?.trim() || !newStudentData.fullName?.trim()) {
       alert('กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุลให้ครบถ้วน');
       return;
     }
     const cleanId = newStudentData.studentId.trim();
-    const t = teachers.find((item) => item.name === newStudentData.teacherName) || teachers[0];
+    const t = newStudentData.teacherName
+      ? teachers.find(
+          (item) =>
+            item.name === newStudentData.teacherName ||
+            normalizeTeacherName(item.name) === normalizeTeacherName(newStudentData.teacherName || '')
+        )
+      : undefined;
     const res = addStudentsBatch([
       {
         studentId: cleanId,
@@ -1160,7 +1166,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         gender: newStudentData.gender || 'ชาย',
         yearLevel: newStudentData.yearLevel || t?.yearLevel || 'ปี 2',
         groupName: newStudentData.groupName?.trim() || t?.groupName || 'กลุ่มศึกษา',
-        teacherName: t ? t.name : 'ไม่ระบุอาจารย์',
+        teacherName: t ? t.name : (newStudentData.teacherName?.trim() || 'ไม่ระบุอาจารย์'),
         groupId: t ? t.groupId : '',
         major: (newStudentData.major || '').trim() || inferMajorFromStudentId(cleanId, newStudentData.yearLevel || t?.yearLevel || 'ปี 2'),
       },
@@ -1170,7 +1176,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       reloadDataStore();
       setIsAddStudentModalOpen(false);
       setNewStudentData({ studentId: '', fullName: '', gender: 'ชาย', yearLevel: 'ปี 2', teacherName: '', groupName: '', major: '' });
-      backupAllToGoogleSheet().catch(() => null);
+      setSyncToast('กำลังสำรองข้อมูลขึ้น Google Sheet...');
+      try {
+        const backupRes = await backupAllToGoogleSheet();
+        if (backupRes.success) {
+          setSyncToast('สำรองข้อมูลขึ้น Google Sheet สำเร็จ (เชื่อมต่อทุกอุปกรณ์แล้ว)');
+        } else {
+          setSyncToast(`บันทึกในเครื่องแล้ว: ${backupRes.message}`);
+        }
+      } catch (err: any) {
+        setSyncToast('บันทึกในเครื่องแล้ว (กำลังซิงค์ Google Sheet เบื้องหลัง)');
+      }
+      setTimeout(() => setSyncToast(null), 4000);
     }
   };
 

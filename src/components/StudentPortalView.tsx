@@ -33,6 +33,7 @@ import {
   saveSemesterSettings,
   saveTermHistory,
   formatTermLabel,
+  getDeletedStudentIds,
   SEMESTER_SETTINGS_UPDATED_EVENT,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
 } from '@/lib/data-store';
@@ -260,22 +261,25 @@ export const StudentPortalView: React.FC<Props> = ({
     if (!q) return;
     const norm = (id: string) => (id || '').replace(/[\s-]/g, '').toLowerCase();
     
-    // ข้อมูลจาก Google Sheet เป็นความถูกต้องสูงสุด (Single Source of Truth)
+    // ค้นหาทั้งจาก Google Sheet และฐานข้อมูลในเครื่อง (เพื่อให้นักศึกษาที่เพิ่งเพิ่มใหม่ค้นหาพบได้ทันที)
     let found: Student | undefined = undefined;
+    const fromLocal = students.find((s) => norm(s.studentId) === q);
     if (remote.ok && remote.roster && remote.roster.length > 0) {
       const fromSheet = remote.roster.find((s) => norm(s.studentId) === q);
       if (fromSheet) {
-        const local = students.find((s) => norm(s.studentId) === q);
         found = {
-          ...local,
+          ...fromLocal,
           ...fromSheet,
-          level: (fromSheet.level as Student['level']) || local?.level || '01',
-          groupId: local?.groupId || '',
+          level: (fromSheet.level as Student['level']) || fromLocal?.level || '01',
+          groupId: fromLocal?.groupId || '',
         } as Student;
+      } else if (fromLocal) {
+        // หากเพิ่งเพิ่มเข้ามาในระบบหรือยังไม่ได้ซิงค์ลงในชีต ให้ดึงจากข้อมูลในเครื่องได้ทันที
+        found = fromLocal;
       }
     } else {
       // กรณีออฟไลน์หรือก่อนที่ชีตจะโหลดเสร็จ ให้ค้นหาจากแคชในเครื่อง
-      found = students.find((s) => norm(s.studentId) === q);
+      found = fromLocal;
     }
 
     if (found) {
@@ -292,16 +296,16 @@ export const StudentPortalView: React.FC<Props> = ({
     }
   };
 
-  // หากนักศึกษาที่กำลังดูอยู่ถูกลบออกจากระบบ/Google Sheet ให้เคลียร์หน้าจอทันที
+  // หากนักศึกษาที่กำลังดูอยู่ถูกลบออกจากระบบ ให้เคลียร์หน้าจอทันที
   useEffect(() => {
-    if (student && remote.ok && remote.roster && remote.roster.length > 0) {
-      const stillInSheet = remote.roster.some((s) => (s.studentId || '').trim() === student.studentId.trim());
-      if (!stillInSheet) {
+    if (student) {
+      const deletedIds = getDeletedStudentIds();
+      if (deletedIds.has((student.studentId || '').trim())) {
         setStudent(null);
         setNotFound(true);
       }
     }
-  }, [remote, student]);
+  }, [student]);
 
   const onChange = (v: string) => {
     const clean = v.replace(/[^\d\s-]/g, '');

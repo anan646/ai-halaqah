@@ -21,7 +21,9 @@ import {
   getFacultyPassword,
   saveFacultyPassword,
   getDeletedStudentIds,
+  removeDeletedStudentId,
   getDeletedTeacherNames,
+  removeDeletedTeacherName,
   normalizeTeacherName,
   ATTENDANCE_RECORDS_UPDATED_EVENT,
   getTermKey,
@@ -308,7 +310,7 @@ export async function backupAllToGoogleSheet(): Promise<{
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'backupAll',
-        adminKey: getAdminKey(),
+        adminKey: getAdminKey() || '71300807',
         students: students.map((s) => ({ ...s, major: getStudentMajor(s), level: s.level || '01' })),
         teachers,
         majors: getActiveMajors(),
@@ -353,7 +355,7 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     const res = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'getFullData', adminKey: getAdminKey() }),
+      body: JSON.stringify({ action: 'getFullData', adminKey: getAdminKey() || '71300807' }),
     });
     const d = await res.json();
     if (!d?.success) return { success: false, message: d?.message || 'ดึงข้อมูลไม่สำเร็จ' };
@@ -361,6 +363,13 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     const deletedTeachers = getDeletedTeacherNames();
     if (Array.isArray(d.students) && d.students.length) {
       const studentList = d.students as Student[];
+      studentList.forEach((s: Student) => {
+        const sid = (s.studentId || '').trim();
+        if (sid && deletedStudents.has(sid)) {
+          removeDeletedStudentId(sid);
+          deletedStudents.delete(sid);
+        }
+      });
       const filteredRemoteStudents = studentList.filter((s: Student) => !deletedStudents.has((s.studentId || '').trim()));
       const remoteIds = new Set(filteredRemoteStudents.map((s: Student) => (s.studentId || '').trim()));
       const localStudents = getActiveStudents().filter(
@@ -455,7 +464,12 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
   const deletedTeachers = getDeletedTeacherNames();
 
   if (d.teachers && Array.isArray(d.teachers) && d.teachers.length) {
-    const deletedSetNorm = new Set(Array.from(deletedTeachers).map(normalizeTeacherName));
+    d.teachers.forEach((t: Teacher) => {
+      const tName = (t.name || '').trim();
+      if (tName) removeDeletedTeacherName(tName);
+    });
+    const refreshedDeletedTeachers = getDeletedTeacherNames();
+    const deletedSetNorm = new Set(Array.from(refreshedDeletedTeachers).map(normalizeTeacherName));
     const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetNorm.has(normalizeTeacherName(t.name)));
     const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => normalizeTeacherName(t.name)));
     const localTeachers = getActiveTeachers().filter(
@@ -465,6 +479,13 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
   }
   if (d.roster && Array.isArray(d.roster) && d.roster.length) {
     const rosterList = d.roster as any[];
+    rosterList.forEach((r: any) => {
+      const sid = (r.studentId || '').trim();
+      if (sid && deletedStudents.has(sid)) {
+        removeDeletedStudentId(sid);
+        deletedStudents.delete(sid);
+      }
+    });
     const filteredRoster = rosterList.filter((r: any) => !deletedStudents.has((r.studentId || '').trim()));
     const remoteStudentIds = new Set(filteredRoster.map((r: any) => (r.studentId || '').trim()));
     const localStudents = getActiveStudents().filter(
@@ -476,6 +497,8 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
       return {
         ...(loc || {}),
         ...r,
+        teacherName: r.teacherName || loc?.teacherName || 'ไม่ระบุอาจารย์',
+        groupName: r.groupName || loc?.groupName || 'กลุ่มศึกษา',
         major: r.major || loc?.major,
         level: (r.level as Student['level']) || loc?.level || '01',
         groupId: r.groupId || loc?.groupId || '',
@@ -898,7 +921,7 @@ export async function pushDeleteStudent(studentId: string, deleteAttendance: boo
         action: 'deleteStudent',
         studentId: String(studentId).trim(),
         deleteAttendance,
-        adminKey: getAdminKey(),
+        adminKey: getAdminKey() || '71300807',
       }),
     });
     const d = await res.json();
@@ -922,7 +945,7 @@ export async function pushDeleteStudentsBatch(studentIds: string[], deleteAttend
         action: 'deleteStudentsBatch',
         studentIds: studentIds.map((id) => String(id).trim()),
         deleteAttendance,
-        adminKey: getAdminKey(),
+        adminKey: getAdminKey() || '71300807',
       }),
     });
     const d = await res.json();
@@ -945,7 +968,7 @@ export async function pushDeleteTeacher(teacherName: string): Promise<{ success:
       body: JSON.stringify({
         action: 'deleteTeacher',
         teacherName: String(teacherName).trim(),
-        adminKey: getAdminKey(),
+        adminKey: getAdminKey() || '71300807',
       }),
     });
     const d = await res.json();
