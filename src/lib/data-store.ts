@@ -330,11 +330,30 @@ const hydrateTeacher = (t: Teacher): Teacher => ({
   level: (t.level as GroupLevel) || '01',
 });
 
+/**
+ * ตัดรายชื่อนักศึกษาที่ซ้ำกันออก ให้เหลือเพียงรายการเดียว
+ */
+export function deduplicateStudents(students: Student[]): Student[] {
+  if (!Array.isArray(students)) return [];
+  const seen = new Set<string>();
+  const result: Student[] = [];
+  for (const s of students) {
+    if (!s || !s.studentId) continue;
+    const id = (s.studentId || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    result.push(s);
+  }
+  return result;
+}
+
 export function getActiveStudents(): Student[] {
   const deletedIds = getDeletedStudentIds();
   const filterDeleted = (list: Student[]) => {
-    if (deletedIds.size === 0) return list;
-    return list.filter((s) => !deletedIds.has((s.studentId || '').trim()));
+    const nonDeleted = deletedIds.size === 0
+      ? list
+      : list.filter((s) => !deletedIds.has((s.studentId || '').trim()));
+    return deduplicateStudents(nonDeleted);
   };
 
   if (typeof window === 'undefined') return filterDeleted(INITIAL_STUDENTS.map(hydrateStudentWithMajor));
@@ -375,8 +394,9 @@ export function saveActiveStudents(students: Student[]): void {
   if (typeof window === 'undefined') return;
   const deletedIds = getDeletedStudentIds();
   const filtered = deletedIds.size > 0 ? students.filter((s) => !deletedIds.has((s.studentId || '').trim())) : students;
-  localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(filtered));
-  window.dispatchEvent(new CustomEvent(STUDENTS_UPDATED_EVENT, { detail: filtered }));
+  const deduped = deduplicateStudents(filtered);
+  localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(deduped));
+  window.dispatchEvent(new CustomEvent(STUDENTS_UPDATED_EVENT, { detail: deduped }));
   window.dispatchEvent(new Event('storage'));
 }
 
@@ -521,7 +541,7 @@ export function batchAssignStudentsToTeacher(
 export function updateStudentInfo(
   studentIdOrOriginalId: string,
   newData: Partial<Student>
-): { success: boolean; message: string; updatedStudent?: Student } {
+): { success: boolean; message: string; updatedStudent?: Student; oldStudentId?: string; newStudentId?: string } {
   const students = getActiveStudents();
   // Find by original ID first, or fallback to newData.studentId
   let sIdx = students.findIndex((s) => s.studentId === studentIdOrOriginalId);
@@ -552,7 +572,9 @@ export function updateStudentInfo(
   };
 
   removeDeletedStudentId(newId);
-  if (targetOldId !== newId) removeDeletedStudentId(targetOldId);
+  if (targetOldId !== newId) {
+    addDeletedStudentId(targetOldId);
+  }
 
   students[sIdx] = updated;
   saveActiveStudents(students);
@@ -585,6 +607,8 @@ export function updateStudentInfo(
     success: true,
     message: `แก้ไขข้อมูลนักศึกษา "${updated.fullName}" สำเร็จแล้ว`,
     updatedStudent: updated,
+    oldStudentId: targetOldId,
+    newStudentId: newId,
   };
 }
 

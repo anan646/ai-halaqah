@@ -221,6 +221,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setLevelActionMsg({ text: res.message, success: res.success });
     reloadDataStore();
     setTimeout(() => setLevelActionMsg(null), 4000);
+    backupAllToGoogleSheet().catch(() => null);
   };
 
   const handleDemoteGroupLevelAdmin = (teacherName: string) => {
@@ -228,6 +229,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setLevelActionMsg({ text: res.message, success: res.success });
     reloadDataStore();
     setTimeout(() => setLevelActionMsg(null), 4000);
+    backupAllToGoogleSheet().catch(() => null);
   };
 
   const handleSetGroupLevelAdmin = (teacherName: string, newLevel: GroupLevel) => {
@@ -235,6 +237,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setLevelActionMsg({ text: res.message, success: res.success });
     reloadDataStore();
     setTimeout(() => setLevelActionMsg(null), 4000);
+    backupAllToGoogleSheet().catch(() => null);
   };
 
   const handlePromoteStudentLevelAdmin = (studentId: string) => {
@@ -242,6 +245,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setLevelActionMsg({ text: res.message, success: res.success });
     reloadDataStore();
     setTimeout(() => setLevelActionMsg(null), 4000);
+    backupAllToGoogleSheet().catch(() => null);
   };
 
   const handleDemoteStudentLevelAdmin = (studentId: string) => {
@@ -249,6 +253,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setLevelActionMsg({ text: res.message, success: res.success });
     reloadDataStore();
     setTimeout(() => setLevelActionMsg(null), 4000);
+    backupAllToGoogleSheet().catch(() => null);
   };
 
   const handleExecuteAcademicYearPromotion = () => {
@@ -260,6 +265,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const res = promoteAcademicYear();
     reloadDataStore();
     setPromotionResult(res.message);
+    backupAllToGoogleSheet().catch(() => null);
   };
 
   const handleDownloadFullBackup = () => {
@@ -724,6 +730,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setDraggedStudentId(null);
     if (res.success) {
       reloadDataStore();
+      backupAllToGoogleSheet().catch(() => null);
     }
   };
 
@@ -733,6 +740,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setTransferToast({ text: res.message, success: res.success });
     if (res.success) {
       reloadDataStore();
+      backupAllToGoogleSheet().catch(() => null);
     }
   };
 
@@ -745,6 +753,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (res.success) count++;
     });
     reloadDataStore();
+    backupAllToGoogleSheet().catch(() => null);
     setSelectedLeftStudents([]);
     setSelectedRightStudents([]);
     setTransferToast({
@@ -800,6 +809,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       reloadDataStore();
       setEditingStudent(null);
       setOriginalStudentId('');
+      if (res.oldStudentId && res.newStudentId && res.oldStudentId.trim() !== res.newStudentId.trim()) {
+        pushDeleteStudent(res.oldStudentId, true).catch(() => null);
+      }
+      backupAllToGoogleSheet().catch(() => null);
     }
   };
 
@@ -1049,6 +1062,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (res.success) {
       setSelectedStudentIds([]);
       reloadDataStore();
+      backupAllToGoogleSheet().catch(() => null);
     }
     setTimeout(() => setEditorMsg(null), 5000);
   };
@@ -1156,6 +1170,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       reloadDataStore();
       setIsAddStudentModalOpen(false);
       setNewStudentData({ studentId: '', fullName: '', gender: 'ชาย', yearLevel: 'ปี 2', teacherName: '', groupName: '', major: '' });
+      backupAllToGoogleSheet().catch(() => null);
     }
   };
 
@@ -1169,6 +1184,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       reloadDataStore();
       setNewMajorInput('');
       setIsAddMajorModalOpen(false);
+      backupAllToGoogleSheet().catch(() => null);
     }
     setTimeout(() => setMajorMsg(null), 4000);
   };
@@ -1179,6 +1195,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setMajorMsg({ text: res.message, success: res.success });
       if (res.success) {
         reloadDataStore();
+        backupAllToGoogleSheet().catch(() => null);
       }
       setTimeout(() => setMajorMsg(null), 4000);
     }
@@ -1300,6 +1317,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         reloadDataStore();
         setIsBulkImportModalOpen(false);
         setBulkRawText('');
+        backupAllToGoogleSheet().catch(() => null);
       }
     } else {
       // Teachers Bulk
@@ -3971,7 +3989,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       {/* ==================== โยกย้ายกลุ่ม ==================== */}
       {activeTab === 'transfer' && (
         <div className="animate-fadeIn">
-          <TransferPanel teachers={teachers} students={students} onChanged={reloadDataStore} />
+          <TransferPanel
+            teachers={teachers}
+            students={students}
+            onChanged={() => {
+              reloadDataStore();
+              backupAllToGoogleSheet().catch(() => null);
+            }}
+          />
         </div>
       )}
 
@@ -4650,12 +4675,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 setMajorMsg({ text: res.message, success: res.success });
                 reloadDataStore();
                 setTimeout(() => setMajorMsg(null), 4000);
+                backupAllToGoogleSheet().catch(() => null);
               }}
               onRename={(from, to) => {
                 const res = renameMajor(from, to);
                 setMajorMsg({ text: res.message, success: res.success });
                 reloadDataStore();
                 setTimeout(() => setMajorMsg(null), 4000);
+                backupAllToGoogleSheet().catch(() => null);
               }}
               onDelete={handleDeleteMajor}
             />
@@ -6303,6 +6330,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           setEditorMsg({ text: msg, success: true });
           setSyncToast(msg);
           setTimeout(() => setSyncToast(null), 4000);
+          backupAllToGoogleSheet().catch(() => null);
         }}
       />
 

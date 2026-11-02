@@ -442,7 +442,14 @@ export const StudentPortalView: React.FC<Props> = ({
               className="relative h-16 mx-auto object-contain brightness-0 invert opacity-95"
               onError={(e) => ((e.currentTarget.style.display = 'none'))}
             />
-            <h1 className="relative mt-4 text-2xl font-black tracking-tight">สวัสดีนักศึกษา</h1>
+            <div className="relative mt-4 flex justify-center items-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/salam-white.png"
+                alt="السلام عليكم"
+                className="h-14 sm:h-16 w-auto max-w-[260px] sm:max-w-[300px] object-contain drop-shadow-md select-none"
+              />
+            </div>
             <p className="relative text-sm text-purple-200 mt-1">กรอกรหัสนักศึกษาเพื่อดูผลการเช็คชื่อของคุณ</p>
           </div>
 

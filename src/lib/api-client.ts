@@ -360,7 +360,13 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
     const deletedStudents = getDeletedStudentIds();
     const deletedTeachers = getDeletedTeacherNames();
     if (Array.isArray(d.students) && d.students.length) {
-      saveActiveStudents(d.students.filter((s: Student) => !deletedStudents.has((s.studentId || '').trim())));
+      const studentList = d.students as Student[];
+      const filteredRemoteStudents = studentList.filter((s: Student) => !deletedStudents.has((s.studentId || '').trim()));
+      const remoteIds = new Set(filteredRemoteStudents.map((s: Student) => (s.studentId || '').trim()));
+      const localStudents = getActiveStudents().filter(
+        (s: Student) => !deletedStudents.has((s.studentId || '').trim()) && !remoteIds.has((s.studentId || '').trim())
+      );
+      saveActiveStudents([...filteredRemoteStudents, ...localStudents]);
     }
     if (Array.isArray(d.teachers) && d.teachers.length) {
       const deletedSetNorm = new Set(Array.from(deletedTeachers).map(normalizeTeacherName));
@@ -457,18 +463,25 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
     );
     saveActiveTeachers([...filteredRemoteTeachers, ...localTeachers]);
   }
-  if (d.roster.length) {
-    const filteredRoster = d.roster.filter((r) => !deletedStudents.has((r.studentId || '').trim()));
-    const local = new Map(getActiveStudents().map((s) => [s.studentId, s]));
-    saveActiveStudents(
-      filteredRoster.map((r) => ({
-        ...(local.get(r.studentId) || {}),
-        ...r,
-        major: r.major || local.get(r.studentId)?.major,
-        level: (r.level as Student['level']) || local.get(r.studentId)?.level || '01',
-        groupId: local.get(r.studentId)?.groupId || '',
-      }))
+  if (d.roster && Array.isArray(d.roster) && d.roster.length) {
+    const rosterList = d.roster as any[];
+    const filteredRoster = rosterList.filter((r: any) => !deletedStudents.has((r.studentId || '').trim()));
+    const remoteStudentIds = new Set(filteredRoster.map((r: any) => (r.studentId || '').trim()));
+    const localStudents = getActiveStudents().filter(
+      (s: Student) => !deletedStudents.has((s.studentId || '').trim()) && !remoteStudentIds.has((s.studentId || '').trim())
     );
+    const localMap = new Map(getActiveStudents().map((s) => [(s.studentId || '').trim(), s]));
+    const mergedRemote = filteredRoster.map((r: any) => {
+      const loc = localMap.get((r.studentId || '').trim());
+      return {
+        ...(loc || {}),
+        ...r,
+        major: r.major || loc?.major,
+        level: (r.level as Student['level']) || loc?.level || '01',
+        groupId: r.groupId || loc?.groupId || '',
+      };
+    });
+    saveActiveStudents([...mergedRemote, ...localStudents]);
   }
   if (d.majors.length) saveActiveMajors(d.majors);
   if (d.terms && d.terms.length) saveTermHistory(d.terms);
