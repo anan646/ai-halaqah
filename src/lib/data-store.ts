@@ -71,7 +71,12 @@ export function addDeletedTeacherName(teacherName: string): void {
 export function removeDeletedTeacherName(teacherName: string): void {
   if (typeof window === 'undefined' || !teacherName) return;
   const set = getDeletedTeacherNames();
-  set.delete(teacherName.trim());
+  const clean = teacherName.trim().toLowerCase();
+  for (const item of Array.from(set)) {
+    if (item.trim().toLowerCase() === clean) {
+      set.delete(item);
+    }
+  }
   localStorage.setItem(STORAGE_KEY_DELETED_TEACHERS, JSON.stringify(Array.from(set)));
 }
 
@@ -784,6 +789,7 @@ export function addTeachersBatch(newTeachers: Teacher[]): {
       groupName: (item.groupName || '').trim() || `กลุ่ม ${cleanName}`,
       gender: item.gender === 'หญิง' ? 'หญิง' : 'ชาย',
       yearLevel: (item.yearLevel || '').trim() || 'ปี 2',
+      level: (item.level as GroupLevel) || '01',
     });
   }
 

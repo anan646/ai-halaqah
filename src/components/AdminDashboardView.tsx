@@ -818,6 +818,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       reloadDataStore();
       setEditingTeacher(null);
       setOriginalTeacherName('');
+      backupAllToGoogleSheet().catch(() => null);
     }
   };
 
@@ -1207,6 +1208,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       reloadDataStore();
       setIsAddTeacherModalOpen(false);
       setNewTeacherData({ name: '', groupName: '', gender: 'ชาย', yearLevel: 'ปี 2' });
+      backupAllToGoogleSheet().catch(() => null);
     }
   };
 
@@ -1330,6 +1332,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         reloadDataStore();
         setIsBulkImportModalOpen(false);
         setBulkRawText('');
+        backupAllToGoogleSheet().catch(() => null);
       }
     }
   };

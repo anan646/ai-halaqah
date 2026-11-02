@@ -362,7 +362,14 @@ export async function restoreFromGoogleSheet(): Promise<{ success: boolean; mess
       saveActiveStudents(d.students.filter((s: Student) => !deletedStudents.has((s.studentId || '').trim())));
     }
     if (Array.isArray(d.teachers) && d.teachers.length) {
-      saveActiveTeachers(d.teachers.filter((t: Teacher) => !deletedTeachers.has((t.name || '').trim())));
+      const cleanLower = (s: string) => (s || '').trim().toLowerCase();
+      const deletedSetLower = new Set(Array.from(deletedTeachers).map(cleanLower));
+      const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetLower.has(cleanLower(t.name)));
+      const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => cleanLower(t.name)));
+      const localTeachers = getActiveTeachers().filter(
+        (t) => !deletedSetLower.has(cleanLower(t.name)) && !remoteNames.has(cleanLower(t.name))
+      );
+      saveActiveTeachers([...filteredRemoteTeachers, ...localTeachers]);
     }
     if (Array.isArray(d.majors) && d.majors.length) saveActiveMajors(d.majors);
     if (Array.isArray(d.announcements)) saveAnnouncements(d.announcements);
@@ -441,9 +448,15 @@ export async function applyPublicDataToLocal(): Promise<boolean> {
   const deletedStudents = getDeletedStudentIds();
   const deletedTeachers = getDeletedTeacherNames();
 
-  if (d.teachers.length) {
-    const filteredTeachers = d.teachers.filter((t) => !deletedTeachers.has((t.name || '').trim()));
-    saveActiveTeachers(filteredTeachers);
+  if (d.teachers && Array.isArray(d.teachers) && d.teachers.length) {
+    const cleanLower = (s: string) => (s || '').trim().toLowerCase();
+    const deletedSetLower = new Set(Array.from(deletedTeachers).map(cleanLower));
+    const filteredRemoteTeachers = d.teachers.filter((t: Teacher) => !deletedSetLower.has(cleanLower(t.name)));
+    const remoteNames = new Set(filteredRemoteTeachers.map((t: Teacher) => cleanLower(t.name)));
+    const localTeachers = getActiveTeachers().filter(
+      (t) => !deletedSetLower.has(cleanLower(t.name)) && !remoteNames.has(cleanLower(t.name))
+    );
+    saveActiveTeachers([...filteredRemoteTeachers, ...localTeachers]);
   }
   if (d.roster.length) {
     const filteredRoster = d.roster.filter((r) => !deletedStudents.has((r.studentId || '').trim()));
